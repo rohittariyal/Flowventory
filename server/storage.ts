@@ -13,12 +13,12 @@ export interface IStorage {
   getUserByUsername(username: string): Promise<User | undefined>;
   getUserByEmail(email: string): Promise<User | undefined>;
   createUser(user: InsertUser): Promise<User>;
-  sessionStore: session.SessionStore;
+  sessionStore: session.Store;
 }
 
 export class MemStorage implements IStorage {
   private users: Map<string, User>;
-  public sessionStore: session.SessionStore;
+  public sessionStore: session.Store;
 
   constructor() {
     this.users = new Map();
@@ -49,6 +49,7 @@ export class MemStorage implements IStorage {
       ...insertUser, 
       id,
       username: insertUser.email, // Use email as username
+      role: insertUser.role || "viewer", // Ensure role is defined
       createdAt: new Date(),
     };
     this.users.set(id, user);
