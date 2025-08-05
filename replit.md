@@ -1,6 +1,13 @@
 # Overview
 
-This is a full-stack web application built with React and Express that provides user authentication and role-based access control. The application features a modern UI built with shadcn/ui components and Tailwind CSS, with a Node.js/Express backend handling authentication via Passport.js. The system supports three user roles (admin, manager, viewer) and includes a comprehensive dashboard interface.
+This is a comprehensive business intelligence dashboard application built with React and Express. It features user authentication, role-based access control, post-login onboarding, and a conditional dashboard UI with dark theme and light green accents. The application provides AI-powered business insights, inventory management, sales intelligence, customer analytics, and return abuse detection based on user roles and onboarding preferences.
+
+## Recent Changes (Latest First)
+- **2025-01-05**: Completed comprehensive dashboard UI with conditional panels based on onboarding data
+- **2025-01-05**: Implemented AI copilot with contextual business insights and chat interface  
+- **2025-01-05**: Added role-based panel access (Return Abuse Detection for admin/manager only)
+- **2025-01-05**: Created modular dashboard components: Business Pulse, Inventory Brain, Sales Intelligence, Customer Radar
+- **2025-01-05**: Fixed all Tailwind CSS compilation issues and implemented dark theme with green accents
 
 # User Preferences
 
