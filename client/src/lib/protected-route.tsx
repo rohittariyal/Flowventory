@@ -5,11 +5,13 @@ import { Redirect, Route } from "wouter";
 export function ProtectedRoute({
   path,
   component: Component,
+  requiresOnboarding = true,
 }: {
   path: string;
   component: () => React.JSX.Element;
+  requiresOnboarding?: boolean;
 }) {
-  const { user, isLoading } = useAuth();
+  const { user, isLoading, needsOnboarding } = useAuth();
 
   if (isLoading) {
     return (
@@ -29,5 +31,14 @@ export function ProtectedRoute({
     );
   }
 
-  return <Component />
+  // If user needs onboarding and this route requires completed onboarding, redirect to onboarding
+  if (requiresOnboarding && needsOnboarding && path !== "/onboarding") {
+    return (
+      <Route path={path}>
+        <Redirect to="/onboarding" />
+      </Route>
+    );
+  }
+
+  return <Route path={path}><Component /></Route>;
 }

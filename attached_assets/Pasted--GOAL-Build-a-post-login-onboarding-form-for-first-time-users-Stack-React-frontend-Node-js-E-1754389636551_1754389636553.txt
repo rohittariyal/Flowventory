@@ -1,0 +1,76 @@
+/ GOAL: Build a post-login onboarding form for first-time users
+// Stack: React frontend + Node.js/Express backend
+// Storage: Replit DB or local JSON for now
+ 
+---
+ 
+🎯 FRONTEND: Create a new page component `Onboarding.jsx` in React
+ 
+This page will include a multi-section onboarding form with the following:
+ 
+1️⃣ Section 1: Business Overview
+- Company Name (Text Input)
+- Industry (Dropdown: Apparel, Electronics, Beauty, Home, Other)
+- Monthly Orders (Dropdown: 0–100, 100–500, 500–1000, 1000+)
+- Products Live (Number input)
+- Business Location (Text input or dropdown)
+ 
+2️⃣ Section 2: Sales Channels
+- Checkboxes:
+  - Shopify
+  - Amazon Seller Central
+  - Flipkart Seller Hub
+  - WooCommerce
+  - Offline Retail
+ 
+3️⃣ Section 3: Inventory Setup
+- Do you manage your own warehouse? (Yes/No toggle)
+- Average Stock per SKU (Slider or input)
+- How often do you reorder? (Dropdown: Weekly, Bi-weekly, Monthly)
+- Reorder method? (Dropdown: Manual, Excel, Tool)
+ 
+4️⃣ Section 4: AI Preferences (Optional)
+- “How would you like AI to assist?” (Multi-select):
+  - Inventory Planning
+  - Forecasting
+  - Customer Feedback Analysis
+  - Return Alerts
+- Notification Method (Checkboxes: Email, In-app, WhatsApp)
+ 
+📝 On Submit:
+- Validate required fields
+- Send POST request to `/api/onboarding/save`
+- On success, store `onboardingComplete = true` in localStorage or user context
+- Redirect user to `/dashboard`
+ 
+---
+ 
+🛠️ BACKEND: Express Route Setup
+ 
+Create a new POST route at `/api/onboarding/save`
+ 
+- Accept JSON payload with full onboarding data
+- Attach `userId` from request body or token
+- Store onboarding data under userId in Replit DB or JSON file
+- Add `onboardingComplete: true` flag for the user
+ 
+Also create a `GET /api/user/:id/profile` route to:
+- Return onboarding status
+- Return saved onboarding data
+ 
+---
+ 
+🔐 AUTH FLOW UPDATE:
+ 
+After successful login:
+- Check if `user.onboardingComplete === true`
+- If not, redirect to `/onboarding`
+- Else → go to `/dashboard`
+ 
+Frontend Logic:
+```js
+if (!user.onboardingComplete) {
+  navigate('/onboarding');
+} else {
+  navigate('/dashboard');
+}

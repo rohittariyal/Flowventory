@@ -7,12 +7,14 @@ import { AuthProvider } from "@/hooks/use-auth";
 import HomePage from "@/pages/home-page";
 import NotFound from "@/pages/not-found";
 import AuthPage from "@/pages/auth-page";
+import OnboardingPage from "@/pages/onboarding-page";
 import { ProtectedRoute } from "./lib/protected-route";
 
 function Router() {
   return (
     <Switch>
       <ProtectedRoute path="/" component={HomePage} />
+      <ProtectedRoute path="/onboarding" component={OnboardingPage} requiresOnboarding={false} />
       <Route path="/auth" component={AuthPage} />
       <Route component={NotFound} />
     </Switch>
