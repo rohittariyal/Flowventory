@@ -124,10 +124,14 @@ export default function OnboardingPage() {
   const onSubmit = async (data: InsertOnboardingData) => {
     setIsSubmitting(true);
     try {
-      await apiRequest("POST", "/api/onboarding/save", {
+      const response = await apiRequest("POST", "/api/onboarding/save", {
         ...data,
         averageStockPerSku: averageStock[0].toString(),
       });
+      
+      if (!response.ok) {
+        throw new Error("Failed to save onboarding data");
+      }
       
       // Invalidate both user and onboarding queries to refresh data
       await Promise.all([
@@ -140,14 +144,13 @@ export default function OnboardingPage() {
         description: "Welcome to your dashboard. Let's get started!",
       });
       
-      // Navigate after a brief delay to ensure queries are updated
-      setTimeout(() => {
-        setLocation("/");
-      }, 100);
+      // Navigate to dashboard using wouter
+      setLocation("/");
     } catch (error) {
+      console.error("Onboarding error:", error);
       toast({
         title: "Error",
-        description: "Failed to complete onboarding. Please try again.",
+        description: error instanceof Error ? error.message : "Failed to complete onboarding. Please try again.",
         variant: "destructive",
       });
     } finally {

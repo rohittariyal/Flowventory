@@ -11,13 +11,16 @@ export function registerRoutes(app: Express): Server {
   // Onboarding routes
   app.post("/api/onboarding/save", async (req, res) => {
     if (!req.isAuthenticated()) {
+      console.log("Onboarding save: User not authenticated");
       return res.status(401).json({ error: "Unauthorized" });
     }
 
     try {
+      console.log("Onboarding save: Starting for user", req.user!.id);
       const validatedData = onboardingSchema.parse(req.body);
       const onboardingData = await storage.saveOnboardingData(req.user!.id, validatedData);
       await storage.updateUserOnboarding(req.user!.id, true);
+      console.log("Onboarding save: Successfully completed for user", req.user!.id);
       
       res.status(201).json({ 
         message: "Onboarding completed successfully",
