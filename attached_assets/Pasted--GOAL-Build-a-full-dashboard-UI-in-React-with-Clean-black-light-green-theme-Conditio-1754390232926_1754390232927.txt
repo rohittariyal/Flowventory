@@ -1,0 +1,86 @@
+// GOAL: Build a full dashboard UI in React with:
+// - Clean black + light green theme
+// - Conditional panels based on user onboarding data
+// - Role-based access control (Admin, Manager, Viewer)
+// - Modular components with soft card styling, shadows, spacing
+ 
+---
+ 
+🎨 THEME SYSTEM:
+ 
+Apply a dark UI across the app using TailwindCSS:
+ 
+- Background: #0B0B0B (deep black)
+- Text: #FFFFFF and #AAAAAA
+- Accent: Light Green (#8BC34A or similar)
+- Cards: Slightly lighter black (#1A1A1A) with rounded corners, soft shadows
+- Transitions: Use Tailwind transitions for hover, click
+- Font: Clean, modern sans-serif like Inter or Poppins
+ 
+Apply this style globally across:
+- Login
+- Onboarding
+- Dashboard
+- PO generator
+- AI assistant
+ 
+---
+ 
+📊 DASHBOARD STRUCTURE:
+ 
+Create a Dashboard page with panels arranged as modular components. Show/hide panels depending on:
+1. Platforms selected during onboarding
+2. User role (Admin, Manager, Viewer)
+ 
+🧠 Pull onboarding data from:
+- `/api/user/:id/profile` (e.g., user.platforms = [“Amazon”, “Shopify”])
+ 
+---
+ 
+🧩 COMPONENTS TO INCLUDE (conditionally render):
+ 
+1. **Business Pulse Panel** (Always shown)
+   - KPI cards: Sales, Orders, Refunds, ROI
+   - Weekly trends chart
+   - AI-generated “Insight Card” (text)
+ 
+2. **Inventory Brain** (If any platform is selected)
+   - Table of SKUs, Stock, Velocity
+   - Low-stock highlight
+   - PO Suggestion area (Admin only)
+ 
+3. **Sales Intelligence** (If Amazon / Shopify / Flipkart selected)
+   - Channel cards
+   - Bar charts: Best & Worst SKUs
+   - Pie chart: Return reasons
+ 
+4. **Customer Radar** (If enabled in onboarding)
+   - New vs Returning stats
+   - Review sentiment summary
+   - Churn risk indicator
+ 
+5. **AI Copilot Box** (If AI module was opted during onboarding)
+   - Chat input: Ask “Why are sales down?”
+   - Dummy GPT-based replies
+ 
+6. **Return Abuse Panel** (Optional – if returns flagged)
+   - Table of SKUs with high return %
+   - Risk level (Low/Med/High)
+ 
+---
+ 
+🔐 ROLE-BASED UI LOGIC:
+ 
+Use user.role from login/auth to show/hide sensitive panels:
+ 
+- Admin:
+  - Full access (PO generator, AI, all panels)
+- Manager:
+  - View data but no PO or user control
+- Viewer:
+  - Read-only KPI + charts only
+ 
+Example:
+```jsx
+{user.role === 'Admin' && <POGenerator />}
+{user.role !== 'Viewer' && <AskTheAI />}

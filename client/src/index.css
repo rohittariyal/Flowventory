@@ -3,25 +3,25 @@
 @tailwind utilities;
 
 :root {
-  --background: hsl(0, 0%, 100%);
-  --foreground: hsl(20, 14.3%, 4.1%);
-  --muted: hsl(60, 4.8%, 95.9%);
-  --muted-foreground: hsl(25, 5.3%, 44.7%);
-  --popover: hsl(0, 0%, 100%);
-  --popover-foreground: hsl(20, 14.3%, 4.1%);
-  --card: hsl(0, 0%, 100%);
-  --card-foreground: hsl(20, 14.3%, 4.1%);
-  --border: hsl(20, 5.9%, 90%);
-  --input: hsl(20, 5.9%, 90%);
-  --primary: hsl(207, 90%, 54%);
-  --primary-foreground: hsl(211, 100%, 99%);
-  --secondary: hsl(60, 4.8%, 95.9%);
-  --secondary-foreground: hsl(24, 9.8%, 10%);
-  --accent: hsl(60, 4.8%, 95.9%);
-  --accent-foreground: hsl(24, 9.8%, 10%);
-  --destructive: hsl(0, 84.2%, 60.2%);
-  --destructive-foreground: hsl(60, 9.1%, 97.8%);
-  --ring: hsl(20, 14.3%, 4.1%);
+  --background: hsl(0, 0%, 4.3%);
+  --foreground: hsl(0, 0%, 100%);
+  --muted: hsl(0, 0%, 10.2%);
+  --muted-foreground: hsl(0, 0%, 66.7%);
+  --popover: hsl(0, 0%, 10.2%);
+  --popover-foreground: hsl(0, 0%, 100%);
+  --card: hsl(0, 0%, 10.2%);
+  --card-foreground: hsl(0, 0%, 100%);
+  --border: hsl(0, 0%, 14.9%);
+  --input: hsl(0, 0%, 14.9%);
+  --primary: hsl(88, 50%, 53%);
+  --primary-foreground: hsl(0, 0%, 0%);
+  --secondary: hsl(0, 0%, 14.9%);
+  --secondary-foreground: hsl(0, 0%, 100%);
+  --accent: hsl(0, 0%, 14.9%);
+  --accent-foreground: hsl(0, 0%, 100%);
+  --destructive: hsl(0, 62.8%, 60.6%);
+  --destructive-foreground: hsl(0, 0%, 100%);
+  --ring: hsl(88, 50%, 53%);
   --radius: 0.5rem;
 }
 
@@ -55,5 +55,29 @@
 
   body {
     @apply font-sans antialiased bg-background text-foreground;
+    font-family: 'Inter', system-ui, -apple-system, sans-serif;
+  }
+
+  .dashboard-card {
+    @apply bg-card border border-border rounded-lg shadow-lg transition-all duration-200 hover:shadow-xl;
+  }
+
+  .dashboard-panel {
+    @apply p-6 space-y-4;
+  }
+
+  .kpi-card {
+    @apply bg-secondary border border-border rounded-lg p-4 hover:bg-secondary transition-colors;
+    background-color: hsl(var(--secondary) / 0.5);
+  }
+  
+  .kpi-card:hover {
+    background-color: hsl(var(--secondary) / 0.7);
+  }
+
+  .insight-card {
+    @apply bg-gradient-to-r border rounded-lg p-4;
+    background: linear-gradient(to right, hsl(var(--primary) / 0.1), hsl(var(--primary) / 0.05));
+    border-color: hsl(var(--primary) / 0.2);
   }
 }
