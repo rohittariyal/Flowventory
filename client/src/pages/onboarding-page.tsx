@@ -129,15 +129,21 @@ export default function OnboardingPage() {
         averageStockPerSku: averageStock[0].toString(),
       });
       
-      // Invalidate user query to refresh onboarding status
-      queryClient.invalidateQueries({ queryKey: ["/api/user"] });
+      // Invalidate both user and onboarding queries to refresh data
+      await Promise.all([
+        queryClient.invalidateQueries({ queryKey: ["/api/user"] }),
+        queryClient.invalidateQueries({ queryKey: ["/api/onboarding"] })
+      ]);
       
       toast({
         title: "Onboarding Complete!",
         description: "Welcome to your dashboard. Let's get started!",
       });
       
-      setLocation("/");
+      // Navigate after a brief delay to ensure queries are updated
+      setTimeout(() => {
+        setLocation("/");
+      }, 100);
     } catch (error) {
       toast({
         title: "Error",

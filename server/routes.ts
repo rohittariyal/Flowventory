@@ -29,6 +29,23 @@ export function registerRoutes(app: Express): Server {
     }
   });
 
+  app.get("/api/onboarding", async (req, res) => {
+    if (!req.isAuthenticated()) {
+      return res.status(401).json({ error: "Unauthorized" });
+    }
+
+    try {
+      const onboardingData = await storage.getOnboardingData(req.user!.id);
+      if (!onboardingData) {
+        return res.status(404).json({ error: "No onboarding data found" });
+      }
+      res.json(onboardingData);
+    } catch (error) {
+      console.error("Onboarding get error:", error);
+      res.status(500).json({ error: "Internal server error" });
+    }
+  });
+
   app.get("/api/user/:id/profile", async (req, res) => {
     if (!req.isAuthenticated()) {
       return res.status(401).json({ error: "Unauthorized" });
