@@ -32,7 +32,8 @@ export function ProtectedRoute({
   }
 
   // If user needs onboarding and this route requires completed onboarding, redirect to onboarding
-  if (requiresOnboarding && needsOnboarding && path !== "/onboarding") {
+  // But only if we're not currently on the dashboard and user still needs onboarding
+  if (requiresOnboarding && needsOnboarding && path !== "/onboarding" && path === "/") {
     return (
       <Route path={path}>
         <Redirect to="/onboarding" />

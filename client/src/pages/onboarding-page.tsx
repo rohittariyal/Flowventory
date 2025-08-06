@@ -133,7 +133,15 @@ export default function OnboardingPage() {
         throw new Error("Failed to save onboarding data");
       }
       
-      // Invalidate both user and onboarding queries to refresh data
+      // Update the user in the query cache to mark onboarding as complete
+      if (user) {
+        queryClient.setQueryData(["/api/user"], {
+          ...user,
+          onboardingComplete: "true"
+        });
+      }
+      
+      // Invalidate queries to refresh data
       await Promise.all([
         queryClient.invalidateQueries({ queryKey: ["/api/user"] }),
         queryClient.invalidateQueries({ queryKey: ["/api/onboarding"] })
@@ -144,8 +152,11 @@ export default function OnboardingPage() {
         description: "Welcome to your dashboard. Let's get started!",
       });
       
-      // Navigate to dashboard using wouter
-      setLocation("/");
+      // Small delay to ensure state updates, then navigate
+      setTimeout(() => {
+        setLocation("/");
+      }, 100);
+      
     } catch (error) {
       console.error("Onboarding error:", error);
       toast({
