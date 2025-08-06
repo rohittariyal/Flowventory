@@ -2,7 +2,7 @@ import type { Express } from "express";
 import { createServer, type Server } from "http";
 import { setupAuth } from "./auth";
 import { storage } from "./storage";
-import { onboardingSchema, platformConnectionSchema, type PlatformConnections } from "@shared/schema";
+import { onboardingSchema, platformConnectionSchema, createNotificationSchema, markNotificationReadSchema, type PlatformConnections } from "@shared/schema";
 
 // Authentication middleware
 function requireAuth(req: any, res: any, next: any) {
@@ -327,6 +327,53 @@ export function registerRoutes(app: Express): Server {
     } catch (error) {
       console.error('Error removing team member:', error);
       res.status(500).json({ error: "Failed to remove team member" });
+    }
+  });
+
+  // Notification routes
+  app.get("/api/notifications", requireAuth, async (req, res) => {
+    try {
+      const user = req.user!;
+      // Use sample organization for now, in real app would get from user's organization
+      const organizationId = user.organizationId || "sample-org-123";
+      const notifications = await storage.getNotifications(organizationId, user.id);
+      res.json(notifications);
+    } catch (error) {
+      console.error("Get notifications error:", error);
+      res.status(500).json({ error: "Failed to fetch notifications" });
+    }
+  });
+
+  app.post("/api/notifications", requireAuth, async (req, res) => {
+    try {
+      const user = req.user!;
+      if (user.role === "viewer") {
+        return res.status(403).json({ error: "Viewers cannot create notifications" });
+      }
+
+      const organizationId = user.organizationId || "sample-org-123";
+      const validatedData = createNotificationSchema.parse(req.body);
+      const notification = await storage.createNotification(organizationId, validatedData);
+      res.status(201).json(notification);
+    } catch (error) {
+      console.error("Create notification error:", error);
+      res.status(400).json({ error: "Invalid notification data" });
+    }
+  });
+
+  app.post("/api/notifications/:id/read", requireAuth, async (req, res) => {
+    try {
+      const user = req.user!;
+      if (user.role === "viewer") {
+        return res.status(403).json({ error: "Viewers cannot mark notifications as read" });
+      }
+
+      const notificationId = req.params.id;
+      await storage.markNotificationAsRead(notificationId, user.id);
+      res.json({ message: "Notification marked as read" });
+    } catch (error) {
+      console.error("Mark notification read error:", error);
+      res.status(500).json({ error: "Failed to mark notification as read" });
     }
   });
 

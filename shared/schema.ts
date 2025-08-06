@@ -37,6 +37,22 @@ export const teamInvitations = pgTable("team_invitations", {
   createdAt: timestamp("created_at").defaultNow(),
 });
 
+export const notifications = pgTable("notifications", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  organizationId: varchar("organization_id").references(() => organizations.id).notNull(),
+  userId: varchar("user_id").references(() => users.id), // Null for organization-wide notifications
+  type: text("type", { enum: ["inventory_low", "api_connection_failed", "no_upload", "team_update", "system"] }).notNull(),
+  title: text("title").notNull(),
+  message: text("message").notNull(),
+  icon: text("icon").notNull(),
+  priority: text("priority", { enum: ["low", "medium", "high", "critical"] }).default("medium").notNull(),
+  isRead: text("is_read").default("false").notNull(),
+  readBy: jsonb("read_by").default({}), // Store user IDs who have read this notification
+  metadata: jsonb("metadata").default({}), // Additional data like product SKU, connection name, etc.
+  createdAt: timestamp("created_at").defaultNow(),
+  expiresAt: timestamp("expires_at"), // For auto-expiring notifications
+});
+
 export const onboardingData = pgTable("onboarding_data", {
   id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
   userId: varchar("user_id").notNull().references(() => users.id),
@@ -129,6 +145,17 @@ export const teamInvitationsRelations = relations(teamInvitations, ({ one }) => 
   }),
 }));
 
+export const notificationsRelations = relations(notifications, ({ one }) => ({
+  organization: one(organizations, {
+    fields: [notifications.organizationId],
+    references: [organizations.id],
+  }),
+  user: one(users, {
+    fields: [notifications.userId],
+    references: [users.id],
+  }),
+}));
+
 // Team management schemas
 export const inviteTeamMemberSchema = z.object({
   email: z.string().email("Invalid email address"),
@@ -140,12 +167,31 @@ export const updateTeamMemberSchema = z.object({
   role: z.enum(["manager", "viewer"], { required_error: "Role is required" }),
 });
 
+// Notification schemas
+export const createNotificationSchema = z.object({
+  type: z.enum(["inventory_low", "api_connection_failed", "no_upload", "team_update", "system"]),
+  title: z.string().min(1, "Title is required"),
+  message: z.string().min(1, "Message is required"),
+  icon: z.string().min(1, "Icon is required"),
+  priority: z.enum(["low", "medium", "high", "critical"]).default("medium"),
+  userId: z.string().optional(), // For user-specific notifications
+  metadata: z.record(z.any()).default({}),
+  expiresAt: z.string().optional(), // ISO string
+});
+
+export const markNotificationReadSchema = z.object({
+  notificationId: z.string().min(1, "Notification ID is required"),
+});
+
 export type InsertUser = z.infer<typeof insertUserSchema>;
 export type LoginData = z.infer<typeof loginSchema>;
 export type User = typeof users.$inferSelect;
 export type Organization = typeof organizations.$inferSelect;
 export type TeamInvitation = typeof teamInvitations.$inferSelect;
+export type Notification = typeof notifications.$inferSelect;
 export type OnboardingData = typeof onboardingData.$inferSelect;
 export type InsertOnboardingData = z.infer<typeof onboardingSchema>;
 export type InviteTeamMemberData = z.infer<typeof inviteTeamMemberSchema>;
 export type UpdateTeamMemberData = z.infer<typeof updateTeamMemberSchema>;
+export type CreateNotificationData = z.infer<typeof createNotificationSchema>;
+export type MarkNotificationReadData = z.infer<typeof markNotificationReadSchema>;

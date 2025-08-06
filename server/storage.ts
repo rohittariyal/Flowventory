@@ -1,4 +1,4 @@
-import { type User, type InsertUser, type OnboardingData, type InsertOnboardingData, type PlatformConnections, type Organization, type TeamInvitation, type InviteTeamMemberData, type UpdateTeamMemberData } from "@shared/schema";
+import { type User, type InsertUser, type OnboardingData, type InsertOnboardingData, type PlatformConnections, type Organization, type TeamInvitation, type InviteTeamMemberData, type UpdateTeamMemberData, type Notification, type CreateNotificationData } from "@shared/schema";
 import { randomUUID } from "crypto";
 import session from "express-session";
 import createMemoryStore from "memorystore";
@@ -27,6 +27,12 @@ export interface IStorage {
   removeTeamMember(organizationId: string, userId: string): Promise<void>;
   getTeamInvitations(organizationId: string): Promise<TeamInvitation[]>;
   
+  // Notification methods
+  createNotification(organizationId: string, notificationData: CreateNotificationData): Promise<Notification>;
+  getNotifications(organizationId: string, userId?: string): Promise<Notification[]>;
+  markNotificationAsRead(notificationId: string, userId: string): Promise<void>;
+  deleteExpiredNotifications(): Promise<void>;
+  
   sessionStore: session.Store;
 }
 
@@ -35,6 +41,7 @@ export class MemStorage implements IStorage {
   private onboardingData: Map<string, OnboardingData>;
   private organizations: Map<string, Organization>;
   private teamInvitations: Map<string, TeamInvitation>;
+  private notifications: Map<string, Notification>;
   public sessionStore: session.Store;
 
   constructor() {
@@ -42,8 +49,77 @@ export class MemStorage implements IStorage {
     this.onboardingData = new Map();
     this.organizations = new Map();
     this.teamInvitations = new Map();
+    this.notifications = new Map();
     this.sessionStore = new MemoryStore({
       checkPeriod: 86400000,
+    });
+    
+    // Initialize with some sample notifications
+    this.initializeSampleNotifications();
+  }
+
+  private initializeSampleNotifications() {
+    // Create sample organization if it doesn't exist
+    const sampleOrgId = "sample-org-123";
+    if (!this.organizations.has(sampleOrgId)) {
+      this.organizations.set(sampleOrgId, {
+        id: sampleOrgId,
+        name: "Sample Organization",
+        createdAt: new Date(),
+      });
+    }
+
+    // Add sample notifications
+    const notifications = [
+      {
+        id: randomUUID(),
+        organizationId: sampleOrgId,
+        userId: null,
+        type: "inventory_low" as const,
+        title: "Low Inventory Alert",
+        message: "3 products are below reorder level",
+        icon: "AlertTriangle",
+        priority: "high" as const,
+        isRead: "false",
+        readBy: {},
+        metadata: { productCount: 3, products: ["SKU-001", "SKU-007", "SKU-012"] },
+        createdAt: new Date(Date.now() - 2 * 60 * 60 * 1000), // 2 hours ago
+        expiresAt: null,
+      },
+      {
+        id: randomUUID(),
+        organizationId: sampleOrgId,
+        userId: null,
+        type: "api_connection_failed" as const,
+        title: "API Connection Failed",
+        message: "Shopify connection lost - data sync interrupted",
+        icon: "WifiOff",
+        priority: "critical" as const,
+        isRead: "false",
+        readBy: {},
+        metadata: { platform: "Shopify", lastSync: new Date(Date.now() - 30 * 60 * 1000) },
+        createdAt: new Date(Date.now() - 30 * 60 * 1000), // 30 minutes ago
+        expiresAt: null,
+      },
+      {
+        id: randomUUID(),
+        organizationId: sampleOrgId,
+        userId: null,
+        type: "no_upload" as const,
+        title: "No Data Upload",
+        message: "No inventory data uploaded in last 7 days",
+        icon: "Upload",
+        priority: "medium" as const,
+        isRead: "false",
+        readBy: {},
+        metadata: { lastUpload: new Date(Date.now() - 7 * 24 * 60 * 60 * 1000) },
+        createdAt: new Date(Date.now() - 24 * 60 * 60 * 1000), // 1 day ago
+        expiresAt: null,
+      },
+    ];
+
+    notifications.forEach(notification => {
+      this.notifications.set(notification.id, notification);
     });
   }
 
@@ -206,6 +282,72 @@ export class MemStorage implements IStorage {
     return Array.from(this.teamInvitations.values()).filter(
       (invitation) => invitation.organizationId === organizationId
     );
+  }
+
+  // Notification methods
+  async createNotification(organizationId: string, notificationData: CreateNotificationData): Promise<Notification> {
+    const notification: Notification = {
+      id: randomUUID(),
+      organizationId,
+      userId: notificationData.userId || null,
+      type: notificationData.type,
+      title: notificationData.title,
+      message: notificationData.message,
+      icon: notificationData.icon,
+      priority: notificationData.priority,
+      isRead: "false",
+      readBy: {},
+      metadata: notificationData.metadata,
+      createdAt: new Date(),
+      expiresAt: notificationData.expiresAt ? new Date(notificationData.expiresAt) : null,
+    };
+
+    this.notifications.set(notification.id, notification);
+    return notification;
+  }
+
+  async getNotifications(organizationId: string, userId?: string): Promise<Notification[]> {
+    const now = new Date();
+    return Array.from(this.notifications.values())
+      .filter(notification => {
+        // Filter by organization
+        if (notification.organizationId !== organizationId) return false;
+        
+        // Filter out expired notifications
+        if (notification.expiresAt && notification.expiresAt < now) return false;
+        
+        // For organization-wide notifications or user-specific notifications
+        if (notification.userId === null || notification.userId === userId) {
+          // Show only unread notifications or notifications not read by this user
+          if (userId && notification.readBy && notification.readBy[userId]) {
+            return false; // User has already read this notification
+          }
+          return true;
+        }
+        
+        return false;
+      })
+      .sort((a, b) => b.createdAt!.getTime() - a.createdAt!.getTime()); // Sort by newest first
+  }
+
+  async markNotificationAsRead(notificationId: string, userId: string): Promise<void> {
+    const notification = this.notifications.get(notificationId);
+    if (notification) {
+      if (!notification.readBy) {
+        notification.readBy = {};
+      }
+      notification.readBy[userId] = true;
+      this.notifications.set(notificationId, notification);
+    }
+  }
+
+  async deleteExpiredNotifications(): Promise<void> {
+    const now = new Date();
+    for (const [id, notification] of this.notifications.entries()) {
+      if (notification.expiresAt && notification.expiresAt < now) {
+        this.notifications.delete(id);
+      }
+    }
   }
 }
 

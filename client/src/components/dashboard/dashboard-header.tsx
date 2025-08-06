@@ -3,6 +3,7 @@ import { Badge } from "@/components/ui/badge";
 import { LogOut, Settings, Bell, Upload, FileSpreadsheet, Users } from "lucide-react";
 import { useAuth } from "@/hooks/use-auth";
 import { useLocation } from "wouter";
+import { NotificationPanel } from "../NotificationPanel";
 import { type User, type OnboardingData } from "@shared/schema";
 
 interface DashboardHeaderProps {
@@ -89,9 +90,7 @@ export function DashboardHeader({ user, onImportClick, onSettingsClick }: Dashbo
             </Button>
           )}
           
-          <Button variant="ghost" size="sm" className="text-muted-foreground hover:text-foreground">
-            <Bell className="h-4 w-4" />
-          </Button>
+          <NotificationPanel user={user} />
           {/* Settings - Admin only */}
           {user.role === "admin" && (
             <Button 

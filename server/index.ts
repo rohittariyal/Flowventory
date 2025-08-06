@@ -1,6 +1,7 @@
 import express, { type Request, Response, NextFunction } from "express";
 import { registerRoutes } from "./routes";
 import { setupVite, serveStatic, log } from "./vite";
+import { NotificationGenerators } from "./notificationGenerators";
 
 const app = express();
 app.use(express.json());
@@ -67,5 +68,11 @@ app.use((req, res, next) => {
     reusePort: true,
   }, () => {
     log(`serving on port ${port}`);
+    
+    // Start notification generators in development
+    if (app.get("env") === "development") {
+      // Start periodic checks every 5 minutes for demo purposes
+      NotificationGenerators.startPeriodicChecks(5);
+    }
   });
 })();
