@@ -2,6 +2,14 @@ import { sql } from "drizzle-orm";
 import { pgTable, text, varchar, timestamp, jsonb } from "drizzle-orm/pg-core";
 import { createInsertSchema } from "drizzle-zod";
 import { z } from "zod";
+import { relations } from "drizzle-orm";
+
+export const organizations = pgTable("organizations", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  name: text("name").notNull(),
+  createdBy: text("created_by").notNull(), // Email of admin who created org
+  createdAt: timestamp("created_at").defaultNow(),
+});
 
 export const users = pgTable("users", {
   id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
@@ -11,8 +19,21 @@ export const users = pgTable("users", {
   email: text("email").notNull().unique(),
   companyName: text("company_name").notNull(),
   role: text("role", { enum: ["admin", "manager", "viewer"] }).notNull().default("viewer"),
+  organizationId: varchar("organization_id").references(() => organizations.id),
   onboardingComplete: text("onboarding_complete").default("false"),
   platformConnections: jsonb("platform_connections").default({}),
+  invitedBy: text("invited_by"), // Email of admin who invited them
+  joinedAt: timestamp("joined_at").defaultNow(),
+  createdAt: timestamp("created_at").defaultNow(),
+});
+
+export const teamInvitations = pgTable("team_invitations", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  email: text("email").notNull(),
+  role: text("role", { enum: ["manager", "viewer"] }).notNull(),
+  organizationId: varchar("organization_id").references(() => organizations.id).notNull(),
+  invitedBy: text("invited_by").notNull(), // Admin email
+  status: text("status", { enum: ["pending", "accepted", "expired"] }).default("pending").notNull(),
   createdAt: timestamp("created_at").defaultNow(),
 });
 
@@ -88,8 +109,43 @@ export const platformConnectionSchema = z.object({
   apiKey: z.string().min(1, "API key is required"),
 });
 
+// Relations
+export const organizationsRelations = relations(organizations, ({ many }) => ({
+  users: many(users),
+  invitations: many(teamInvitations),
+}));
+
+export const usersRelations = relations(users, ({ one }) => ({
+  organization: one(organizations, {
+    fields: [users.organizationId],
+    references: [organizations.id],
+  }),
+}));
+
+export const teamInvitationsRelations = relations(teamInvitations, ({ one }) => ({
+  organization: one(organizations, {
+    fields: [teamInvitations.organizationId],
+    references: [organizations.id],
+  }),
+}));
+
+// Team management schemas
+export const inviteTeamMemberSchema = z.object({
+  email: z.string().email("Invalid email address"),
+  role: z.enum(["manager", "viewer"], { required_error: "Role is required" }),
+});
+
+export const updateTeamMemberSchema = z.object({
+  userId: z.string().min(1, "User ID is required"),
+  role: z.enum(["manager", "viewer"], { required_error: "Role is required" }),
+});
+
 export type InsertUser = z.infer<typeof insertUserSchema>;
 export type LoginData = z.infer<typeof loginSchema>;
 export type User = typeof users.$inferSelect;
+export type Organization = typeof organizations.$inferSelect;
+export type TeamInvitation = typeof teamInvitations.$inferSelect;
 export type OnboardingData = typeof onboardingData.$inferSelect;
 export type InsertOnboardingData = z.infer<typeof onboardingSchema>;
+export type InviteTeamMemberData = z.infer<typeof inviteTeamMemberSchema>;
+export type UpdateTeamMemberData = z.infer<typeof updateTeamMemberSchema>;

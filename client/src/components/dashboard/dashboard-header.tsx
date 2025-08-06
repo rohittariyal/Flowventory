@@ -1,7 +1,8 @@
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
-import { LogOut, Settings, Bell, Upload, FileSpreadsheet } from "lucide-react";
+import { LogOut, Settings, Bell, Upload, FileSpreadsheet, Users } from "lucide-react";
 import { useAuth } from "@/hooks/use-auth";
+import { useLocation } from "wouter";
 import { type User, type OnboardingData } from "@shared/schema";
 
 interface DashboardHeaderProps {
@@ -12,6 +13,7 @@ interface DashboardHeaderProps {
 
 export function DashboardHeader({ user, onImportClick, onSettingsClick }: DashboardHeaderProps) {
   const { logoutMutation } = useAuth();
+  const [, setLocation] = useLocation();
 
   const getRoleBadgeColor = (role: string) => {
     switch (role) {
@@ -73,6 +75,18 @@ export function DashboardHeader({ user, onImportClick, onSettingsClick }: Dashbo
                 Import Sales
               </Button>
             </div>
+          )}
+
+          {/* Team Management Button - Admin and Manager only */}
+          {(user.role === "admin" || user.role === "manager") && (
+            <Button 
+              variant="ghost" 
+              size="sm" 
+              onClick={() => setLocation("/team")}
+              className="text-blue-400 hover:text-blue-300"
+            >
+              <Users className="h-4 w-4" />
+            </Button>
           )}
           
           <Button variant="ghost" size="sm" className="text-muted-foreground hover:text-foreground">
