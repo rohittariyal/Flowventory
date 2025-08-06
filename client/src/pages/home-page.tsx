@@ -23,20 +23,35 @@ export default function HomePage() {
 
   useEffect(() => {
     if (onboardingData && user) {
-      // For complete design preview, show ALL panels regardless of onboarding data
-      const panels = [
-        "business-pulse",     // Always show
-        "sales-intelligence", // Show for demo
-        "inventory-brain",    // Show for demo  
-        "customer-radar",     // Always show
-        "ai-copilot"          // Show for demo
-      ];
+      const panels = ["business-pulse"]; // Always show Business Pulse
       
-      // Role-based panels
-      if (user.role === "admin" || user.role === "manager") {
+      // Show Sales Intelligence Panel if user selected any sales platforms
+      if (onboardingData.salesChannels && onboardingData.salesChannels.length > 0) {
+        panels.push("sales-intelligence");
+      }
+      
+      // Show Inventory Panel if platforms were selected
+      if (onboardingData.salesChannels && onboardingData.salesChannels.length > 0) {
+        panels.push("inventory-brain");
+      }
+      
+      // Show AI Copilot Panel if user selected any AI features
+      if (onboardingData.aiAssistance && onboardingData.aiAssistance.length > 0) {
+        panels.push("ai-copilot");
+      }
+      
+      // Show Customer Radar Panel if user selected Customer Feedback Analysis
+      if (onboardingData.aiAssistance?.includes("feedback-analysis")) {
+        panels.push("customer-radar");
+      }
+      
+      // Show Return Abuse Panel if user selected Return Alerts (admin/manager only)
+      if (onboardingData.aiAssistance?.includes("return-alerts") && 
+          (user.role === "admin" || user.role === "manager")) {
         panels.push("return-abuse");
       }
       
+      // Show PO Generator Panel for admins only
       if (user.role === "admin") {
         panels.push("po-generator");
       }
@@ -57,11 +72,11 @@ export default function HomePage() {
             <BusinessPulsePanel className="xl:col-span-2" />
           )}
           
-          {/* Sales Intelligence - Show for demo */}
-          {selectedPanels.includes("sales-intelligence") && (
+          {/* Sales Intelligence - Based on selected channels */}
+          {selectedPanels.includes("sales-intelligence") && onboardingData?.salesChannels && (
             <SalesIntelligencePanel 
               className="xl:col-span-2" 
-              salesChannels={onboardingData?.salesChannels || ["amazon", "shopify", "flipkart"]}
+              salesChannels={onboardingData.salesChannels}
             />
           )}
           
