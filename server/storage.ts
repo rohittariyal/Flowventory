@@ -1,4 +1,4 @@
-import { type User, type InsertUser, type OnboardingData, type InsertOnboardingData } from "@shared/schema";
+import { type User, type InsertUser, type OnboardingData, type InsertOnboardingData, type PlatformConnections } from "@shared/schema";
 import { randomUUID } from "crypto";
 import session from "express-session";
 import createMemoryStore from "memorystore";
@@ -14,6 +14,7 @@ export interface IStorage {
   getUserByEmail(email: string): Promise<User | undefined>;
   createUser(user: InsertUser): Promise<User>;
   updateUserOnboarding(userId: string, complete: boolean): Promise<void>;
+  updateUserPlatformConnections(userId: string, connections: PlatformConnections): Promise<void>;
   saveOnboardingData(userId: string, data: InsertOnboardingData): Promise<OnboardingData>;
   getOnboardingData(userId: string): Promise<OnboardingData | undefined>;
   sessionStore: session.Store;
@@ -56,6 +57,7 @@ export class MemStorage implements IStorage {
       username: insertUser.email, // Use email as username
       role: insertUser.role || "viewer", // Ensure role is defined
       onboardingComplete: "false",
+      platformConnections: {},
       createdAt: new Date(),
     };
     this.users.set(id, user);
@@ -66,6 +68,14 @@ export class MemStorage implements IStorage {
     const user = this.users.get(userId);
     if (user) {
       user.onboardingComplete = complete ? "true" : "false";
+      this.users.set(userId, user);
+    }
+  }
+
+  async updateUserPlatformConnections(userId: string, connections: PlatformConnections): Promise<void> {
+    const user = this.users.get(userId);
+    if (user) {
+      user.platformConnections = connections;
       this.users.set(userId, user);
     }
   }

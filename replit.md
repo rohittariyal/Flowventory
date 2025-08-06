@@ -3,6 +3,10 @@
 This is a comprehensive business intelligence dashboard application built with React and Express. It features user authentication, role-based access control, post-login onboarding, and a conditional dashboard UI with dark theme and light green accents. The application provides AI-powered business insights, inventory management, sales intelligence, customer analytics, and return abuse detection based on user roles and onboarding preferences.
 
 ## Recent Changes (Latest First)
+- **2025-01-06**: Updated Settings Panel to use persistent backend storage instead of local state for platform connections
+- **2025-01-06**: Added database schema to include platformConnections field in user table
+- **2025-01-06**: Created backend routes (/api/platforms/connect, /api/platforms/disconnect, /api/platforms/connections) for saving and retrieving platform connection data
+- **2025-01-06**: Enhanced frontend to use persistent backend storage instead of local state for platform connections
 - **2025-01-06**: Added comprehensive Settings Panel showing user's selected platforms with simulated API key connections
 - **2025-01-06**: Implemented CSV import functionality with drag-and-drop interface, data preview, and header cleanup
 - **2025-01-06**: Created import buttons in dashboard header for inventory and sales data uploads

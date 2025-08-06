@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import {
   Dialog,
   DialogContent,
@@ -12,6 +12,9 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Separator } from "@/components/ui/separator";
 import { Settings, CheckCircle, Link, Key, AlertCircle } from "lucide-react";
+import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
+import { apiRequest } from "@/lib/queryClient";
+import { useToast } from "@/hooks/use-toast";
 import { type OnboardingData, type User } from "@shared/schema";
 
 interface SettingsPanelProps {
@@ -24,14 +27,72 @@ interface SettingsPanelProps {
 interface ConnectionStatus {
   [key: string]: {
     connected: boolean;
-    apiKey?: string;
+    connectedAt?: string;
   };
 }
 
 export function SettingsPanel({ isOpen, onClose, user, onboardingData }: SettingsPanelProps) {
-  const [connections, setConnections] = useState<ConnectionStatus>({});
   const [connectingPlatform, setConnectingPlatform] = useState<string | null>(null);
   const [apiKeyInput, setApiKeyInput] = useState<string>("");
+  const { toast } = useToast();
+  const queryClient = useQueryClient();
+
+  // Fetch platform connections from backend
+  const { data: connections = {}, isLoading } = useQuery<ConnectionStatus>({
+    queryKey: ["/api/platforms/connections"],
+    enabled: isOpen,
+  });
+
+  // Connect platform mutation
+  const connectMutation = useMutation({
+    mutationFn: async ({ platform, apiKey }: { platform: string; apiKey: string }) => {
+      const res = await apiRequest("POST", "/api/platforms/connect", {
+        platform,
+        apiKey,
+      });
+      return await res.json();
+    },
+    onSuccess: (data) => {
+      queryClient.invalidateQueries({ queryKey: ["/api/platforms/connections"] });
+      toast({
+        title: "Connected Successfully",
+        description: `${data.platform} has been connected to your dashboard.`,
+      });
+      setConnectingPlatform(null);
+      setApiKeyInput("");
+    },
+    onError: (error: Error) => {
+      toast({
+        title: "Connection Failed",
+        description: error.message,
+        variant: "destructive",
+      });
+    },
+  });
+
+  // Disconnect platform mutation
+  const disconnectMutation = useMutation({
+    mutationFn: async (platform: string) => {
+      const res = await apiRequest("POST", "/api/platforms/disconnect", {
+        platform,
+      });
+      return await res.json();
+    },
+    onSuccess: (data) => {
+      queryClient.invalidateQueries({ queryKey: ["/api/platforms/connections"] });
+      toast({
+        title: "Disconnected Successfully",
+        description: `${data.platform} has been disconnected from your dashboard.`,
+      });
+    },
+    onError: (error: Error) => {
+      toast({
+        title: "Disconnection Failed",
+        description: error.message,
+        variant: "destructive",
+      });
+    },
+  });
 
   const getPlatformDetails = (platform: string) => {
     const platformMap: Record<string, { name: string; icon: string; description: string }> = {
@@ -81,30 +142,15 @@ export function SettingsPanel({ isOpen, onClose, user, onboardingData }: Setting
 
   const handleConfirmConnection = () => {
     if (connectingPlatform && apiKeyInput.trim()) {
-      setConnections(prev => ({
-        ...prev,
-        [connectingPlatform]: {
-          connected: true,
-          apiKey: apiKeyInput.trim()
-        }
-      }));
-      
-      // Show success message
-      setTimeout(() => {
-        setConnectingPlatform(null);
-        setApiKeyInput("");
-      }, 500);
+      connectMutation.mutate({
+        platform: connectingPlatform,
+        apiKey: apiKeyInput.trim(),
+      });
     }
   };
 
   const handleDisconnect = (platform: string) => {
-    setConnections(prev => ({
-      ...prev,
-      [platform]: {
-        connected: false,
-        apiKey: undefined
-      }
-    }));
+    disconnectMutation.mutate(platform);
   };
 
   const isConnected = (platform: string) => connections[platform]?.connected || false;
@@ -186,9 +232,10 @@ export function SettingsPanel({ isOpen, onClose, user, onboardingData }: Setting
                                 variant="outline"
                                 size="sm"
                                 onClick={() => handleDisconnect(platform)}
+                                disabled={disconnectMutation.isPending}
                                 className="text-muted-foreground hover:text-foreground"
                               >
-                                Disconnect
+                                {disconnectMutation.isPending ? "Disconnecting..." : "Disconnect"}
                               </Button>
                             ) : (
                               <Button
@@ -253,11 +300,11 @@ export function SettingsPanel({ isOpen, onClose, user, onboardingData }: Setting
                   </Button>
                   <Button
                     onClick={handleConfirmConnection}
-                    disabled={!apiKeyInput.trim()}
+                    disabled={!apiKeyInput.trim() || connectMutation.isPending}
                     className="flex-1 bg-primary hover:bg-primary/90"
                   >
                     <CheckCircle className="h-4 w-4 mr-1" />
-                    Connect
+                    {connectMutation.isPending ? "Connecting..." : "Connect"}
                   </Button>
                 </div>
               </CardContent>

@@ -1,5 +1,5 @@
 import { sql } from "drizzle-orm";
-import { pgTable, text, varchar, timestamp } from "drizzle-orm/pg-core";
+import { pgTable, text, varchar, timestamp, jsonb } from "drizzle-orm/pg-core";
 import { createInsertSchema } from "drizzle-zod";
 import { z } from "zod";
 
@@ -12,6 +12,7 @@ export const users = pgTable("users", {
   companyName: text("company_name").notNull(),
   role: text("role", { enum: ["admin", "manager", "viewer"] }).notNull().default("viewer"),
   onboardingComplete: text("onboarding_complete").default("false"),
+  platformConnections: jsonb("platform_connections").default({}),
   createdAt: timestamp("created_at").defaultNow(),
 });
 
@@ -68,6 +69,23 @@ export const onboardingSchema = createInsertSchema(onboardingData).omit({
   salesChannels: z.array(z.string()).min(1, "At least one sales channel is required"),
   aiAssistance: z.array(z.string()),
   notificationMethods: z.array(z.string()).min(1, "At least one notification method is required"),
+});
+
+// Platform connection types
+export interface PlatformConnection {
+  connected: boolean;
+  apiKey?: string;
+  connectedAt?: string;
+}
+
+export interface PlatformConnections {
+  [platformName: string]: PlatformConnection;
+}
+
+// Schema for updating platform connections
+export const platformConnectionSchema = z.object({
+  platform: z.string().min(1, "Platform name is required"),
+  apiKey: z.string().min(1, "API key is required"),
 });
 
 export type InsertUser = z.infer<typeof insertUserSchema>;
