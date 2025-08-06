@@ -1,7 +1,7 @@
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
-import { Package, AlertTriangle, TrendingDown, Plus } from "lucide-react";
+import { Package, AlertTriangle, TrendingDown, Plus, Download } from "lucide-react";
 import { type User } from "@shared/schema";
 
 interface InventoryBrainPanelProps {
@@ -97,6 +97,53 @@ export function InventoryBrainPanel({ className, user, importedData }: Inventory
   const lowStockItems = inventoryData.filter(item => item.status !== "healthy");
   const canManagePO = user.role === "admin";
 
+  const downloadInventoryReport = () => {
+    // Create CSV data
+    const headers = [
+      'SKU',
+      'Product Name', 
+      'Stock Left',
+      'Sales Velocity',
+      'Projected Days Left',
+      'Alert Status'
+    ];
+
+    const csvData = inventoryData.map(item => [
+      item.sku,
+      item.productName,
+      item.stock,
+      item.velocity,
+      item.daysLeft,
+      item.daysLeft < 3 ? 'Reorder Soon' : 'Normal'
+    ]);
+
+    // Convert to CSV format
+    const csvContent = [
+      headers.join(','),
+      ...csvData.map(row => row.map(field => 
+        typeof field === 'string' && field.includes(',') 
+          ? `"${field}"` 
+          : field
+      ).join(','))
+    ].join('\n');
+
+    // Create blob and download
+    const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
+    const link = document.createElement('a');
+    const url = URL.createObjectURL(blob);
+    
+    // Generate filename with today's date
+    const today = new Date().toISOString().split('T')[0];
+    const filename = `inventory_report_${today}.csv`;
+    
+    link.setAttribute('href', url);
+    link.setAttribute('download', filename);
+    link.style.visibility = 'hidden';
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+  };
+
   return (
     <Card className={`dashboard-card ${className}`}>
       <CardHeader>
@@ -110,12 +157,23 @@ export function InventoryBrainPanel({ className, user, importedData }: Inventory
               </Badge>
             )}
           </CardTitle>
-          {canManagePO && (
-            <Button size="sm" className="bg-primary hover:bg-primary">
-              <Plus className="h-4 w-4 mr-2" />
-              Generate PO
+          <div className="flex items-center space-x-2">
+            <Button 
+              size="sm" 
+              variant="outline"
+              onClick={downloadInventoryReport}
+              className="text-primary border-primary hover:bg-primary hover:text-primary-foreground"
+            >
+              <Download className="h-4 w-4 mr-2" />
+              Download Report
             </Button>
-          )}
+            {canManagePO && (
+              <Button size="sm" className="bg-primary hover:bg-primary">
+                <Plus className="h-4 w-4 mr-2" />
+                Generate PO
+              </Button>
+            )}
+          </div>
         </div>
       </CardHeader>
       <CardContent className="dashboard-panel">
