@@ -75,8 +75,17 @@ export function setupAuth(app: Express) {
     });
   });
 
-  app.post("/api/login", passport.authenticate("local"), (req, res) => {
-    res.status(200).json(req.user);
+  app.post("/api/login", passport.authenticate("local"), async (req, res) => {
+    try {
+      const user = req.user!;
+      // Add test alerts for the user on login
+      const organizationId = user.organizationId || "sample-org-123";
+      await storage.addTestAlertsForUser(user.id, organizationId);
+      res.status(200).json(user);
+    } catch (error) {
+      console.error("Error adding test alerts on login:", error);
+      res.status(200).json(req.user); // Still allow login even if alerts fail
+    }
   });
 
   app.post("/api/logout", (req, res, next) => {

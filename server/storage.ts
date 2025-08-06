@@ -65,61 +65,86 @@ export class MemStorage implements IStorage {
       this.organizations.set(sampleOrgId, {
         id: sampleOrgId,
         name: "Sample Organization",
+        createdBy: "system",
         createdAt: new Date(),
       });
     }
+  }
 
-    // Add sample notifications
-    const notifications = [
+  // Add test alerts for a specific user on login
+  async addTestAlertsForUser(userId: string, organizationId: string = "sample-org-123"): Promise<void> {
+    const testAlerts = [
       {
-        id: randomUUID(),
-        organizationId: sampleOrgId,
-        userId: null,
+        id: `test-alert-1-${userId}`,
+        organizationId,
+        userId: null, // Organization-wide alerts
         type: "inventory_low" as const,
-        title: "Low Inventory Alert",
-        message: "3 products are below reorder level",
+        title: "Low Stock Alert",
+        message: "3 SKUs have stock below reorder level",
         icon: "AlertTriangle",
         priority: "high" as const,
         isRead: "false",
         readBy: {},
-        metadata: { productCount: 3, products: ["SKU-001", "SKU-007", "SKU-012"] },
-        createdAt: new Date(Date.now() - 2 * 60 * 60 * 1000), // 2 hours ago
+        metadata: { 
+          productCount: 3, 
+          products: ["SKU-001", "SKU-007", "SKU-012"],
+          skus: ["Widget Pro", "Phone Case", "USB Cable"]
+        },
+        createdAt: new Date(),
         expiresAt: null,
       },
       {
-        id: randomUUID(),
-        organizationId: sampleOrgId,
+        id: `test-alert-2-${userId}`,
+        organizationId,
         userId: null,
         type: "api_connection_failed" as const,
-        title: "API Connection Failed",
-        message: "Shopify connection lost - data sync interrupted",
+        title: "Sync Failed",
+        message: "Amazon sync failed – API key missing",
         icon: "WifiOff",
         priority: "critical" as const,
         isRead: "false",
         readBy: {},
-        metadata: { platform: "Shopify", lastSync: new Date(Date.now() - 30 * 60 * 1000) },
-        createdAt: new Date(Date.now() - 30 * 60 * 1000), // 30 minutes ago
+        metadata: { 
+          platform: "Amazon",
+          error: "Invalid API credentials",
+          lastSync: new Date(Date.now() - 2 * 60 * 60 * 1000)
+        },
+        createdAt: new Date(),
         expiresAt: null,
       },
       {
-        id: randomUUID(),
-        organizationId: sampleOrgId,
+        id: `test-alert-3-${userId}`,
+        organizationId,
         userId: null,
         type: "no_upload" as const,
-        title: "No Data Upload",
-        message: "No inventory data uploaded in last 7 days",
+        title: "Data Upload Missing",
+        message: "No CSV uploaded in 7 days",
         icon: "Upload",
         priority: "medium" as const,
         isRead: "false",
         readBy: {},
-        metadata: { lastUpload: new Date(Date.now() - 7 * 24 * 60 * 60 * 1000) },
-        createdAt: new Date(Date.now() - 24 * 60 * 60 * 1000), // 1 day ago
+        metadata: { 
+          lastUpload: new Date(Date.now() - 7 * 24 * 60 * 60 * 1000),
+          daysSinceUpload: 7,
+          expectedFrequency: "daily"
+        },
+        createdAt: new Date(),
         expiresAt: null,
       },
     ];
 
-    notifications.forEach(notification => {
-      this.notifications.set(notification.id, notification);
+    // Clear any existing test alerts for this user first
+    const keysToDelete: string[] = [];
+    this.notifications.forEach((notification, id) => {
+      if (id.includes(`test-alert-`) && id.includes(userId)) {
+        keysToDelete.push(id);
+      }
+    });
+    keysToDelete.forEach(id => this.notifications.delete(id));
+
+    // Add the new test alerts
+    testAlerts.forEach(alert => {
+      this.notifications.set(alert.id, alert);
     });
   }
 
@@ -319,8 +344,11 @@ export class MemStorage implements IStorage {
         // For organization-wide notifications or user-specific notifications
         if (notification.userId === null || notification.userId === userId) {
           // Show only unread notifications or notifications not read by this user
-          if (userId && notification.readBy && notification.readBy[userId]) {
-            return false; // User has already read this notification
+          if (userId && notification.readBy && typeof notification.readBy === 'object' && notification.readBy !== null) {
+            const readByRecord = notification.readBy as Record<string, boolean>;
+            if (readByRecord[userId]) {
+              return false; // User has already read this notification
+            }
           }
           return true;
         }
@@ -333,21 +361,25 @@ export class MemStorage implements IStorage {
   async markNotificationAsRead(notificationId: string, userId: string): Promise<void> {
     const notification = this.notifications.get(notificationId);
     if (notification) {
-      if (!notification.readBy) {
+      if (!notification.readBy || typeof notification.readBy !== 'object') {
         notification.readBy = {};
       }
-      notification.readBy[userId] = true;
+      const readByRecord = notification.readBy as Record<string, boolean>;
+      readByRecord[userId] = true;
+      notification.readBy = readByRecord;
       this.notifications.set(notificationId, notification);
     }
   }
 
   async deleteExpiredNotifications(): Promise<void> {
     const now = new Date();
-    for (const [id, notification] of this.notifications.entries()) {
+    const keysToDelete: string[] = [];
+    this.notifications.forEach((notification, id) => {
       if (notification.expiresAt && notification.expiresAt < now) {
-        this.notifications.delete(id);
+        keysToDelete.push(id);
       }
-    }
+    });
+    keysToDelete.forEach(id => this.notifications.delete(id));
   }
 }
 
