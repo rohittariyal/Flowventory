@@ -3,6 +3,10 @@
 This is a comprehensive business intelligence dashboard application built with React and Express. It features user authentication, role-based access control, post-login onboarding, and a conditional dashboard UI with dark theme and light green accents. The application provides AI-powered business insights, inventory management, sales intelligence, customer analytics, and return abuse detection based on user roles and onboarding preferences.
 
 ## Recent Changes (Latest First)
+- **2025-01-06**: Added comprehensive Settings Panel showing user's selected platforms with simulated API key connections
+- **2025-01-06**: Implemented CSV import functionality with drag-and-drop interface, data preview, and header cleanup
+- **2025-01-06**: Created import buttons in dashboard header for inventory and sales data uploads
+- **2025-01-06**: Enhanced Inventory Brain Panel to display imported CSV data with import status badges
 - **2025-01-06**: Added smart AI-like features using dummy logic throughout dashboard
 - **2025-01-06**: Enhanced AI Copilot Panel with smart responses and 1-second response delay
 - **2025-01-06**: Added intelligent Inventory Brain calculations (Days Left = Stock/Velocity formula)

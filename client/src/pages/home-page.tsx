@@ -10,6 +10,7 @@ import { AICopilotPanel } from "@/components/dashboard/ai-copilot-panel";
 import { ReturnAbusePanel } from "@/components/dashboard/return-abuse-panel";
 import { POGeneratorPanel } from "@/components/dashboard/po-generator-panel";
 import { CSVImportModal } from "@/components/csv-import-modal";
+import { SettingsPanel } from "@/components/settings-panel";
 import { type OnboardingData } from "@shared/schema";
 
 export default function HomePage() {
@@ -18,6 +19,7 @@ export default function HomePage() {
   const [showImportModal, setShowImportModal] = useState(false);
   const [importType, setImportType] = useState<'inventory' | 'sales'>('inventory');
   const [importedData, setImportedData] = useState<{inventory?: any[], sales?: any[]}>({});
+  const [showSettings, setShowSettings] = useState(false);
 
   // Fetch user's onboarding data to determine which panels to show
   const { data: onboardingData } = useQuery<OnboardingData>({
@@ -85,7 +87,11 @@ export default function HomePage() {
 
   return (
     <div className="min-h-screen bg-background">
-      <DashboardHeader user={user} onImportClick={openImportModal} />
+      <DashboardHeader 
+        user={user} 
+        onImportClick={openImportModal}
+        onSettingsClick={() => setShowSettings(true)}
+      />
       <main className="p-6 space-y-6">
         {/* Smart Alerts */}
         {onboardingData && (selectedPanels.includes("inventory-brain") || selectedPanels.includes("po-generator")) && (
@@ -163,6 +169,16 @@ export default function HomePage() {
           onImport={handleImport}
           importType={importType}
         />
+
+        {/* Settings Panel */}
+        {onboardingData && (
+          <SettingsPanel
+            isOpen={showSettings}
+            onClose={() => setShowSettings(false)}
+            user={user}
+            onboardingData={onboardingData}
+          />
+        )}
       </main>
     </div>
   );

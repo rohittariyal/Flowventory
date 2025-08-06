@@ -2,14 +2,15 @@ import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { LogOut, Settings, Bell, Upload, FileSpreadsheet } from "lucide-react";
 import { useAuth } from "@/hooks/use-auth";
-import { type User } from "@shared/schema";
+import { type User, type OnboardingData } from "@shared/schema";
 
 interface DashboardHeaderProps {
   user: User;
   onImportClick?: (type: 'inventory' | 'sales') => void;
+  onSettingsClick?: () => void;
 }
 
-export function DashboardHeader({ user, onImportClick }: DashboardHeaderProps) {
+export function DashboardHeader({ user, onImportClick, onSettingsClick }: DashboardHeaderProps) {
   const { logoutMutation } = useAuth();
 
   const getRoleBadgeColor = (role: string) => {
@@ -77,7 +78,12 @@ export function DashboardHeader({ user, onImportClick }: DashboardHeaderProps) {
           <Button variant="ghost" size="sm" className="text-muted-foreground hover:text-foreground">
             <Bell className="h-4 w-4" />
           </Button>
-          <Button variant="ghost" size="sm" className="text-muted-foreground hover:text-foreground">
+          <Button 
+            variant="ghost" 
+            size="sm" 
+            onClick={onSettingsClick}
+            className="text-muted-foreground hover:text-foreground"
+          >
             <Settings className="h-4 w-4" />
           </Button>
           <Button
