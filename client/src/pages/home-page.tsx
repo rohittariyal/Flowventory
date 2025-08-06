@@ -9,11 +9,15 @@ import { CustomerRadarPanel } from "@/components/dashboard/customer-radar-panel"
 import { AICopilotPanel } from "@/components/dashboard/ai-copilot-panel";
 import { ReturnAbusePanel } from "@/components/dashboard/return-abuse-panel";
 import { POGeneratorPanel } from "@/components/dashboard/po-generator-panel";
+import { CSVImportModal } from "@/components/csv-import-modal";
 import { type OnboardingData } from "@shared/schema";
 
 export default function HomePage() {
   const { user } = useAuth();
   const [selectedPanels, setSelectedPanels] = useState<string[]>([]);
+  const [showImportModal, setShowImportModal] = useState(false);
+  const [importType, setImportType] = useState<'inventory' | 'sales'>('inventory');
+  const [importedData, setImportedData] = useState<{inventory?: any[], sales?: any[]}>({});
 
   // Fetch user's onboarding data to determine which panels to show
   const { data: onboardingData } = useQuery<OnboardingData>({
@@ -60,11 +64,28 @@ export default function HomePage() {
     }
   }, [onboardingData, user]);
 
+  const handleImport = (data: any[], type: 'inventory' | 'sales') => {
+    setImportedData(prev => ({
+      ...prev,
+      [type]: data
+    }));
+    console.log(`Imported ${type} data:`, data);
+    
+    // Show success message
+    const successMessage = `Successfully imported ${data.length} ${type} records! The data is now visible in your ${type} dashboard panel.`;
+    alert(successMessage);
+  };
+
+  const openImportModal = (type: 'inventory' | 'sales') => {
+    setImportType(type);
+    setShowImportModal(true);
+  };
+
   if (!user) return null;
 
   return (
     <div className="min-h-screen bg-background">
-      <DashboardHeader user={user} />
+      <DashboardHeader user={user} onImportClick={openImportModal} />
       <main className="p-6 space-y-6">
         {/* Smart Alerts */}
         {onboardingData && (selectedPanels.includes("inventory-brain") || selectedPanels.includes("po-generator")) && (
@@ -97,7 +118,7 @@ export default function HomePage() {
           
           {/* Inventory Brain - Conditional on inventory size */}
           {selectedPanels.includes("inventory-brain") && (
-            <InventoryBrainPanel user={user} />
+            <InventoryBrainPanel user={user} importedData={importedData.inventory} />
           )}
           
           {/* Customer Radar - Always shown */}
@@ -134,6 +155,14 @@ export default function HomePage() {
             </div>
           </div>
         )}
+
+        {/* CSV Import Modal */}
+        <CSVImportModal
+          isOpen={showImportModal}
+          onClose={() => setShowImportModal(false)}
+          onImport={handleImport}
+          importType={importType}
+        />
       </main>
     </div>
   );

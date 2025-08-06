@@ -7,6 +7,7 @@ import { type User } from "@shared/schema";
 interface InventoryBrainPanelProps {
   className?: string;
   user: User;
+  importedData?: any[];
 }
 
 interface InventoryItem {
@@ -18,9 +19,22 @@ interface InventoryItem {
   suggestedReorder: number;
 }
 
-export function InventoryBrainPanel({ className, user }: InventoryBrainPanelProps) {
+export function InventoryBrainPanel({ className, user, importedData }: InventoryBrainPanelProps) {
+  // Transform imported data or use default data
+  const transformImportedData = (data: any[]): (InventoryItem & { daysLeft: number })[] => {
+    return data.map((item, index) => ({
+      sku: item.sku || item.SKU || `IMP-${index + 1}`,
+      productName: item.name || item.product_name || item['Product Name'] || `Imported Item ${index + 1}`,
+      stock: parseInt(item.stock || item.Stock || item.quantity || item.Quantity || '0'),
+      velocity: parseFloat(item.velocity || item.Velocity || (Math.random() * 20 + 5).toFixed(1)), // Random velocity if not provided
+      status: "healthy" as const,
+      suggestedReorder: 0,
+      daysLeft: Math.round((parseInt(item.stock || item.Stock || item.quantity || item.Quantity || '0')) / (parseFloat(item.velocity || item.Velocity || (Math.random() * 20 + 5).toFixed(1))))
+    }));
+  };
+
   // Smart inventory data with days left calculations
-  const inventoryData: (InventoryItem & { daysLeft: number })[] = [
+  const inventoryData: (InventoryItem & { daysLeft: number })[] = importedData ? transformImportedData(importedData) : [
     {
       sku: "ELC-001",
       productName: "Wireless Earbuds Pro",
@@ -90,6 +104,11 @@ export function InventoryBrainPanel({ className, user }: InventoryBrainPanelProp
           <CardTitle className="flex items-center space-x-2">
             <Package className="h-5 w-5 text-primary" />
             <span>Inventory Brain</span>
+            {importedData && (
+              <Badge className="bg-green-500/20 text-green-400 border-green-500/30 text-xs ml-2">
+                {importedData.length} imported
+              </Badge>
+            )}
           </CardTitle>
           {canManagePO && (
             <Button size="sm" className="bg-primary hover:bg-primary">

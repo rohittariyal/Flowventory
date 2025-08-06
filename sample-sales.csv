@@ -1,0 +1,11 @@
+Date,SKU,Amount,Platform,Quantity,Customer
+2025-01-01,ELC-001,199.98,Shopify,2,customer001
+2025-01-01,ELC-003,49.99,Amazon,1,customer002
+2025-01-02,ELC-002,299.99,Flipkart,1,customer003
+2025-01-02,ELC-001,99.99,Shopify,1,customer004
+2025-01-03,ELC-009,29.97,Amazon,3,customer005
+2025-01-03,ELC-004,79.99,Shopify,1,customer006
+2025-01-04,ELC-005,39.98,Amazon,2,customer007
+2025-01-04,ELC-003,49.99,Flipkart,1,customer008
+2025-01-05,ELC-002,599.98,Shopify,2,customer009
+2025-01-05,ELC-006,39.99,Amazon,1,customer010

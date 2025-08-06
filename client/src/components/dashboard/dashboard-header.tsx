@@ -1,14 +1,15 @@
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
-import { LogOut, Settings, Bell } from "lucide-react";
+import { LogOut, Settings, Bell, Upload, FileSpreadsheet } from "lucide-react";
 import { useAuth } from "@/hooks/use-auth";
 import { type User } from "@shared/schema";
 
 interface DashboardHeaderProps {
   user: User;
+  onImportClick?: (type: 'inventory' | 'sales') => void;
 }
 
-export function DashboardHeader({ user }: DashboardHeaderProps) {
+export function DashboardHeader({ user, onImportClick }: DashboardHeaderProps) {
   const { logoutMutation } = useAuth();
 
   const getRoleBadgeColor = (role: string) => {
@@ -49,6 +50,30 @@ export function DashboardHeader({ user }: DashboardHeaderProps) {
         </div>
 
         <div className="flex items-center space-x-3">
+          {/* CSV Import Buttons */}
+          {onImportClick && (
+            <div className="flex items-center space-x-2 mr-4">
+              <Button 
+                variant="outline" 
+                size="sm" 
+                onClick={() => onImportClick('inventory')}
+                className="text-primary border-primary hover:bg-primary hover:text-primary-foreground"
+              >
+                <Upload className="h-4 w-4 mr-1" />
+                Import Inventory
+              </Button>
+              <Button 
+                variant="outline" 
+                size="sm" 
+                onClick={() => onImportClick('sales')}
+                className="text-primary border-primary hover:bg-primary hover:text-primary-foreground"
+              >
+                <FileSpreadsheet className="h-4 w-4 mr-1" />
+                Import Sales
+              </Button>
+            </div>
+          )}
+          
           <Button variant="ghost" size="sm" className="text-muted-foreground hover:text-foreground">
             <Bell className="h-4 w-4" />
           </Button>
