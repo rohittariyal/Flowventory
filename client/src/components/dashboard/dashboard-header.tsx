@@ -90,7 +90,10 @@ export function DashboardHeader({ user, onImportClick, onSettingsClick }: Dashbo
             </Button>
           )}
           
-          <NotificationPanel user={user} />
+          {/* Notification Panel - Admin and Manager only */}
+          {(user.role === "admin" || user.role === "manager") && (
+            <NotificationPanel user={user} />
+          )}
           {/* Settings - Admin only */}
           {user.role === "admin" && (
             <Button 

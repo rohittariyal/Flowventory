@@ -334,7 +334,11 @@ export function registerRoutes(app: Express): Server {
   app.get("/api/notifications", requireAuth, async (req, res) => {
     try {
       const user = req.user!;
-      // Use sample organization for now, in real app would get from user's organization
+      // Only Admin and Manager can access notifications
+      if (user.role === "viewer") {
+        return res.status(403).json({ error: "Access denied: Viewers cannot access notifications" });
+      }
+      
       const organizationId = user.organizationId || "sample-org-123";
       const notifications = await storage.getNotifications(organizationId, user.id);
       res.json(notifications);

@@ -141,6 +141,7 @@ export class MemStorage implements IStorage {
       }
     });
     keysToDelete.forEach(id => this.notifications.delete(id));
+    console.log(`Cleared ${keysToDelete.length} existing test alerts for user ${userId}`);
 
     // Add the new test alerts
     testAlerts.forEach(alert => {
