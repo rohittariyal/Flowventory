@@ -51,8 +51,8 @@ export function DashboardHeader({ user, onImportClick, onSettingsClick }: Dashbo
         </div>
 
         <div className="flex items-center space-x-3">
-          {/* CSV Import Buttons */}
-          {onImportClick && (
+          {/* CSV Import Buttons - Admin and Manager only */}
+          {onImportClick && (user.role === "admin" || user.role === "manager") && (
             <div className="flex items-center space-x-2 mr-4">
               <Button 
                 variant="outline" 
@@ -78,14 +78,17 @@ export function DashboardHeader({ user, onImportClick, onSettingsClick }: Dashbo
           <Button variant="ghost" size="sm" className="text-muted-foreground hover:text-foreground">
             <Bell className="h-4 w-4" />
           </Button>
-          <Button 
-            variant="ghost" 
-            size="sm" 
-            onClick={onSettingsClick}
-            className="text-muted-foreground hover:text-foreground"
-          >
-            <Settings className="h-4 w-4" />
-          </Button>
+          {/* Settings - Admin only */}
+          {user.role === "admin" && (
+            <Button 
+              variant="ghost" 
+              size="sm" 
+              onClick={onSettingsClick}
+              className="text-muted-foreground hover:text-foreground"
+            >
+              <Settings className="h-4 w-4" />
+            </Button>
+          )}
           <Button
             variant="ghost"
             size="sm"

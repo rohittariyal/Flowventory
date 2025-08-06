@@ -40,7 +40,7 @@ export default function AuthPage() {
       fullName: "",
       email: "",
       companyName: "",
-      role: "viewer",
+      role: "admin",
       password: "",
       username: "",
     },
@@ -273,6 +273,28 @@ export default function AuthPage() {
                       {registerForm.formState.errors.companyName && (
                         <p className="text-sm text-destructive">
                           {registerForm.formState.errors.companyName.message}
+                        </p>
+                      )}
+                    </div>
+
+                    <div className="space-y-2">
+                      <Label htmlFor="role">User Role</Label>
+                      <Select 
+                        value={registerForm.watch("role")} 
+                        onValueChange={(value) => registerForm.setValue("role", value as "admin" | "manager" | "viewer")}
+                      >
+                        <SelectTrigger>
+                          <SelectValue placeholder="Select your role" />
+                        </SelectTrigger>
+                        <SelectContent>
+                          <SelectItem value="admin">Admin - Full Access</SelectItem>
+                          <SelectItem value="manager">Manager - Limited Settings</SelectItem>
+                          <SelectItem value="viewer">Viewer - Read Only</SelectItem>
+                        </SelectContent>
+                      </Select>
+                      {registerForm.formState.errors.role && (
+                        <p className="text-sm text-destructive">
+                          {registerForm.formState.errors.role.message}
                         </p>
                       )}
                     </div>

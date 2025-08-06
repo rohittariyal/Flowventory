@@ -138,12 +138,12 @@ export default function HomePage() {
           )}
           
           {/* Return Abuse Detection - Admin/Manager only */}
-          {selectedPanels.includes("return-abuse") && (
+          {selectedPanels.includes("return-abuse") && (user.role === "admin" || user.role === "manager") && (
             <ReturnAbusePanel className="xl:col-span-2" />
           )}
           
           {/* PO Generator - Admin only */}
-          {selectedPanels.includes("po-generator") && (
+          {selectedPanels.includes("po-generator") && user.role === "admin" && (
             <POGeneratorPanel user={user} />
           )}
         </div>
