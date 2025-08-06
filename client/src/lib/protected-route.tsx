@@ -8,7 +8,7 @@ export function ProtectedRoute({
   requiresOnboarding = true,
 }: {
   path: string;
-  component: () => React.JSX.Element;
+  component: () => React.JSX.Element | null;
   requiresOnboarding?: boolean;
 }) {
   const { user, isLoading, needsOnboarding } = useAuth();

@@ -1,0 +1,91 @@
+// GOAL: Create a full design preview of the e-commerce dashboard
+ 
+ 
+---
+ 
+🎨 THEME:
+- Dark background: #0B0B0B
+- Cards: #1A1A1A with rounded-xl, padding, soft drop shadows
+- Text: White (#FFFFFF), Muted grey (#AAAAAA)
+- Accent color: Light Green (#8BC34A) for highlights, borders, charts
+- Font: Clean sans-serif like Inter or Poppins
+- Responsive layout, use TailwindCSS for styling
+ 
+---
+ 
+📊 PANELS TO INCLUDE (Show All):
+ 
+1️⃣ BusinessPulsePanel:
+- Four KPI cards: Sales, Orders, Refunds, Ad ROI
+- Line chart of 7-day trends
+- AI Insight card with dummy message:
+  “Sales down 8% due to Amazon traffic drop”
+ 
+2️⃣ InventoryBrainPanel:
+- Table of SKUs: SKU ID, Name, Stock, Velocity, Days Left
+- Low stock rows highlighted in red
+- “Reorder Now” button
+ 
+3️⃣ SalesIntelligencePanel:
+- Channel cards (Amazon, Flipkart, Shopify) with mini KPIs
+- Bar chart: Top 5 SKUs
+- Bar chart: Bottom 5 SKUs
+- Pie chart: Return reasons
+ 
+4️⃣ CustomerRadarPanel:
+- New vs Returning buyers stat
+- Sentiment gauge (smiley / neutral / sad face icons)
+- Chart: Churn Risk (dummy segments: Low, Med, High)
+ 
+5️⃣ AICopilotPanel:
+- Box with prompt: “Ask your dashboard anything…”
+- Display dummy GPT-style reply:
+  “Margins dropped due to high refunds on SKU X”
+ 
+6️⃣ ReturnAbusePanel:
+- Table: Suspicious SKUs, Return Rate %, Flag (Low/Med/High)
+- Highlight risky SKUs in red with ⚠️ icon
+ 
+7️⃣ POGeneratorPanel:
+- List of SKUs below reorder threshold
+- Suggested PO draft card:
+  SKU: X  
+  Recommended Qty: 300  
+  ETA: 5 days  
+- Button: “Send PO”
+ 
+---
+ 
+🧱 COMPONENT STRUCTURE (React)
+ 
+Create each of the above panels as its own component:
+```jsx
+/components/dashboard/PanelBusinessPulse.jsx
+/components/dashboard/PanelInventoryBrain.jsx
+/components/dashboard/PanelSalesIntelligence.jsx
+/components/dashboard/PanelCustomerRadar.jsx
+/components/dashboard/PanelAICopilot.jsx
+/components/dashboard/PanelReturnAbuse.jsx
+/components/dashboard/PanelPOGenerator.jsx
+ 
+ 
+// PROBLEM: After onboarding submission, the user is redirected to the dashboard,
+// but the app sends them back to onboarding again to fill final steps they already completed.
+ 
+// GOAL: Ensure that the onboardingComplete flag is saved in both backend AND frontend,
+// and that the dashboard properly recognizes it before deciding to redirect again.
+ 
+---
+ 
+✅ FIX IN BACKEND (Express):
+- After saving onboarding data in POST /api/onboarding/save, update user object with:
+  onboardingComplete: true
+ 
+✅ FIX IN FRONTEND (React):
+1. After POST /api/onboarding/save is successful:
+- Save onboardingComplete = true in localStorage or userContext
+- Example:
+```js
+localStorage.setItem("onboardingComplete", true);
+ 
+ 
