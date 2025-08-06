@@ -3,6 +3,9 @@
 This is a comprehensive business intelligence dashboard application built with React and Express. It features user authentication, role-based access control, post-login onboarding, and a conditional dashboard UI with dark theme and light green accents. The application provides AI-powered business insights, inventory management, sales intelligence, customer analytics, and return abuse detection based on user roles and onboarding preferences.
 
 ## Recent Changes (Latest First)
+- **2025-01-06**: Removed all AI features access for Viewer role users
+- **2025-01-06**: Updated AI Copilot Panel to be Admin/Manager only
+- **2025-01-06**: Restricted AI-powered smart alerts and suggestions for Viewers
 - **2025-01-06**: Implemented comprehensive role-based access control for dashboard panels and features
 - **2025-01-06**: Added user role selector in registration form (Admin, Manager, Viewer) with Admin as default
 - **2025-01-06**: Applied role restrictions: Admin sees all, Manager can't access Settings/PO Generator, Viewer sees basic panels only

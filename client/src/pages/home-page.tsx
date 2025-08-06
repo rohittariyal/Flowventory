@@ -41,8 +41,9 @@ export default function HomePage() {
         panels.push("inventory-brain");
       }
       
-      // Show AI Copilot Panel if user selected any AI features
-      if (onboardingData.aiAssistance && onboardingData.aiAssistance.length > 0) {
+      // Show AI Copilot Panel if user selected any AI features (Admin/Manager only)
+      if (onboardingData.aiAssistance && onboardingData.aiAssistance.length > 0 && 
+          (user.role === "admin" || user.role === "manager")) {
         panels.push("ai-copilot");
       }
       
@@ -93,8 +94,9 @@ export default function HomePage() {
         onSettingsClick={() => setShowSettings(true)}
       />
       <main className="p-6 space-y-6">
-        {/* Smart Alerts */}
-        {onboardingData && (selectedPanels.includes("inventory-brain") || selectedPanels.includes("po-generator")) && (
+        {/* Smart Alerts - Admin/Manager only */}
+        {onboardingData && (selectedPanels.includes("inventory-brain") || selectedPanels.includes("po-generator")) && 
+         (user.role === "admin" || user.role === "manager") && (
           <div className="bg-yellow-500/10 border border-yellow-500/20 rounded-lg p-4">
             <div className="flex items-center space-x-2">
               <div className="text-yellow-400">⚠️</div>
@@ -132,8 +134,8 @@ export default function HomePage() {
             <CustomerRadarPanel />
           )}
           
-          {/* AI Copilot - Conditional on AI features */}
-          {selectedPanels.includes("ai-copilot") && (
+          {/* AI Copilot - Admin/Manager only */}
+          {selectedPanels.includes("ai-copilot") && (user.role === "admin" || user.role === "manager") && (
             <AICopilotPanel />
           )}
           
