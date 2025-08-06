@@ -71,7 +71,7 @@ export class MemStorage implements IStorage {
     }
   }
 
-  // Add test alerts for a specific user on login
+  // Add test alerts for a specific user on login/registration
   async addTestAlertsForUser(userId: string, organizationId: string = "sample-org-123"): Promise<void> {
     const testAlerts = [
       {
@@ -146,6 +146,8 @@ export class MemStorage implements IStorage {
     testAlerts.forEach(alert => {
       this.notifications.set(alert.id, alert);
     });
+    
+    console.log(`Added ${testAlerts.length} test alerts for user ${userId}`);
   }
 
   async getUser(id: string): Promise<User | undefined> {
@@ -333,13 +335,24 @@ export class MemStorage implements IStorage {
 
   async getNotifications(organizationId: string, userId?: string): Promise<Notification[]> {
     const now = new Date();
-    return Array.from(this.notifications.values())
-      .filter(notification => {
+    const allNotifications = Array.from(this.notifications.values());
+    console.log(`Total notifications in system: ${allNotifications.length}`);
+    console.log(`Looking for org: ${organizationId}, user: ${userId}`);
+    
+    const filtered = allNotifications.filter(notification => {
+        console.log(`Checking notification: ${notification.id}, org: ${notification.organizationId}, userId: ${notification.userId}`);
+        
         // Filter by organization
-        if (notification.organizationId !== organizationId) return false;
+        if (notification.organizationId !== organizationId) {
+          console.log(`Skipping - wrong org: ${notification.organizationId} vs ${organizationId}`);
+          return false;
+        }
         
         // Filter out expired notifications
-        if (notification.expiresAt && notification.expiresAt < now) return false;
+        if (notification.expiresAt && notification.expiresAt < now) {
+          console.log(`Skipping - expired: ${notification.expiresAt}`);
+          return false;
+        }
         
         // For organization-wide notifications or user-specific notifications
         if (notification.userId === null || notification.userId === userId) {
@@ -347,15 +360,21 @@ export class MemStorage implements IStorage {
           if (userId && notification.readBy && typeof notification.readBy === 'object' && notification.readBy !== null) {
             const readByRecord = notification.readBy as Record<string, boolean>;
             if (readByRecord[userId]) {
+              console.log(`Skipping - already read by user: ${userId}`);
               return false; // User has already read this notification
             }
           }
+          console.log(`Including notification: ${notification.id}`);
           return true;
         }
         
+        console.log(`Skipping - not for this user`);
         return false;
       })
       .sort((a, b) => b.createdAt!.getTime() - a.createdAt!.getTime()); // Sort by newest first
+    
+    console.log(`Returning ${filtered.length} notifications for user ${userId}`);
+    return filtered;
   }
 
   async markNotificationAsRead(notificationId: string, userId: string): Promise<void> {

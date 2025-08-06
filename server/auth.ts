@@ -69,8 +69,18 @@ export function setupAuth(app: Express) {
       password: await hashPassword(req.body.password),
     });
 
-    req.login(user, (err) => {
+    req.login(user, async (err) => {
       if (err) return next(err);
+      
+      try {
+        // Add test alerts for the new user
+        const organizationId = user.organizationId || "sample-org-123";
+        await storage.addTestAlertsForUser(user.id, organizationId);
+        console.log(`Added test alerts for new user: ${user.id}`);
+      } catch (error) {
+        console.error("Error adding test alerts on registration:", error);
+      }
+      
       res.status(201).json(user);
     });
   });

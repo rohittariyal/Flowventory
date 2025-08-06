@@ -377,6 +377,23 @@ export function registerRoutes(app: Express): Server {
     }
   });
 
+  // Test endpoint to generate sample alerts
+  app.post("/api/notifications/test", requireAuth, async (req, res) => {
+    try {
+      const user = req.user!;
+      if (user.role === "viewer") {
+        return res.status(403).json({ error: "Viewers cannot generate test notifications" });
+      }
+
+      const organizationId = user.organizationId || "sample-org-123";
+      await storage.addTestAlertsForUser(user.id, organizationId);
+      res.json({ message: "Test alerts added successfully" });
+    } catch (error) {
+      console.error("Generate test alerts error:", error);
+      res.status(500).json({ error: "Failed to generate test alerts" });
+    }
+  });
+
   const httpServer = createServer(app);
 
   return httpServer;
