@@ -19,23 +19,25 @@ interface InventoryItem {
 }
 
 export function InventoryBrainPanel({ className, user }: InventoryBrainPanelProps) {
-  // Mock inventory data
-  const inventoryData: InventoryItem[] = [
+  // Smart inventory data with days left calculations
+  const inventoryData: (InventoryItem & { daysLeft: number })[] = [
     {
       sku: "ELC-001",
       productName: "Wireless Earbuds Pro",
       stock: 45,
       velocity: 12.5,
       status: "healthy",
-      suggestedReorder: 0
+      suggestedReorder: 0,
+      daysLeft: Math.round(45 / 12.5) // 4 days
     },
     {
       sku: "ELC-002", 
       productName: "Smart Watch Series X",
       stock: 8,
       velocity: 15.2,
-      status: "low",
-      suggestedReorder: 50
+      status: "critical",
+      suggestedReorder: 50,
+      daysLeft: Math.round(8 / 15.2) // 1 day - CRITICAL!
     },
     {
       sku: "ELC-003",
@@ -43,7 +45,8 @@ export function InventoryBrainPanel({ className, user }: InventoryBrainPanelProp
       stock: 2,
       velocity: 22.1,
       status: "critical", 
-      suggestedReorder: 100
+      suggestedReorder: 100,
+      daysLeft: Math.round(2 / 22.1) // 0 days - URGENT!
     },
     {
       sku: "ELC-004",
@@ -51,7 +54,8 @@ export function InventoryBrainPanel({ className, user }: InventoryBrainPanelProp
       stock: 67,
       velocity: 8.7,
       status: "healthy",
-      suggestedReorder: 0
+      suggestedReorder: 0,
+      daysLeft: Math.round(67 / 8.7) // 8 days
     }
   ];
 
@@ -124,6 +128,7 @@ export function InventoryBrainPanel({ className, user }: InventoryBrainPanelProp
                   <th className="p-3 font-medium">Product</th>
                   <th className="p-3 font-medium">Stock</th>
                   <th className="p-3 font-medium">Velocity/Day</th>
+                  <th className="p-3 font-medium">Days Left</th>
                   <th className="p-3 font-medium">Status</th>
                   {canManagePO && <th className="p-3 font-medium">Suggested PO</th>}
                 </tr>
@@ -144,6 +149,21 @@ export function InventoryBrainPanel({ className, user }: InventoryBrainPanelProp
                       </span>
                     </td>
                     <td className="p-3 text-sm text-muted-foreground">{item.velocity}</td>
+                    <td className="p-3">
+                      <div className="flex flex-col">
+                        <span className={`text-sm font-medium ${
+                          item.daysLeft <= 1 ? 'text-destructive' : 
+                          item.daysLeft <= 3 ? 'text-yellow-400' : 'text-foreground'
+                        }`}>
+                          {item.daysLeft} days
+                        </span>
+                        {item.daysLeft <= 3 && (
+                          <span className="text-xs text-muted-foreground">
+                            {item.daysLeft <= 1 ? 'Stockout imminent!' : 'Reorder needed soon'}
+                          </span>
+                        )}
+                      </div>
+                    </td>
                     <td className="p-3">
                       <Badge className={`text-xs ${getStatusColor(item.status)}`}>
                         <div className="flex items-center space-x-1">

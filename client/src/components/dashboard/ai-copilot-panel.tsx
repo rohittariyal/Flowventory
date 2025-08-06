@@ -49,7 +49,7 @@ export function AICopilotPanel({ className }: AICopilotPanelProps) {
     setInputValue("");
     setIsTyping(true);
 
-    // Simulate AI response
+    // Simulate AI response with 1-second delay
     setTimeout(() => {
       const aiResponse = generateAIResponse(message);
       const aiMessage: ChatMessage = {
@@ -60,14 +60,14 @@ export function AICopilotPanel({ className }: AICopilotPanelProps) {
       };
       setMessages(prev => [...prev, aiMessage]);
       setIsTyping(false);
-    }, 1500);
+    }, 1000); // 1-second delay for smart responses
   };
 
   const generateAIResponse = (userMessage: string): string => {
     const lowerMessage = userMessage.toLowerCase();
     
-    if (lowerMessage.includes("sales") && lowerMessage.includes("down")) {
-      return "Based on your data analysis, sales are down 12% this week primarily due to: \n\n1. Reduced traffic from Amazon (competitor launched similar product)\n2. Low stock on your best-selling Wireless Earbuds Pro\n3. Seasonal slowdown in electronics category\n\nRecommendations: Increase marketing spend, restock key items, and consider bundling slow-moving inventory.";
+    if (lowerMessage.includes("sales") && (lowerMessage.includes("low") || lowerMessage.includes("down"))) {
+      return "Sales dropped 12% this week. Main reason: lower conversions on Flipkart due to increased competition. Also noticed 23% decline in your top SKU (Beauty Serum Pro). \n\nRecommendations: Optimize Flipkart listings, increase ad spend on Amazon, and consider flash sales for slow-movers.";
     }
     
     if (lowerMessage.includes("reorder") || lowerMessage.includes("inventory")) {

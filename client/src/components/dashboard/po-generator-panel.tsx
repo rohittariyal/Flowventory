@@ -10,37 +10,31 @@ interface POGeneratorPanelProps {
 }
 
 export function POGeneratorPanel({ className, user }: POGeneratorPanelProps) {
-  // Mock data for SKUs below reorder threshold
+  // Smart PO data with velocity-based calculations (velocity × 7 days formula)
   const reorderSKUs = [
     {
-      sku: "ELEC-001",
-      name: "Wireless Headphones Pro",
-      currentStock: 12,
-      threshold: 50,
-      suggestedQty: 300,
-      eta: "5 days",
-      priority: "high" as const,
-      cost: "$3,600"
-    },
-    {
-      sku: "ELEC-007",
+      sku: "ELC-002",
       name: "Smart Watch Series X",
       currentStock: 8,
-      threshold: 30,
-      suggestedQty: 150,
-      eta: "7 days", 
-      priority: "medium" as const,
-      cost: "$2,250"
+      velocity: 15.2,
+      daysLeft: Math.round(8 / 15.2), // 1 day
+      suggestedQty: Math.round(15.2 * 7), // velocity × 7 days = 106
+      eta: "7 days",
+      priority: "critical" as const,
+      cost: "$3,180",
+      calculation: "15.2/day × 7 days"
     },
     {
-      sku: "ELEC-015",
-      name: "USB-C Cable 6ft",
-      currentStock: 25,
-      threshold: 100,
-      suggestedQty: 500,
-      eta: "3 days",
-      priority: "high" as const,
-      cost: "$750"
+      sku: "ELC-003", 
+      name: "USB-C Power Bank",
+      currentStock: 2,
+      velocity: 22.1,
+      daysLeft: Math.round(2 / 22.1), // 0 days
+      suggestedQty: Math.round(22.1 * 7), // velocity × 7 days = 155
+      eta: "5 days",
+      priority: "critical" as const,
+      cost: "$4,650",
+      calculation: "22.1/day × 7 days"
     }
   ];
 
@@ -50,6 +44,8 @@ export function POGeneratorPanel({ className, user }: POGeneratorPanelProps) {
 
   const getPriorityColor = (priority: string) => {
     switch (priority) {
+      case "critical":
+        return "bg-red-500/10 text-red-400 border-red-500/20";
       case "high":
         return "bg-red-500/10 text-red-400 border-red-500/20";
       case "medium":
@@ -102,7 +98,7 @@ export function POGeneratorPanel({ className, user }: POGeneratorPanelProps) {
                     <p className="text-sm text-muted-foreground">SKU: {item.sku}</p>
                     <div className="flex items-center space-x-3 mt-1">
                       <span className="text-xs text-muted-foreground">
-                        Stock: {item.currentStock} / {item.threshold}
+                        Stock: {item.currentStock} ({item.daysLeft} days left)
                       </span>
                       <Badge className={`text-xs ${getPriorityColor(item.priority)}`}>
                         {item.priority.toUpperCase()}
@@ -114,6 +110,7 @@ export function POGeneratorPanel({ className, user }: POGeneratorPanelProps) {
                   <p className="text-sm text-muted-foreground">Suggested Qty</p>
                   <p className="text-lg font-bold text-primary">{item.suggestedQty}</p>
                   <p className="text-xs text-muted-foreground">{item.cost}</p>
+                  <p className="text-xs text-primary">{item.calculation}</p>
                 </div>
               </div>
             </div>

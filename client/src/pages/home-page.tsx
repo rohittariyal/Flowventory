@@ -66,6 +66,21 @@ export default function HomePage() {
     <div className="min-h-screen bg-background">
       <DashboardHeader user={user} />
       <main className="p-6 space-y-6">
+        {/* Smart Alerts */}
+        {onboardingData && (selectedPanels.includes("inventory-brain") || selectedPanels.includes("po-generator")) && (
+          <div className="bg-yellow-500/10 border border-yellow-500/20 rounded-lg p-4">
+            <div className="flex items-center space-x-2">
+              <div className="text-yellow-400">⚠️</div>
+              <div className="text-yellow-400 font-medium">
+                2 products are running low on stock.
+              </div>
+              <span className="text-muted-foreground">
+                Check Inventory Panel for details.
+              </span>
+            </div>
+          </div>
+        )}
+        
         <div className="grid grid-cols-1 xl:grid-cols-2 gap-6">
           {/* Business Pulse - Always shown */}
           {selectedPanels.includes("business-pulse") && (

@@ -3,6 +3,11 @@
 This is a comprehensive business intelligence dashboard application built with React and Express. It features user authentication, role-based access control, post-login onboarding, and a conditional dashboard UI with dark theme and light green accents. The application provides AI-powered business insights, inventory management, sales intelligence, customer analytics, and return abuse detection based on user roles and onboarding preferences.
 
 ## Recent Changes (Latest First)
+- **2025-01-06**: Added smart AI-like features using dummy logic throughout dashboard
+- **2025-01-06**: Enhanced AI Copilot Panel with smart responses and 1-second response delay
+- **2025-01-06**: Added intelligent Inventory Brain calculations (Days Left = Stock/Velocity formula)
+- **2025-01-06**: Implemented smart alerts showing low stock warnings at dashboard top
+- **2025-01-06**: Enhanced PO Generator with velocity-based quantity recommendations (velocity × 7 days)
 - **2025-01-06**: Fixed onboarding completion persistence issue preventing dashboard access after onboarding
 - **2025-01-06**: Completed full design preview mode showing all 7 dashboard panels with complete styling
 - **2025-01-06**: Implemented POGeneratorPanel with automated purchase order creation (admin only)
