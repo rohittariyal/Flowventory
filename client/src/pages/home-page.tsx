@@ -8,6 +8,7 @@ import { SalesIntelligencePanel } from "@/components/dashboard/sales-intelligenc
 import { CustomerRadarPanel } from "@/components/dashboard/customer-radar-panel";
 import { AICopilotPanel } from "@/components/dashboard/ai-copilot-panel";
 import { ReturnAbusePanel } from "@/components/dashboard/return-abuse-panel";
+import { POGeneratorPanel } from "@/components/dashboard/po-generator-panel";
 import { type OnboardingData } from "@shared/schema";
 
 export default function HomePage() {
@@ -21,32 +22,28 @@ export default function HomePage() {
   });
 
   useEffect(() => {
-    if (onboardingData) {
-      const panels = ["business-pulse"]; // Always show business pulse
+    if (onboardingData && user) {
+      // For complete design preview, show ALL panels regardless of onboarding data
+      const panels = [
+        "business-pulse",     // Always show
+        "sales-intelligence", // Show for demo
+        "inventory-brain",    // Show for demo  
+        "customer-radar",     // Always show
+        "ai-copilot"          // Show for demo
+      ];
       
-      // Add panels based on onboarding data
-      if (onboardingData.salesChannels?.length > 0) {
-        panels.push("sales-intelligence");
-      }
-      
-      if (onboardingData.averageStockPerSku && parseInt(onboardingData.averageStockPerSku) > 0) {
-        panels.push("inventory-brain");
-      }
-      
-      panels.push("customer-radar"); // Always show customer insights
-      
-      if (onboardingData.aiAssistance?.length > 0) {
-        panels.push("ai-copilot");
-      }
-      
-      // Show return abuse panel for admins and managers
-      if (user?.role === "admin" || user?.role === "manager") {
+      // Role-based panels
+      if (user.role === "admin" || user.role === "manager") {
         panels.push("return-abuse");
+      }
+      
+      if (user.role === "admin") {
+        panels.push("po-generator");
       }
       
       setSelectedPanels(panels);
     }
-  }, [onboardingData, user?.role]);
+  }, [onboardingData, user]);
 
   if (!user) return null;
 
@@ -60,11 +57,11 @@ export default function HomePage() {
             <BusinessPulsePanel className="xl:col-span-2" />
           )}
           
-          {/* Sales Intelligence - Conditional on sales channels */}
-          {selectedPanels.includes("sales-intelligence") && onboardingData?.salesChannels && (
+          {/* Sales Intelligence - Show for demo */}
+          {selectedPanels.includes("sales-intelligence") && (
             <SalesIntelligencePanel 
               className="xl:col-span-2" 
-              salesChannels={onboardingData.salesChannels}
+              salesChannels={onboardingData?.salesChannels || ["amazon", "shopify", "flipkart"]}
             />
           )}
           
@@ -86,6 +83,11 @@ export default function HomePage() {
           {/* Return Abuse Detection - Admin/Manager only */}
           {selectedPanels.includes("return-abuse") && (
             <ReturnAbusePanel className="xl:col-span-2" />
+          )}
+          
+          {/* PO Generator - Admin only */}
+          {selectedPanels.includes("po-generator") && (
+            <POGeneratorPanel user={user} />
           )}
         </div>
         

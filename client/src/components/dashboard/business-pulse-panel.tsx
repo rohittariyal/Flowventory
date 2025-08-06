@@ -71,14 +71,26 @@ export function BusinessPulsePanel({ className }: BusinessPulsePanelProps) {
           ))}
         </div>
 
-        {/* Weekly Trends Chart Placeholder */}
-        <div className="rounded-lg p-6 border border-border" style={{ backgroundColor: 'hsl(var(--secondary) / 0.3)' }}>
-          <h4 className="text-sm font-medium text-foreground mb-4">Weekly Trends</h4>
-          <div className="h-32 flex items-center justify-center text-muted-foreground">
-            <div className="text-center">
-              <TrendingUp className="h-8 w-8 mx-auto mb-2 text-primary" />
-              <p className="text-sm">Chart visualization would render here</p>
-            </div>
+        {/* Weekly Trends Chart */}
+        <div className="chart-container">
+          <h3 className="text-lg font-semibold text-foreground mb-4">7-Day Sales Trend</h3>
+          <div className="h-40 flex items-end justify-between space-x-2">
+            {/* Simple bar chart representation */}
+            {[65, 78, 52, 89, 95, 71, 83].map((height, index) => (
+              <div key={index} className="flex flex-col items-center flex-1">
+                <div 
+                  className="w-full bg-primary/80 rounded-t transition-all hover:bg-primary"
+                  style={{ height: `${height}%` }}
+                />
+                <span className="text-xs text-muted-foreground mt-2">
+                  {['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'][index]}
+                </span>
+              </div>
+            ))}
+          </div>
+          <div className="flex justify-between text-xs text-muted-foreground mt-2">
+            <span>$0</span>
+            <span>$50k</span>
           </div>
         </div>
 
