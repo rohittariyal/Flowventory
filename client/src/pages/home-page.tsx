@@ -35,7 +35,7 @@ export default function HomePage() {
       
       panels.push("customer-radar"); // Always show customer insights
       
-      if (onboardingData.aiAssistance?.includes("insights") || onboardingData.aiAssistance?.includes("predictions")) {
+      if (onboardingData.aiAssistance?.length > 0) {
         panels.push("ai-copilot");
       }
       

@@ -161,12 +161,12 @@ export default function OnboardingPage() {
   const progress = (currentStep / STEPS.length) * 100;
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-blue-50 via-white to-indigo-50 py-12 px-4 sm:px-6 lg:px-8">
+    <div className="min-h-screen bg-background py-12 px-4 sm:px-6 lg:px-8">
       <div className="max-w-4xl mx-auto">
         {/* Header */}
         <div className="text-center mb-8">
-          <h1 className="text-3xl font-bold text-gray-900 mb-2">Welcome to your setup!</h1>
-          <p className="text-lg text-gray-600">Let's get your business configured in just a few steps</p>
+          <h1 className="text-3xl font-bold text-foreground mb-2">Welcome to your setup!</h1>
+          <p className="text-lg text-muted-foreground">Let's get your business configured in just a few steps</p>
         </div>
 
         {/* Progress Bar */}
@@ -187,11 +187,11 @@ export default function OnboardingPage() {
                   `}>
                     {isCompleted ? <CheckCircle className="h-5 w-5" /> : <Icon className="h-5 w-5" />}
                   </div>
-                  <span className={`ml-2 text-sm font-medium ${isActive ? 'text-primary' : 'text-gray-500'}`}>
+                  <span className={`ml-2 text-sm font-medium ${isActive ? 'text-primary' : 'text-muted-foreground'}`}>
                     {step.title}
                   </span>
                   {index < STEPS.length - 1 && (
-                    <ArrowRight className="h-4 w-4 text-gray-300 mx-4" />
+                    <ArrowRight className="h-4 w-4 text-muted-foreground mx-4" />
                   )}
                 </div>
               );
@@ -311,11 +311,11 @@ export default function OnboardingPage() {
                 <div className="space-y-6">
                   <div>
                     <Label className="text-base font-medium">Select your sales channels</Label>
-                    <p className="text-sm text-gray-600 mb-4">Choose all platforms where you sell your products</p>
+                    <p className="text-sm text-muted-foreground mb-4">Choose all platforms where you sell your products</p>
                     
                     <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                       {SALES_CHANNELS.map((channel) => (
-                        <div key={channel.id} className="flex items-center space-x-3 p-4 border rounded-lg hover:bg-gray-50">
+                        <div key={channel.id} className="flex items-center space-x-3 p-4 border border-border rounded-lg hover:bg-muted/50 transition-colors">
                           <Checkbox
                             id={channel.id}
                             checked={form.watch("salesChannels").includes(channel.id)}
