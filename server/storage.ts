@@ -1,4 +1,4 @@
-import { type User, type InsertUser, type OnboardingData, type InsertOnboardingData, type PlatformConnections, type Organization, type TeamInvitation, type InviteTeamMemberData, type UpdateTeamMemberData, type Notification, type CreateNotificationData, type Event, type InsertEvent, type Task, type InsertTask, type CreateEventData, type CreateTaskData, type UpdateTaskData } from "@shared/schema";
+import { type User, type InsertUser, type OnboardingData, type InsertOnboardingData, type PlatformConnections, type Organization, type TeamInvitation, type InviteTeamMemberData, type UpdateTeamMemberData, type Notification, type CreateNotificationData, type Event, type InsertEvent, type Task, type InsertTask, type CreateEventData, type CreateTaskData, type UpdateTaskData, type PurchaseOrder, type InsertPurchaseOrder } from "@shared/schema";
 import { randomUUID } from "crypto";
 import session from "express-session";
 import createMemoryStore from "memorystore";
@@ -48,6 +48,13 @@ export interface IStorage {
   resolveTask(id: string): Promise<{ task: Task, event: Event }>;
   getTaskByEventId(eventId: string): Promise<Task | undefined>;
   
+  // Purchase Order methods
+  createPurchaseOrder(poData: InsertPurchaseOrder): Promise<PurchaseOrder>;
+  getPurchaseOrders(organizationId: string, filters?: { status?: string }): Promise<PurchaseOrder[]>;
+  getPurchaseOrder(id: string): Promise<PurchaseOrder | undefined>;
+  updatePurchaseOrder(id: string, updates: Partial<PurchaseOrder>): Promise<PurchaseOrder | undefined>;
+  deletePurchaseOrder(id: string): Promise<void>;
+  
   sessionStore: session.Store;
 }
 
@@ -59,6 +66,7 @@ export class MemStorage implements IStorage {
   private notifications: Map<string, Notification>;
   private events: Map<string, Event>;
   private tasks: Map<string, Task>;
+  private purchaseOrders: Map<string, PurchaseOrder>;
   public sessionStore: session.Store;
 
   constructor() {
@@ -69,6 +77,7 @@ export class MemStorage implements IStorage {
     this.notifications = new Map();
     this.events = new Map();
     this.tasks = new Map();
+    this.purchaseOrders = new Map();
     this.sessionStore = new MemoryStore({
       checkPeriod: 86400000,
     });
@@ -690,6 +699,54 @@ export class MemStorage implements IStorage {
     for (const eventData of sampleEvents) {
       await this.createEvent(eventData);
     }
+  }
+
+  // Purchase Order methods
+  async createPurchaseOrder(poData: InsertPurchaseOrder): Promise<PurchaseOrder> {
+    const now = new Date();
+    const po: PurchaseOrder = {
+      id: randomUUID(),
+      ...poData,
+      status: "draft",
+      createdAt: now,
+      updatedAt: now,
+    };
+    
+    this.purchaseOrders.set(po.id, po);
+    return po;
+  }
+
+  async getPurchaseOrders(organizationId: string, filters?: { status?: string }): Promise<PurchaseOrder[]> {
+    const allPOs = Array.from(this.purchaseOrders.values())
+      .filter(po => po.organizationId === organizationId);
+
+    if (filters?.status) {
+      return allPOs.filter(po => po.status === filters.status);
+    }
+
+    return allPOs;
+  }
+
+  async getPurchaseOrder(id: string): Promise<PurchaseOrder | undefined> {
+    return this.purchaseOrders.get(id);
+  }
+
+  async updatePurchaseOrder(id: string, updates: Partial<PurchaseOrder>): Promise<PurchaseOrder | undefined> {
+    const po = this.purchaseOrders.get(id);
+    if (!po) return undefined;
+
+    const updatedPO = {
+      ...po,
+      ...updates,
+      updatedAt: new Date(),
+    };
+
+    this.purchaseOrders.set(id, updatedPO);
+    return updatedPO;
+  }
+
+  async deletePurchaseOrder(id: string): Promise<void> {
+    this.purchaseOrders.delete(id);
   }
 }
 

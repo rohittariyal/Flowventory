@@ -1,5 +1,5 @@
 import { sql } from "drizzle-orm";
-import { pgTable, text, varchar, timestamp, jsonb } from "drizzle-orm/pg-core";
+import { pgTable, text, varchar, timestamp, jsonb, integer } from "drizzle-orm/pg-core";
 import { createInsertSchema } from "drizzle-zod";
 import { z } from "zod";
 import { relations } from "drizzle-orm";
@@ -144,6 +144,33 @@ export const teamInvitationsRelations = relations(teamInvitations, ({ one }) => 
     references: [organizations.id],
   }),
 }));
+
+// Purchase Orders Schema
+export const purchaseOrders = pgTable("purchase_orders", {
+  id: text("id").primaryKey().default(sql`gen_random_uuid()`),
+  sku: text("sku").notNull(),
+  supplier: text("supplier").notNull(),
+  quantity: integer("quantity").notNull(),
+  notes: text("notes"),
+  status: text("status", { enum: ["draft", "pending", "approved", "cancelled"] }).notNull().default("draft"),
+  createdBy: text("created_by").notNull(),
+  organizationId: text("organization_id").notNull(),
+  createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
+  updatedAt: timestamp("updated_at", { withTimezone: true }).defaultNow().notNull(),
+});
+
+export const insertPurchaseOrderSchema = createInsertSchema(purchaseOrders).omit({
+  id: true,
+  createdAt: true,
+  updatedAt: true,
+}).extend({
+  sku: z.string().min(1, "SKU is required"),
+  supplier: z.string().min(1, "Supplier is required"),
+  quantity: z.number().min(1, "Quantity must be at least 1"),
+});
+
+export type PurchaseOrder = typeof purchaseOrders.$inferSelect;
+export type InsertPurchaseOrder = z.infer<typeof insertPurchaseOrderSchema>;
 
 export const notificationsRelations = relations(notifications, ({ one }) => ({
   organization: one(organizations, {

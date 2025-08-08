@@ -591,6 +591,43 @@ export function registerRoutes(app: Express): Server {
     }
   });
 
+  // Purchase Orders API routes - Admin and Manager only
+  app.post("/api/purchase-orders", requiresActionCenterAccess, async (req, res) => {
+    try {
+      if (!req.user?.organizationId) {
+        return res.status(400).json({ error: "Organization ID is required" });
+      }
+
+      const poData = {
+        ...req.body,
+        createdBy: req.user.id,
+        organizationId: req.user.organizationId,
+      };
+
+      const po = await storage.createPurchaseOrder(poData);
+      res.status(201).json(po);
+    } catch (error) {
+      console.error("Error creating purchase order:", error);
+      res.status(500).json({ error: "Failed to create purchase order" });
+    }
+  });
+
+  app.get("/api/purchase-orders", requiresActionCenterAccess, async (req, res) => {
+    try {
+      if (!req.user?.organizationId) {
+        return res.status(400).json({ error: "Organization ID is required" });
+      }
+
+      const { status } = req.query;
+      const filters = status ? { status: status as string } : undefined;
+      const purchaseOrders = await storage.getPurchaseOrders(req.user.organizationId, filters);
+      res.json(purchaseOrders);
+    } catch (error) {
+      console.error("Error fetching purchase orders:", error);
+      res.status(500).json({ error: "Failed to fetch purchase orders" });
+    }
+  });
+
   const httpServer = createServer(app);
 
   return httpServer;

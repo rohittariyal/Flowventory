@@ -1,6 +1,6 @@
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
-import { LogOut, Settings, Bell, Upload, FileSpreadsheet, Users, BarChart3 } from "lucide-react";
+import { LogOut, Settings, Bell, Upload, FileSpreadsheet, Users, BarChart3, Package } from "lucide-react";
 import { Link } from "wouter";
 import { useAuth } from "@/hooks/use-auth";
 import { useLocation } from "wouter";
@@ -77,6 +77,16 @@ export function DashboardHeader({ user, onImportClick, onSettingsClick }: Dashbo
                 Import Sales
               </Button>
             </div>
+          )}
+
+          {/* Inventory Button - Admin and Manager only */}
+          {(user.role === "admin" || user.role === "manager") && (
+            <Button asChild variant="ghost" size="sm">
+              <Link href="/inventory">
+                <Package className="h-4 w-4 mr-1" />
+                Inventory
+              </Link>
+            </Button>
           )}
 
           {/* Action Center Button - Admin and Manager only */}
