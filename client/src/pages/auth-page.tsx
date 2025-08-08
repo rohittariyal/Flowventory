@@ -71,8 +71,8 @@ export default function AuthPage() {
   };
 
   return (
-    <div className="min-h-screen bg-background flex items-center justify-center py-12 px-4 sm:px-6 lg:px-8">
-      <div className="max-w-4xl w-full grid grid-cols-1 lg:grid-cols-2 gap-8">
+    <div className="min-h-screen bg-background flex items-center justify-center py-6 sm:py-12 px-3 sm:px-4 lg:px-8">
+      <div className="max-w-4xl w-full grid grid-cols-1 lg:grid-cols-2 gap-6 sm:gap-8">
         {/* Hero Section */}
         <div className="hidden lg:flex flex-col justify-center space-y-8 p-8">
           <div className="text-center">

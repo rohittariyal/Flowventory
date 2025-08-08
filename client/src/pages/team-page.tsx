@@ -139,19 +139,19 @@ export default function TeamPage() {
     }
   };
 
-  // Viewer role sees access denied
+  // Viewer role sees access denied - Responsive
   if (user?.role === "viewer") {
     return (
-      <div className="min-h-screen bg-black text-green-400 p-6">
+      <div className="min-h-screen bg-black text-green-400 p-3 sm:p-6">
         <div className="max-w-4xl mx-auto">
-          <div className="flex items-center justify-center h-96">
-            <Card className="bg-gray-900 border-gray-800 text-center p-8">
+          <div className="flex items-center justify-center min-h-96">
+            <Card className="bg-gray-900 border-gray-800 text-center p-6 sm:p-8 w-full max-w-md">
               <CardHeader>
-                <CardTitle className="text-red-400 flex items-center justify-center gap-2">
-                  <Shield className="h-6 w-6" />
+                <CardTitle className="text-red-400 flex items-center justify-center gap-2 text-lg sm:text-xl">
+                  <Shield className="h-5 w-5 sm:h-6 sm:w-6" />
                   Access Denied
                 </CardTitle>
-                <CardDescription className="text-gray-400">
+                <CardDescription className="text-gray-400 text-sm sm:text-base">
                   You don't have permission to view team management.
                 </CardDescription>
               </CardHeader>

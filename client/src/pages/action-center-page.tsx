@@ -29,24 +29,25 @@ export default function ActionCenterPage() {
 
   return (
     <div className="min-h-screen bg-background">
-      {/* Navigation Header */}
+      {/* Navigation Header - Responsive */}
       <div className="border-b">
-        <div className="container mx-auto px-4 py-4">
-          <div className="flex items-center gap-4">
+        <div className="container mx-auto px-3 sm:px-4 py-3 sm:py-4">
+          <div className="flex items-center gap-2 sm:gap-4">
             <Button asChild variant="ghost" size="sm">
               <Link href="/">
-                <ArrowLeft className="mr-2 h-4 w-4" />
-                Dashboard
+                <ArrowLeft className="mr-1 sm:mr-2 h-4 w-4" />
+                <span className="hidden sm:inline">Dashboard</span>
+                <span className="sm:hidden">Back</span>
               </Link>
             </Button>
             <div className="h-4 w-px bg-border" />
-            <h1 className="text-lg font-semibold">Action Center</h1>
+            <h1 className="text-base sm:text-lg font-semibold truncate">Action Center</h1>
           </div>
         </div>
       </div>
 
-      {/* Main Content */}
-      <div className="container mx-auto px-4 py-6">
+      {/* Main Content - Responsive */}
+      <div className="container mx-auto px-3 sm:px-4 py-4 sm:py-6">
         <ActionCenter />
       </div>
     </div>

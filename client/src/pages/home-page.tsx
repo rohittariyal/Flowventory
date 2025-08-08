@@ -93,71 +93,82 @@ export default function HomePage() {
         onImportClick={openImportModal}
         onSettingsClick={() => setShowSettings(true)}
       />
-      <main className="p-6 space-y-6">
-        {/* Smart Alerts - Admin/Manager only */}
+      <main className="p-3 sm:p-6 space-y-4 sm:space-y-6">
+        {/* Smart Alerts - Admin/Manager only - Responsive */}
         {onboardingData && (selectedPanels.includes("inventory-brain") || selectedPanels.includes("po-generator")) && 
          (user.role === "admin" || user.role === "manager") && (
-          <div className="bg-yellow-500/10 border border-yellow-500/20 rounded-lg p-4">
-            <div className="flex items-center space-x-2">
+          <div className="bg-yellow-500/10 border border-yellow-500/20 rounded-lg p-3 sm:p-4">
+            <div className="flex flex-col sm:flex-row sm:items-center space-y-1 sm:space-y-0 sm:space-x-2">
               <div className="text-yellow-400">⚠️</div>
               <div className="text-yellow-400 font-medium">
                 2 products are running low on stock.
               </div>
-              <span className="text-muted-foreground">
+              <span className="text-muted-foreground text-sm">
                 Check Inventory Panel for details.
               </span>
             </div>
           </div>
         )}
         
-        <div className="grid grid-cols-1 xl:grid-cols-2 gap-6">
-          {/* Business Pulse - Always shown */}
+        <div className="grid grid-cols-1 lg:grid-cols-2 xl:grid-cols-3 gap-4 sm:gap-6">
+          {/* Business Pulse - Always shown - Responsive */}
           {selectedPanels.includes("business-pulse") && (
-            <BusinessPulsePanel className="xl:col-span-2" />
+            <div className="lg:col-span-2 xl:col-span-3">
+              <BusinessPulsePanel />
+            </div>
           )}
           
-          {/* Sales Intelligence - Based on selected channels */}
+          {/* Sales Intelligence - Based on selected channels - Responsive */}
           {selectedPanels.includes("sales-intelligence") && onboardingData?.salesChannels && (
-            <SalesIntelligencePanel 
-              className="xl:col-span-2" 
-              salesChannels={onboardingData.salesChannels}
-            />
+            <div className="lg:col-span-2 xl:col-span-3">
+              <SalesIntelligencePanel salesChannels={onboardingData.salesChannels} />
+            </div>
           )}
           
-          {/* Inventory Brain - Conditional on inventory size */}
+          {/* Inventory Brain - Conditional on inventory size - Responsive */}
           {selectedPanels.includes("inventory-brain") && (
-            <InventoryBrainPanel user={user} importedData={importedData.inventory} />
+            <div className="lg:col-span-1">
+              <InventoryBrainPanel user={user} importedData={importedData.inventory} />
+            </div>
           )}
           
-          {/* Customer Radar - Always shown */}
+          {/* Customer Radar - Always shown - Responsive */}
           {selectedPanels.includes("customer-radar") && (
-            <CustomerRadarPanel />
+            <div className="lg:col-span-1">
+              <CustomerRadarPanel />
+            </div>
           )}
           
-          {/* AI Copilot - Admin/Manager only */}
+          {/* AI Copilot - Admin/Manager only - Responsive */}
           {selectedPanels.includes("ai-copilot") && (user.role === "admin" || user.role === "manager") && (
-            <AICopilotPanel />
+            <div className="lg:col-span-1">
+              <AICopilotPanel />
+            </div>
           )}
           
-          {/* Return Abuse Detection - Admin/Manager only */}
+          {/* Return Abuse Detection - Admin/Manager only - Responsive */}
           {selectedPanels.includes("return-abuse") && (user.role === "admin" || user.role === "manager") && (
-            <ReturnAbusePanel className="xl:col-span-2" />
+            <div className="lg:col-span-2 xl:col-span-3">
+              <ReturnAbusePanel />
+            </div>
           )}
           
-          {/* PO Generator - Admin only */}
+          {/* PO Generator - Admin only - Responsive */}
           {selectedPanels.includes("po-generator") && user.role === "admin" && (
-            <POGeneratorPanel user={user} />
+            <div className="lg:col-span-1">
+              <POGeneratorPanel user={user} />
+            </div>
           )}
         </div>
         
-        {/* Welcome message for new users */}
+        {/* Welcome message for new users - Responsive */}
         {selectedPanels.length === 0 && (
-          <div className="text-center py-12">
-            <div className="bg-card rounded-lg p-8 border border-border max-w-md mx-auto">
-              <h2 className="text-xl font-semibold text-foreground mb-4">
+          <div className="text-center py-8 sm:py-12">
+            <div className="bg-card rounded-lg p-6 sm:p-8 border border-border max-w-md mx-auto">
+              <h2 className="text-lg sm:text-xl font-semibold text-foreground mb-4">
                 Setting up your dashboard...
               </h2>
-              <p className="text-muted-foreground">
+              <p className="text-sm sm:text-base text-muted-foreground">
                 Complete your onboarding to see personalized business insights and analytics.
               </p>
             </div>

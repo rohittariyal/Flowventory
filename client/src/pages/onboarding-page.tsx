@@ -172,17 +172,17 @@ export default function OnboardingPage() {
   const progress = (currentStep / STEPS.length) * 100;
 
   return (
-    <div className="min-h-screen bg-background py-12 px-4 sm:px-6 lg:px-8">
+    <div className="min-h-screen bg-background py-6 sm:py-12 px-3 sm:px-4 lg:px-8">
       <div className="max-w-4xl mx-auto">
-        {/* Header */}
-        <div className="text-center mb-8">
-          <h1 className="text-3xl font-bold text-foreground mb-2">Welcome to your setup!</h1>
-          <p className="text-lg text-muted-foreground">Let's get your business configured in just a few steps</p>
+        {/* Header - Responsive */}
+        <div className="text-center mb-6 sm:mb-8">
+          <h1 className="text-2xl sm:text-3xl font-bold text-foreground mb-2">Welcome to your setup!</h1>
+          <p className="text-base sm:text-lg text-muted-foreground">Let's get your business configured in just a few steps</p>
         </div>
 
-        {/* Progress Bar */}
-        <div className="mb-8">
-          <div className="flex items-center justify-between mb-4">
+        {/* Progress Bar - Responsive */}
+        <div className="mb-6 sm:mb-8">
+          <div className="hidden sm:flex items-center justify-between mb-4">
             {STEPS.map((step, index) => {
               const Icon = step.icon;
               const isActive = currentStep === step.id;
@@ -208,6 +208,12 @@ export default function OnboardingPage() {
               );
             })}
           </div>
+          {/* Mobile step indicator */}
+          <div className="sm:hidden text-center mb-4">
+            <p className="text-sm text-muted-foreground">
+              Step {currentStep} of {STEPS.length}: {STEPS[currentStep - 1].title}
+            </p>
+          </div>
           <Progress value={progress} className="h-2" />
         </div>
 
@@ -231,8 +237,8 @@ export default function OnboardingPage() {
               
               {/* Step 1: Business Overview */}
               {currentStep === 1 && (
-                <div className="space-y-6">
-                  <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                <div className="space-y-4 sm:space-y-6">
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 sm:gap-6">
                     <div className="space-y-2">
                       <Label htmlFor="companyName">Company Name</Label>
                       <Input

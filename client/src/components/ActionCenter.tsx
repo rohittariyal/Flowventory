@@ -537,7 +537,11 @@ export function ActionCenter() {
       </Tabs>
 
       <TaskDetailsModal 
-        task={selectedTask}
+        task={selectedTask ? {
+          ...selectedTask,
+          createdAt: new Date(selectedTask.createdAt),
+          updatedAt: new Date(selectedTask.updatedAt)
+        } : null}
         open={taskDetailsOpen}
         onOpenChange={setTaskDetailsOpen}
       />

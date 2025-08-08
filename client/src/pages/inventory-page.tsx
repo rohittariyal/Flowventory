@@ -140,30 +140,30 @@ function InventoryPage() {
   };
 
   return (
-    <div className="container mx-auto p-6 space-y-6">
+    <div className="container mx-auto p-3 sm:p-6 space-y-4 sm:space-y-6">
       <Card>
         <CardHeader>
-          <div className="flex items-center gap-3">
-            <Package className="h-6 w-6 text-primary" />
-            <div>
-              <CardTitle>Inventory Management</CardTitle>
-              <CardDescription>
+          <div className="flex items-center gap-2 sm:gap-3">
+            <Package className="h-5 w-5 sm:h-6 sm:w-6 text-primary shrink-0" />
+            <div className="min-w-0">
+              <CardTitle className="text-lg sm:text-xl">Inventory Management</CardTitle>
+              <CardDescription className="text-sm">
                 Monitor stock levels, days cover, and manage reorder tasks
               </CardDescription>
             </div>
           </div>
         </CardHeader>
-        <CardContent>
-          <div className="rounded-md border">
+        <CardContent className="px-3 sm:px-6">
+          <div className="rounded-md border overflow-x-auto">
             <Table>
               <TableHeader>
                 <TableRow>
-                  <TableHead>SKU</TableHead>
-                  <TableHead>Channels</TableHead>
-                  <TableHead className="text-right">Stock</TableHead>
-                  <TableHead className="text-right">Threshold</TableHead>
-                  <TableHead className="text-right">Days Cover</TableHead>
-                  <TableHead>Actions</TableHead>
+                  <TableHead className="min-w-[80px]">SKU</TableHead>
+                  <TableHead className="min-w-[100px]">Channels</TableHead>
+                  <TableHead className="text-right min-w-[60px]">Stock</TableHead>
+                  <TableHead className="text-right min-w-[80px]">Threshold</TableHead>
+                  <TableHead className="text-right min-w-[90px]">Days Cover</TableHead>
+                  <TableHead className="min-w-[150px]">Actions</TableHead>
                 </TableRow>
               </TableHeader>
               <TableBody>
@@ -194,7 +194,7 @@ function InventoryPage() {
                       </Badge>
                     </TableCell>
                     <TableCell>
-                      <div className="flex gap-2">
+                      <div className="flex flex-col sm:flex-row gap-1 sm:gap-2">
                         {item.stock <= item.threshold && (
                           <>
                             {!item.hasLinkedTask && item.latestEventId ? (
@@ -203,20 +203,20 @@ function InventoryPage() {
                                 size="sm"
                                 onClick={() => handleCreateTask(item.latestEventId!)}
                                 disabled={createTaskMutation.isPending}
-                                className="text-xs"
+                                className="text-xs w-full sm:w-auto"
                               >
-                                <AlertTriangle className="h-3 w-3 mr-1" />
-                                Create Task
+                                <AlertTriangle className="h-3 w-3 sm:mr-1" />
+                                <span className="hidden sm:inline ml-1">Create Task</span>
                               </Button>
                             ) : item.hasLinkedTask ? (
                               <Button
                                 variant="outline"
                                 size="sm"
-                                className="text-xs"
+                                className="text-xs w-full sm:w-auto"
                                 disabled
                               >
-                                <CheckCircle className="h-3 w-3 mr-1" />
-                                Open Task
+                                <CheckCircle className="h-3 w-3 sm:mr-1" />
+                                <span className="hidden sm:inline ml-1">Open Task</span>
                               </Button>
                             ) : null}
                           </>
@@ -225,10 +225,10 @@ function InventoryPage() {
                           variant="ghost"
                           size="sm"
                           onClick={() => handleCreatePo(item.sku)}
-                          className="text-xs"
+                          className="text-xs w-full sm:w-auto"
                         >
-                          <FileText className="h-3 w-3 mr-1" />
-                          Draft PO
+                          <FileText className="h-3 w-3 sm:mr-1" />
+                          <span className="hidden sm:inline ml-1">Draft PO</span>
                         </Button>
                       </div>
                     </TableCell>
