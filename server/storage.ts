@@ -2,6 +2,7 @@ import { type User, type InsertUser, type OnboardingData, type InsertOnboardingD
 import { randomUUID } from "crypto";
 import session from "express-session";
 import createMemoryStore from "memorystore";
+import { notificationService } from "./notificationService";
 
 const MemoryStore = createMemoryStore(session);
 
@@ -533,6 +534,15 @@ export class MemStorage implements IStorage {
     };
     
     this.tasks.set(id, task);
+    
+    // Send notification for P1 tasks
+    if (task.priority === "P1") {
+      // Don't await to avoid blocking task creation
+      notificationService.notifyP1Task(task).catch(error => {
+        console.error("Failed to send P1 task notification:", error);
+      });
+    }
+    
     return task;
   }
 

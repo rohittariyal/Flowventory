@@ -3,6 +3,9 @@
 This is a comprehensive business intelligence dashboard application built with React and Express. It features user authentication, role-based access control, post-login onboarding, and a conditional dashboard UI with dark theme and light green accents. The application provides AI-powered business insights, inventory management, sales intelligence, customer analytics, and return abuse detection based on user roles and onboarding preferences.
 
 ## Recent Changes (Latest First)
+- **2025-01-08**: Implemented P1 task notification system with Teams webhook and email fallback support
+- **2025-01-08**: Added purchase orders backend schema, API routes, and inventory integration
+- **2025-01-08**: Created comprehensive inventory management page with color-coded stock levels and action buttons
 - **2025-01-08**: Added comprehensive sync adapters with mock data for Shopify, Amazon, and Meta platforms
 - **2025-01-08**: Implemented sync management UI with manual trigger buttons and real-time status display
 - **2025-01-08**: Created intelligent business logic for inventory alerts, payment mismatches, and ROAS monitoring  
@@ -81,6 +84,7 @@ Preferred communication style: Simple, everyday language.
 - **passport & passport-local**: Authentication middleware and local strategy
 - **express-session**: Session management middleware
 - **connect-pg-simple**: PostgreSQL session store adapter
+- **nodemailer**: Email delivery service for SMTP notifications
 
 ### UI/UX Libraries
 - **@radix-ui/***: Unstyled, accessible UI component primitives
@@ -97,3 +101,31 @@ Preferred communication style: Simple, everyday language.
 - **tsx**: TypeScript execution engine for Node.js
 - **esbuild**: Fast JavaScript bundler for production builds
 - **drizzle-kit**: Database migration and introspection tools
+
+## Notification System Architecture
+
+### P1 Task Notification Service
+- **Service Location**: `server/notificationService.ts` and `server/emailService.ts`
+- **Trigger**: Automatically called when any P1 priority task is created
+- **Teams Integration**: Sends rich card notifications to Microsoft Teams via webhook
+- **Email Fallback**: SMTP email notifications when Teams webhook unavailable
+- **URL Generation**: Automatic deep linking to Action Center with task filtering
+
+### Environment Configuration
+**Teams Webhook (Primary)**:
+- `TEAMS_WEBHOOK_URL`: Microsoft Teams incoming webhook URL
+
+**SMTP Email (Fallback)**:
+- `SMTP_HOST`: Email server hostname
+- `SMTP_PORT`: Email server port (587 for TLS, 465 for SSL)
+- `SMTP_SECURE`: "true" for SSL, "false" for TLS
+- `SMTP_USER`: Email authentication username
+- `SMTP_PASS`: Email authentication password
+- `SMTP_FROM`: Sender email address
+- `NOTIFICATION_EMAIL`: Recipient email (defaults to SMTP_FROM)
+
+### Integration Points
+- **Task Creation**: Integrated into `storage.createTask()` method
+- **Non-blocking**: Notifications sent asynchronously to avoid blocking task creation
+- **Error Handling**: Comprehensive logging for troubleshooting
+- **Test Endpoint**: `/api/test/p1-notification` for admin testing

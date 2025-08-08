@@ -628,6 +628,32 @@ export function registerRoutes(app: Express): Server {
     }
   });
 
+  // Test endpoint for P1 notification (Admin only)
+  app.post("/api/test/p1-notification", requireAuth, async (req, res) => {
+    if (!req.user || req.user.role !== "admin") {
+      return res.status(403).json({ error: "Admin access required" });
+    }
+
+    try {
+      // Create a test P1 task to trigger notification
+      const testTask = await storage.createTask({
+        title: "Test Critical Task - " + new Date().toLocaleTimeString(),
+        type: "RESTOCK",
+        priority: "P1",
+        notes: "This is a test P1 task to verify the notification system is working correctly."
+      });
+      
+      res.json({ 
+        message: "Test P1 task created successfully", 
+        task: testTask,
+        note: "Check console for notification attempt logs"
+      });
+    } catch (error) {
+      console.error("Error creating test P1 task:", error);
+      res.status(500).json({ error: "Failed to create test task" });
+    }
+  });
+
   const httpServer = createServer(app);
 
   return httpServer;
