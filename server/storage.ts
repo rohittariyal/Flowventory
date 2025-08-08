@@ -519,6 +519,26 @@ export class MemStorage implements IStorage {
   async createTask(taskData: CreateTaskData): Promise<Task> {
     const id = randomUUID();
     const now = new Date();
+    
+    // Calculate default due dates based on task type
+    let defaultDueAt: Date | null = null;
+    if (!taskData.dueAt) {
+      switch (taskData.type) {
+        case "RESTOCK":
+          defaultDueAt = new Date(now.getTime() + 24 * 60 * 60 * 1000); // +24 hours
+          break;
+        case "RETRY_SYNC":
+          defaultDueAt = new Date(now.getTime() + 2 * 60 * 60 * 1000); // +2 hours
+          break;
+        case "RECONCILE":
+          defaultDueAt = new Date(now.getTime() + 48 * 60 * 60 * 1000); // +48 hours
+          break;
+        case "ADJUST_BUDGET":
+          defaultDueAt = new Date(now.getTime() + 72 * 60 * 60 * 1000); // +72 hours
+          break;
+      }
+    }
+    
     const task: Task = {
       id,
       title: taskData.title,
@@ -526,7 +546,7 @@ export class MemStorage implements IStorage {
       type: taskData.type,
       assigneeId: taskData.assigneeId || null,
       priority: taskData.priority,
-      dueAt: taskData.dueAt ? new Date(taskData.dueAt) : null,
+      dueAt: taskData.dueAt ? new Date(taskData.dueAt) : defaultDueAt,
       status: "OPEN",
       notes: taskData.notes || null,
       createdAt: now,

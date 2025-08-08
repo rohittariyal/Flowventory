@@ -3,6 +3,9 @@
 This is a comprehensive business intelligence dashboard application built with React and Express. It features user authentication, role-based access control, post-login onboarding, and a conditional dashboard UI with dark theme and light green accents. The application provides AI-powered business insights, inventory management, sales intelligence, customer analytics, and return abuse detection based on user roles and onboarding preferences.
 
 ## Recent Changes (Latest First)
+- **2025-01-08**: Added default due dates for task types (RESTOCK: +24h, RETRY_SYNC: +2h, RECONCILE: +48h)
+- **2025-01-08**: Implemented overdue count and "Mine" filter chips in Action Center with real-time counts
+- **2025-01-08**: Enhanced task display with overdue highlighting and improved due date formatting
 - **2025-01-08**: Implemented P1 task notification system with Teams webhook and email fallback support
 - **2025-01-08**: Added purchase orders backend schema, API routes, and inventory integration
 - **2025-01-08**: Created comprehensive inventory management page with color-coded stock levels and action buttons

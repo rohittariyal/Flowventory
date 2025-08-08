@@ -1,5 +1,6 @@
 import { useState, useEffect } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
+import { useAuth } from "@/hooks/use-auth";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -18,7 +19,9 @@ import {
   TrendingDown,
   RefreshCw,
   Activity,
-  ShoppingCart
+  ShoppingCart,
+  Filter,
+  User
 } from "lucide-react";
 import { formatDistanceToNow } from "date-fns";
 import { apiRequest } from "@/lib/queryClient";
@@ -69,6 +72,14 @@ const PRIORITY_COLORS = {
 
 export function ActionCenter() {
   const [selectedTab, setSelectedTab] = useState("overview");
+  const [taskFilters, setTaskFilters] = useState<{
+    overdue: boolean;
+    mine: boolean;
+  }>({
+    overdue: false,
+    mine: false,
+  });
+  const { user } = useAuth();
   const queryClient = useQueryClient();
 
   // Fetch events with summary for overview
@@ -81,14 +92,29 @@ export function ActionCenter() {
     },
   });
 
-  // Fetch tasks
-  const { data: tasks = [] } = useQuery<Task[]>({
+  // Fetch all tasks for counts
+  const { data: allTasks = [] } = useQuery<Task[]>({
     queryKey: ["/api/tasks"],
     queryFn: async () => {
       const response = await fetch("/api/tasks");
       if (!response.ok) throw new Error("Failed to fetch tasks");
       return response.json();
     },
+  });
+
+  // Fetch filtered tasks
+  const { data: tasks = [] } = useQuery<Task[]>({
+    queryKey: ["/api/tasks", taskFilters],
+    queryFn: async () => {
+      const params = new URLSearchParams();
+      if (taskFilters.overdue) params.set("overdue", "true");
+      if (taskFilters.mine && user) params.set("assigneeId", user.id);
+      
+      const response = await fetch(`/api/tasks?${params.toString()}`);
+      if (!response.ok) throw new Error("Failed to fetch tasks");
+      return response.json();
+    },
+    enabled: !!user,
   });
 
   // Resolve task mutation
@@ -373,10 +399,63 @@ export function ActionCenter() {
         </TabsContent>
 
         <TabsContent value="tasks" className="space-y-4">
+          {/* Filter Chips */}
+          <div className="flex items-center gap-3 mb-4">
+            <div className="flex items-center gap-2">
+              <Filter className="h-4 w-4 text-muted-foreground" />
+              <span className="text-sm font-medium">Filters:</span>
+            </div>
+            
+            <Button
+              variant={taskFilters.overdue ? "default" : "outline"}
+              size="sm"
+              onClick={() => setTaskFilters(prev => ({ ...prev, overdue: !prev.overdue }))}
+              className="h-8"
+            >
+              <AlertTriangle className="h-3 w-3 mr-1" />
+              Overdue
+              <Badge variant="secondary" className="ml-2 text-xs">
+                {allTasks.filter(task => {
+                  if (!task.dueAt || task.status === "DONE") return false;
+                  return new Date(task.dueAt) < new Date();
+                }).length}
+              </Badge>
+            </Button>
+            
+            <Button
+              variant={taskFilters.mine ? "default" : "outline"}
+              size="sm"
+              onClick={() => setTaskFilters(prev => ({ ...prev, mine: !prev.mine }))}
+              className="h-8"
+            >
+              <User className="h-3 w-3 mr-1" />
+              Mine
+              <Badge variant="secondary" className="ml-2 text-xs">
+                {allTasks.filter(task => task.assigneeId === user?.id).length}
+              </Badge>
+            </Button>
+            
+            {(taskFilters.overdue || taskFilters.mine) && (
+              <Button
+                variant="ghost"
+                size="sm"
+                onClick={() => setTaskFilters({ overdue: false, mine: false })}
+                className="h-8 text-muted-foreground"
+              >
+                Clear filters
+              </Button>
+            )}
+          </div>
+
           <Card>
             <CardHeader>
               <CardTitle>Task Management</CardTitle>
-              <CardDescription>Track and manage all tasks</CardDescription>
+              <CardDescription>
+                {taskFilters.overdue || taskFilters.mine 
+                  ? `Showing ${tasks.length} filtered tasks`
+                  : "Track and manage all tasks"
+                }
+              </CardDescription>
             </CardHeader>
             <CardContent>
               <div className="space-y-4">
@@ -407,7 +486,15 @@ export function ActionCenter() {
                       <p>Created: {formatDistanceToNow(new Date(task.createdAt))} ago</p>
                       <p>Type: {task.type}</p>
                       {task.dueAt && (
-                        <p>Due: {formatDistanceToNow(new Date(task.dueAt))} from now</p>
+                        <p className={
+                          new Date(task.dueAt) < new Date() && task.status !== "DONE"
+                            ? "text-destructive font-medium"
+                            : ""
+                        }>
+                          Due: {formatDistanceToNow(new Date(task.dueAt))} 
+                          {new Date(task.dueAt) < new Date() ? " ago" : " from now"}
+                          {new Date(task.dueAt) < new Date() && task.status !== "DONE" && " (OVERDUE)"}
+                        </p>
                       )}
                     </div>
                   </div>
