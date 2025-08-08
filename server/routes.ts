@@ -398,6 +398,156 @@ export function registerRoutes(app: Express): Server {
     }
   });
 
+  // Authentication middleware to check if user has admin/manager privileges for Action Center
+  const requiresActionCenterAccess = (req: any, res: any, next: any) => {
+    if (!req.isAuthenticated()) {
+      return res.sendStatus(401);
+    }
+    
+    const user = req.user;
+    if (!user || (user.role !== "admin" && user.role !== "manager")) {
+      return res.sendStatus(403); // Forbidden - viewer role users cannot access Action Center
+    }
+    
+    next();
+  };
+
+  // Action Center Events API routes
+  app.get("/api/events", requiresActionCenterAccess, async (req, res) => {
+    try {
+      const { status, type, severity, summary } = req.query;
+      const filters = {
+        status: status as string,
+        type: type as string,
+        severity: severity as string,
+        summary: summary === "true",
+      };
+      
+      const result = await storage.getEvents(filters);
+      res.json(result);
+    } catch (error) {
+      console.error("Error fetching events:", error);
+      res.status(500).json({ error: "Failed to fetch events" });
+    }
+  });
+
+  app.post("/api/events", requiresActionCenterAccess, async (req, res) => {
+    try {
+      const eventData = req.body;
+      const result = await storage.createEvent(eventData);
+      res.status(201).json(result);
+    } catch (error) {
+      console.error("Error creating event:", error);
+      res.status(500).json({ error: "Failed to create event" });
+    }
+  });
+
+  app.get("/api/events/:id", requiresActionCenterAccess, async (req, res) => {
+    try {
+      const event = await storage.getEvent(req.params.id);
+      if (!event) {
+        return res.status(404).json({ error: "Event not found" });
+      }
+      res.json(event);
+    } catch (error) {
+      console.error("Error fetching event:", error);
+      res.status(500).json({ error: "Failed to fetch event" });
+    }
+  });
+
+  app.patch("/api/events/:id", requiresActionCenterAccess, async (req, res) => {
+    try {
+      const updatedEvent = await storage.updateEvent(req.params.id, req.body);
+      if (!updatedEvent) {
+        return res.status(404).json({ error: "Event not found" });
+      }
+      res.json(updatedEvent);
+    } catch (error) {
+      console.error("Error updating event:", error);
+      res.status(500).json({ error: "Failed to update event" });
+    }
+  });
+
+  // Action Center Tasks API routes
+  app.get("/api/tasks", requiresActionCenterAccess, async (req, res) => {
+    try {
+      const { status, assigneeId, type, priority, overdue } = req.query;
+      const filters = {
+        status: status as string,
+        assigneeId: assigneeId as string,
+        type: type as string,
+        priority: priority as string,
+        overdue: overdue === "true",
+      };
+      
+      const tasks = await storage.getTasks(filters);
+      res.json(tasks);
+    } catch (error) {
+      console.error("Error fetching tasks:", error);
+      res.status(500).json({ error: "Failed to fetch tasks" });
+    }
+  });
+
+  app.post("/api/tasks", requiresActionCenterAccess, async (req, res) => {
+    try {
+      const taskData = req.body;
+      const task = await storage.createTask(taskData);
+      res.status(201).json(task);
+    } catch (error) {
+      console.error("Error creating task:", error);
+      res.status(500).json({ error: "Failed to create task" });
+    }
+  });
+
+  app.get("/api/tasks/:id", requiresActionCenterAccess, async (req, res) => {
+    try {
+      const task = await storage.getTask(req.params.id);
+      if (!task) {
+        return res.status(404).json({ error: "Task not found" });
+      }
+      res.json(task);
+    } catch (error) {
+      console.error("Error fetching task:", error);
+      res.status(500).json({ error: "Failed to fetch task" });
+    }
+  });
+
+  app.patch("/api/tasks/:id", requiresActionCenterAccess, async (req, res) => {
+    try {
+      const updatedTask = await storage.updateTask(req.params.id, req.body);
+      if (!updatedTask) {
+        return res.status(404).json({ error: "Task not found" });
+      }
+      res.json(updatedTask);
+    } catch (error) {
+      console.error("Error updating task:", error);
+      res.status(500).json({ error: "Failed to update task" });
+    }
+  });
+
+  app.post("/api/tasks/:id/resolve", requiresActionCenterAccess, async (req, res) => {
+    try {
+      const result = await storage.resolveTask(req.params.id);
+      res.json(result);
+    } catch (error) {
+      console.error("Error resolving task:", error);
+      res.status(500).json({ error: "Failed to resolve task" });
+    }
+  });
+
+  app.post("/api/events/:id/create-task", requiresActionCenterAccess, async (req, res) => {
+    try {
+      const task = await storage.createTaskFromEvent(req.params.id);
+      if (!task) {
+        return res.status(404).json({ error: "Event not found" });
+      }
+      res.status(201).json(task);
+    } catch (error) {
+      console.error("Error creating task from event:", error);
+      res.status(500).json({ error: "Failed to create task from event" });
+    }
+  });
+
   const httpServer = createServer(app);
 
   return httpServer;

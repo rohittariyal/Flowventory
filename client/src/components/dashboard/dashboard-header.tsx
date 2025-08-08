@@ -1,6 +1,7 @@
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
-import { LogOut, Settings, Bell, Upload, FileSpreadsheet, Users } from "lucide-react";
+import { LogOut, Settings, Bell, Upload, FileSpreadsheet, Users, BarChart3 } from "lucide-react";
+import { Link } from "wouter";
 import { useAuth } from "@/hooks/use-auth";
 import { useLocation } from "wouter";
 import { NotificationPanel } from "../NotificationPanel";
@@ -76,6 +77,16 @@ export function DashboardHeader({ user, onImportClick, onSettingsClick }: Dashbo
                 Import Sales
               </Button>
             </div>
+          )}
+
+          {/* Action Center Button - Admin and Manager only */}
+          {(user.role === "admin" || user.role === "manager") && (
+            <Button asChild variant="ghost" size="sm">
+              <Link href="/action-center">
+                <BarChart3 className="h-4 w-4 mr-1" />
+                Action Center
+              </Link>
+            </Button>
           )}
 
           {/* Team Management Button - Admin and Manager only */}

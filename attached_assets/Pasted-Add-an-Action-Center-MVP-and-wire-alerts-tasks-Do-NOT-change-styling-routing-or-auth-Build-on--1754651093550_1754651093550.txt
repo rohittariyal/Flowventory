@@ -1,0 +1,119 @@
+Add an Action Center MVP and wire alerts → tasks. Do NOT change styling, routing, or auth. Build on the current stack and patterns.
+ 
+## Data models (use existing DB + ORM; if Mongo/Mongoose is present, add these schemas; else adapt to current models)
+Event {
+  _id: ObjectId,
+  type: "INVENTORY_LOW"|"SYNC_ERROR"|"PAYMENT_MISMATCH"|"ROAS_DROP",
+  sku?: string,
+  channel?: string,
+  payload: any,
+  severity: "LOW"|"MEDIUM"|"HIGH",
+  occurredAt: Date (default now),
+  status: "OPEN"|"HANDLED" (default "OPEN")
+}
+Task {
+  _id: ObjectId,
+  title: string,
+  sourceEventId: ObjectId (ref Event) UNIQUE,
+  type: "RESTOCK"|"RETRY_SYNC"|"RECONCILE"|"ADJUST_BUDGET",
+  assigneeId?: string,
+  priority: "P1"|"P2"|"P3",
+  dueAt?: Date,
+  status: "OPEN"|"IN_PROGRESS"|"DONE"|"DISMISSED" (default "OPEN"),
+  notes?: string,
+  createdAt/updatedAt
+}
+Add a unique index on Task.sourceEventId.
+ 
+## Mapping rules (event → task)
+- INVENTORY_LOW → RESTOCK
+  - priority = P1 if payload.stock === 0 else P2
+  - title: `Restock ${sku} (stock: ${payload.stock}/${payload.threshold})`
+- SYNC_ERROR → RETRY_SYNC (include connector + error code in notes)
+- PAYMENT_MISMATCH → RECONCILE (include order ids + delta in notes)
+- ROAS_DROP → ADJUST_BUDGET (include campaign + % drop in notes)
+ 
+## Backend endpoints (append; keep style consistent with existing API)
+Events:
+- POST /api/events
+  - Validate input, create event, run mapping, create linked Task if rule matches (idempotent via sourceEventId unique).
+  - Return { event, taskCreated?: Task }
+- GET /api/events
+  - Filters: status, type, severity. Return counts summary too if query ?summary=true
+ 
+Tasks:
+- POST /api/tasks                      // manual create
+- POST /api/tasks/from-event/:eventId  // create from existing event (idempotent)
+- GET  /api/tasks                      // filters: status, assigneeId, type, priority, overdue=true
+- PATCH /api/tasks/:id                 // update assigneeId, dueAt, status, notes
+- POST /api/tasks/:id/resolve          // set status=DONE and flip linked event.status=HANDLED; return both
+ 
+Service logic:
+- After creating an Event, run a pure function mapEventToTaskDraft(event) → TaskDraft|null.
+- When creating a Task from an Event, enforce uniqueness on sourceEventId. If exists, return existing task.
+ 
+## Frontend (use existing React app, keep styling)
+Create components/pages without altering global layout.
+ 
+1) AlertsBar (upgrade existing bell logic only if needed)
+- Fetch /api/events?status=OPEN&summary=true to show counts by severity (e.g., “Critical: X • Warnings: Y”).
+- If there are INVENTORY_LOW events, show a clickable chip like “2 low stock” that, when clicked, navigates/scrolls to Action Center with type filter applied.
+- Keep current visuals; only add the count chips and CTA “Review in Action Center”.
+ 
+2) ActionCenter (new page/section or panel under dashboard route)
+- Table columns: [Select] | Title | Type | Priority | Assignee | Due | Status | Actions
+- Data from GET /api/tasks?status=OPEN by default.
+- Filters UI: Status (Open/Mine/Overdue), Type, Priority; keep minimal.
+- Row actions:
+  - “Assign to me” → PATCH /api/tasks/:id (optimistic update)
+  - “Mark Done” → POST /api/tasks/:id/resolve (optimistic update, remove from list)
+  - “Open Details” → modal that shows sourceEvent payload + notes
+- Empty state: “All clear. You’re on top of everything.”
+ 
+3) In-context create
+- Wherever you render an event or inventory row (existing table or alerts list), add a small button:
+  - If no task yet: “Create Task” → POST /api/tasks/from-event/:eventId
+  - If task exists: “Open Task” → deep link to Action Center filtered to that task
+ 
+State handling:
+- Use existing fetch/axios wrappers and state patterns already present.
+- Optimistic UI for status/assignee updates.
+- Do not change theme or spacing.
+ 
+## Seed data (simple script or temporary button)
+Insert test events by calling POST /api/events with:
+ 
+1) INVENTORY_LOW
+{
+  "type":"INVENTORY_LOW","sku":"SKU-GREEN-TEE","channel":"Shopify",
+  "payload":{"stock":2,"threshold":5},"severity":"MEDIUM"
+}
+2) SYNC_ERROR
+{
+  "type":"SYNC_ERROR","channel":"Amazon",
+  "payload":{"connector":"AmazonSP","code":"E401","message":"Token expired"},
+  "severity":"HIGH"
+}
+3) PAYMENT_MISMATCH
+{
+  "type":"PAYMENT_MISMATCH",
+  "payload":{"orders":["AMZ-1122","AMZ-1130"],"delta":-742.50},
+  "severity":"HIGH"
+}
+4) ROAS_DROP
+{
+  "type":"ROAS_DROP",
+  "payload":{"campaign":"Meta-Prospecting","roasPrev":3.1,"roasNow":1.8,"dropPct":41},
+  "severity":"MEDIUM"
+}
+ 
+Each should auto-create one Task via mapping.
+ 
+## Acceptance criteria
+- New mapped events auto-create exactly one linked Task (no duplicates).
+- Action Center lists tasks; “Assign to me” and “Mark Done” work with optimistic UI.
+- Resolving a task flips the linked event to HANDLED.
+- AlertsBar shows open counts and links to Action Center with filters.
+- No changes to global styles or routes beyond adding the Action Center view.
+ 
+Keep changes minimal, focused, and consistent with existing code. Produce all files/edits needed.

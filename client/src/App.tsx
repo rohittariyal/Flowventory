@@ -9,6 +9,7 @@ import NotFound from "@/pages/not-found";
 import AuthPage from "@/pages/auth-page";
 import OnboardingPage from "@/pages/onboarding-page";
 import TeamPage from "@/pages/team-page";
+import ActionCenterPage from "@/pages/action-center-page";
 import { ProtectedRoute } from "./lib/protected-route";
 
 function Router() {
@@ -17,6 +18,7 @@ function Router() {
       <ProtectedRoute path="/" component={HomePage} />
       <ProtectedRoute path="/onboarding" component={OnboardingPage} requiresOnboarding={false} />
       <ProtectedRoute path="/team" component={TeamPage} />
+      <ProtectedRoute path="/action-center" component={ActionCenterPage} />
       <Route path="/auth" component={AuthPage} />
       <Route component={NotFound} />
     </Switch>

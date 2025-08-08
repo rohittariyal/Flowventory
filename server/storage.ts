@@ -1,4 +1,4 @@
-import { type User, type InsertUser, type OnboardingData, type InsertOnboardingData, type PlatformConnections, type Organization, type TeamInvitation, type InviteTeamMemberData, type UpdateTeamMemberData, type Notification, type CreateNotificationData } from "@shared/schema";
+import { type User, type InsertUser, type OnboardingData, type InsertOnboardingData, type PlatformConnections, type Organization, type TeamInvitation, type InviteTeamMemberData, type UpdateTeamMemberData, type Notification, type CreateNotificationData, type Event, type InsertEvent, type Task, type InsertTask, type CreateEventData, type CreateTaskData, type UpdateTaskData } from "@shared/schema";
 import { randomUUID } from "crypto";
 import session from "express-session";
 import createMemoryStore from "memorystore";
@@ -33,6 +33,21 @@ export interface IStorage {
   markNotificationAsRead(notificationId: string, userId: string): Promise<void>;
   deleteExpiredNotifications(): Promise<void>;
   
+  // Action Center Event methods
+  createEvent(eventData: CreateEventData): Promise<{ event: Event, taskCreated?: Task }>;
+  getEvents(filters?: { status?: string, type?: string, severity?: string, summary?: boolean }): Promise<Event[] | { events: Event[], summary: any }>;
+  getEvent(id: string): Promise<Event | undefined>;
+  updateEvent(id: string, updates: Partial<Event>): Promise<Event | undefined>;
+  
+  // Action Center Task methods  
+  createTask(taskData: CreateTaskData): Promise<Task>;
+  createTaskFromEvent(eventId: string): Promise<Task | undefined>;
+  getTasks(filters?: { status?: string, assigneeId?: string, type?: string, priority?: string, overdue?: boolean }): Promise<Task[]>;
+  getTask(id: string): Promise<Task | undefined>;
+  updateTask(id: string, updates: UpdateTaskData): Promise<Task | undefined>;
+  resolveTask(id: string): Promise<{ task: Task, event: Event }>;
+  getTaskByEventId(eventId: string): Promise<Task | undefined>;
+  
   sessionStore: session.Store;
 }
 
@@ -42,6 +57,8 @@ export class MemStorage implements IStorage {
   private organizations: Map<string, Organization>;
   private teamInvitations: Map<string, TeamInvitation>;
   private notifications: Map<string, Notification>;
+  private events: Map<string, Event>;
+  private tasks: Map<string, Task>;
   public sessionStore: session.Store;
 
   constructor() {
@@ -50,12 +67,17 @@ export class MemStorage implements IStorage {
     this.organizations = new Map();
     this.teamInvitations = new Map();
     this.notifications = new Map();
+    this.events = new Map();
+    this.tasks = new Map();
     this.sessionStore = new MemoryStore({
       checkPeriod: 86400000,
     });
     
     // Initialize with some sample notifications
     this.initializeSampleNotifications();
+    
+    // Initialize with sample events and tasks
+    this.initializeSampleActionCenterData();
   }
 
   private initializeSampleNotifications() {
@@ -400,6 +422,274 @@ export class MemStorage implements IStorage {
       }
     });
     keysToDelete.forEach(id => this.notifications.delete(id));
+  }
+
+  // Action Center Event methods
+  async createEvent(eventData: CreateEventData): Promise<{ event: Event, taskCreated?: Task }> {
+    const id = randomUUID();
+    const event: Event = {
+      id,
+      type: eventData.type,
+      sku: eventData.sku || null,
+      channel: eventData.channel || null,
+      payload: eventData.payload,
+      severity: eventData.severity,
+      occurredAt: new Date(),
+      status: "OPEN",
+    };
+    
+    this.events.set(id, event);
+    
+    // Create a task for high severity events
+    let taskCreated: Task | undefined;
+    if (event.severity === "HIGH") {
+      const taskTitle = this.generateTaskTitle(event);
+      const taskType = this.getTaskTypeFromEvent(event.type);
+      const taskData: CreateTaskData = {
+        title: taskTitle,
+        sourceEventId: event.id,
+        type: taskType,
+        priority: "P1",
+      };
+      taskCreated = await this.createTask(taskData);
+    }
+    
+    return { event, taskCreated };
+  }
+
+  async getEvents(filters?: { status?: string, type?: string, severity?: string, summary?: boolean }): Promise<Event[] | { events: Event[], summary: any }> {
+    let events = Array.from(this.events.values());
+    
+    if (filters) {
+      if (filters.status) {
+        events = events.filter(e => e.status === filters.status);
+      }
+      if (filters.type) {
+        events = events.filter(e => e.type === filters.type);
+      }
+      if (filters.severity) {
+        events = events.filter(e => e.severity === filters.severity);
+      }
+    }
+    
+    // Sort by occurred time (newest first)
+    events.sort((a, b) => b.occurredAt.getTime() - a.occurredAt.getTime());
+    
+    if (filters?.summary) {
+      const summary = {
+        total: events.length,
+        open: events.filter(e => e.status === "OPEN").length,
+        handled: events.filter(e => e.status === "HANDLED").length,
+        bySeverity: {
+          LOW: events.filter(e => e.severity === "LOW").length,
+          MEDIUM: events.filter(e => e.severity === "MEDIUM").length,
+          HIGH: events.filter(e => e.severity === "HIGH").length,
+        },
+      };
+      return { events, summary };
+    }
+    
+    return events;
+  }
+
+  async getEvent(id: string): Promise<Event | undefined> {
+    return this.events.get(id);
+  }
+
+  async updateEvent(id: string, updates: Partial<Event>): Promise<Event | undefined> {
+    const event = this.events.get(id);
+    if (!event) return undefined;
+    
+    const updatedEvent = { ...event, ...updates };
+    this.events.set(id, updatedEvent);
+    return updatedEvent;
+  }
+
+  // Action Center Task methods
+  async createTask(taskData: CreateTaskData): Promise<Task> {
+    const id = randomUUID();
+    const now = new Date();
+    const task: Task = {
+      id,
+      title: taskData.title,
+      sourceEventId: taskData.sourceEventId || null,
+      type: taskData.type,
+      assigneeId: taskData.assigneeId || null,
+      priority: taskData.priority,
+      dueAt: taskData.dueAt ? new Date(taskData.dueAt) : null,
+      status: "OPEN",
+      notes: taskData.notes || null,
+      createdAt: now,
+      updatedAt: now,
+    };
+    
+    this.tasks.set(id, task);
+    return task;
+  }
+
+  async createTaskFromEvent(eventId: string): Promise<Task | undefined> {
+    const event = await this.getEvent(eventId);
+    if (!event) return undefined;
+    
+    const taskTitle = this.generateTaskTitle(event);
+    const taskType = this.getTaskTypeFromEvent(event.type);
+    
+    return await this.createTask({
+      title: taskTitle,
+      sourceEventId: eventId,
+      type: taskType,
+      priority: event.severity === "HIGH" ? "P1" : "P2",
+    });
+  }
+
+  async getTasks(filters?: { 
+    status?: string; 
+    assigneeId?: string; 
+    type?: string; 
+    priority?: string; 
+    overdue?: boolean;
+  }): Promise<Task[]> {
+    let tasks = Array.from(this.tasks.values());
+    
+    if (filters) {
+      if (filters.status) {
+        tasks = tasks.filter(t => t.status === filters.status);
+      }
+      if (filters.assigneeId) {
+        tasks = tasks.filter(t => t.assigneeId === filters.assigneeId);
+      }
+      if (filters.type) {
+        tasks = tasks.filter(t => t.type === filters.type);
+      }
+      if (filters.priority) {
+        tasks = tasks.filter(t => t.priority === filters.priority);
+      }
+      if (filters.overdue) {
+        const now = new Date();
+        tasks = tasks.filter(t => t.dueAt && t.dueAt < now && t.status !== "DONE");
+      }
+    }
+    
+    // Sort by priority and created time
+    tasks.sort((a, b) => {
+      const priorityOrder = { P1: 3, P2: 2, P3: 1 };
+      const aPriority = priorityOrder[a.priority];
+      const bPriority = priorityOrder[b.priority];
+      
+      if (aPriority !== bPriority) {
+        return bPriority - aPriority;
+      }
+      
+      return b.createdAt.getTime() - a.createdAt.getTime();
+    });
+    
+    return tasks;
+  }
+
+  async getTask(id: string): Promise<Task | undefined> {
+    return this.tasks.get(id);
+  }
+
+  async updateTask(id: string, updates: UpdateTaskData): Promise<Task | undefined> {
+    const task = this.tasks.get(id);
+    if (!task) return undefined;
+    
+    const updatedTask = { 
+      ...task, 
+      ...updates,
+      updatedAt: new Date(),
+      dueAt: updates.dueAt ? new Date(updates.dueAt) : task.dueAt,
+    };
+    
+    this.tasks.set(id, updatedTask);
+    return updatedTask;
+  }
+
+  async resolveTask(id: string): Promise<{ task: Task, event: Event }> {
+    const task = await this.updateTask(id, { status: "DONE" });
+    if (!task) throw new Error("Task not found");
+    
+    if (task.sourceEventId) {
+      const event = await this.updateEvent(task.sourceEventId, { status: "HANDLED" });
+      if (event) {
+        return { task, event };
+      }
+    }
+    
+    throw new Error("Unable to resolve task - event not found");
+  }
+
+  async getTaskByEventId(eventId: string): Promise<Task | undefined> {
+    for (const task of this.tasks.values()) {
+      if (task.sourceEventId === eventId) {
+        return task;
+      }
+    }
+    return undefined;
+  }
+
+  // Helper methods for task generation
+  private generateTaskTitle(event: Event): string {
+    switch (event.type) {
+      case "INVENTORY_LOW":
+        return `Restock ${event.sku || "inventory"}`;
+      case "SYNC_ERROR":
+        return `Fix sync error for ${event.channel || "platform"}`;
+      case "PAYMENT_MISMATCH":
+        return `Reconcile payment discrepancy`;
+      case "ROAS_DROP":
+        return `Investigate ROAS drop for ${event.sku || "product"}`;
+      default:
+        return "Investigate issue";
+    }
+  }
+
+  private getTaskTypeFromEvent(eventType: string): "RESTOCK" | "RETRY_SYNC" | "RECONCILE" | "ADJUST_BUDGET" {
+    switch (eventType) {
+      case "INVENTORY_LOW":
+        return "RESTOCK";
+      case "SYNC_ERROR":
+        return "RETRY_SYNC";
+      case "PAYMENT_MISMATCH":
+        return "RECONCILE";
+      case "ROAS_DROP":
+        return "ADJUST_BUDGET";
+      default:
+        return "RETRY_SYNC";
+    }
+  }
+
+  // Initialize sample events and tasks for testing
+  private async initializeSampleActionCenterData() {
+    // Sample events
+    const sampleEvents = [
+      {
+        type: "INVENTORY_LOW",
+        sku: "SKU-001",
+        channel: null,
+        payload: { currentStock: 5, reorderLevel: 20, velocity: 2.5 },
+        severity: "HIGH" as const,
+      },
+      {
+        type: "SYNC_ERROR",
+        sku: null,
+        channel: "Amazon",
+        payload: { errorCode: "AUTH_FAILED", lastSync: "2025-01-07T10:00:00Z" },
+        severity: "MEDIUM" as const,
+      },
+      {
+        type: "PAYMENT_MISMATCH",
+        sku: "SKU-002",
+        channel: "Shopify",
+        payload: { expectedAmount: 299.99, actualAmount: 289.99, orderId: "ORD-123" },
+        severity: "HIGH" as const,
+      }
+    ];
+
+    // Create events and auto-create tasks for high severity ones
+    for (const eventData of sampleEvents) {
+      await this.createEvent(eventData);
+    }
   }
 }
 

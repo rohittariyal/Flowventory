@@ -183,6 +183,63 @@ export const markNotificationReadSchema = z.object({
   notificationId: z.string().min(1, "Notification ID is required"),
 });
 
+// Action Center Events
+export const events = pgTable("events", {
+  id: text("id").primaryKey(),
+  type: text("type", { 
+    enum: ["INVENTORY_LOW", "SYNC_ERROR", "PAYMENT_MISMATCH", "ROAS_DROP"] 
+  }).notNull(),
+  sku: text("sku"),
+  channel: text("channel"),
+  payload: jsonb("payload").notNull(), // Event-specific data
+  severity: text("severity", { enum: ["LOW", "MEDIUM", "HIGH"] }).notNull(),
+  occurredAt: timestamp("occurred_at").defaultNow(),
+  status: text("status", { enum: ["OPEN", "HANDLED"] }).default("OPEN"),
+});
+
+// Action Center Tasks
+export const tasks = pgTable("tasks", {
+  id: text("id").primaryKey(),
+  title: text("title").notNull(),
+  sourceEventId: text("source_event_id").unique().references(() => events.id, { onDelete: "cascade" }),
+  type: text("type", { 
+    enum: ["RESTOCK", "RETRY_SYNC", "RECONCILE", "ADJUST_BUDGET"] 
+  }).notNull(),
+  assigneeId: text("assignee_id").references(() => users.id),
+  priority: text("priority", { enum: ["P1", "P2", "P3"] }).notNull(),
+  dueAt: timestamp("due_at"),
+  status: text("status", { enum: ["OPEN", "IN_PROGRESS", "DONE", "DISMISSED"] }).default("OPEN"),
+  notes: text("notes"),
+  createdAt: timestamp("created_at").defaultNow(),
+  updatedAt: timestamp("updated_at").defaultNow(),
+});
+
+// Action Center schemas
+export const createEventSchema = z.object({
+  type: z.enum(["INVENTORY_LOW", "SYNC_ERROR", "PAYMENT_MISMATCH", "ROAS_DROP"]),
+  sku: z.string().optional(),
+  channel: z.string().optional(),
+  payload: z.any(),
+  severity: z.enum(["LOW", "MEDIUM", "HIGH"]),
+});
+
+export const createTaskSchema = z.object({
+  title: z.string().min(1, "Title is required"),
+  sourceEventId: z.string().optional(),
+  type: z.enum(["RESTOCK", "RETRY_SYNC", "RECONCILE", "ADJUST_BUDGET"]),
+  assigneeId: z.string().optional(),
+  priority: z.enum(["P1", "P2", "P3"]),
+  dueAt: z.string().optional(),
+  notes: z.string().optional(),
+});
+
+export const updateTaskSchema = z.object({
+  assigneeId: z.string().optional(),
+  dueAt: z.string().optional(),
+  status: z.enum(["OPEN", "IN_PROGRESS", "DONE", "DISMISSED"]).optional(),
+  notes: z.string().optional(),
+});
+
 export type InsertUser = z.infer<typeof insertUserSchema>;
 export type LoginData = z.infer<typeof loginSchema>;
 export type User = typeof users.$inferSelect;
@@ -195,3 +252,12 @@ export type InviteTeamMemberData = z.infer<typeof inviteTeamMemberSchema>;
 export type UpdateTeamMemberData = z.infer<typeof updateTeamMemberSchema>;
 export type CreateNotificationData = z.infer<typeof createNotificationSchema>;
 export type MarkNotificationReadData = z.infer<typeof markNotificationReadSchema>;
+
+// Action Center types
+export type Event = typeof events.$inferSelect;
+export type InsertEvent = typeof events.$inferInsert;
+export type Task = typeof tasks.$inferSelect;
+export type InsertTask = typeof tasks.$inferInsert;
+export type CreateEventData = z.infer<typeof createEventSchema>;
+export type CreateTaskData = z.infer<typeof createTaskSchema>;
+export type UpdateTaskData = z.infer<typeof updateTaskSchema>;
