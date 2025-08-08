@@ -3,6 +3,11 @@
 This is a comprehensive business intelligence dashboard application built with React and Express. It features user authentication, role-based access control, post-login onboarding, and a conditional dashboard UI with dark theme and light green accents. The application provides AI-powered business insights, inventory management, sales intelligence, customer analytics, and return abuse detection based on user roles and onboarding preferences.
 
 ## Recent Changes (Latest First)
+- **2025-01-08**: Added comprehensive sync adapters with mock data for Shopify, Amazon, and Meta platforms
+- **2025-01-08**: Implemented sync management UI with manual trigger buttons and real-time status display
+- **2025-01-08**: Created intelligent business logic for inventory alerts, payment mismatches, and ROAS monitoring  
+- **2025-01-08**: Added auto-sync functionality running every 30 minutes with optional cron scheduling
+- **2025-01-08**: Integrated sync status tracking and sync routes (/api/sync/shopify, /api/sync/amazon, /api/sync/meta, /api/sync/status)
 - **2025-01-06**: Removed all AI features access for Viewer role users
 - **2025-01-06**: Updated AI Copilot Panel to be Admin/Manager only
 - **2025-01-06**: Restricted AI-powered smart alerts and suggestions for Viewers

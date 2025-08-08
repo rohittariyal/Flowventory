@@ -2,6 +2,7 @@ import express, { type Request, Response, NextFunction } from "express";
 import { registerRoutes } from "./routes";
 import { setupVite, serveStatic, log } from "./vite";
 import { NotificationGenerators } from "./notificationGenerators";
+import { syncManager } from "./syncAdapters";
 
 const app = express();
 app.use(express.json());
@@ -73,6 +74,9 @@ app.use((req, res, next) => {
     if (app.get("env") === "development") {
       // Start periodic checks every 5 minutes for demo purposes
       NotificationGenerators.startPeriodicChecks(5);
+      
+      // Start auto-sync every 30 minutes (optional cron)
+      syncManager.startAutoSync(30);
     }
   });
 })();

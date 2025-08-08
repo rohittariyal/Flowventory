@@ -15,7 +15,10 @@ import {
   Package,
   DollarSign,
   AlertCircle,
-  TrendingDown
+  TrendingDown,
+  RefreshCw,
+  Activity,
+  ShoppingCart
 } from "lucide-react";
 import { formatDistanceToNow } from "date-fns";
 import { apiRequest } from "@/lib/queryClient";
@@ -214,6 +217,7 @@ export function ActionCenter() {
           <TabsTrigger value="overview">Overview</TabsTrigger>
           <TabsTrigger value="events">Events</TabsTrigger>
           <TabsTrigger value="tasks">Tasks</TabsTrigger>
+          <TabsTrigger value="sync">Sync</TabsTrigger>
         </TabsList>
 
         <TabsContent value="overview" className="space-y-4">
@@ -412,7 +416,221 @@ export function ActionCenter() {
             </CardContent>
           </Card>
         </TabsContent>
+
+        <TabsContent value="sync" className="space-y-4">
+          <SyncManagement />
+        </TabsContent>
       </Tabs>
     </div>
+  );
+}
+
+// Sync Management Component
+function SyncManagement() {
+  const { data: syncStatus, isLoading } = useQuery({
+    queryKey: ["/api/sync/status"],
+    refetchInterval: 30000, // Refresh every 30 seconds
+  });
+
+  const shopifySync = useMutation({
+    mutationFn: async () => {
+      const response = await apiRequest("POST", "/api/sync/shopify");
+      return response.json();
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["/api/sync/status"] });
+      queryClient.invalidateQueries({ queryKey: ["/api/events"] });
+    },
+  });
+
+  const amazonSync = useMutation({
+    mutationFn: async () => {
+      const response = await apiRequest("POST", "/api/sync/amazon");
+      return response.json();
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["/api/sync/status"] });
+      queryClient.invalidateQueries({ queryKey: ["/api/events"] });
+    },
+  });
+
+  const metaSync = useMutation({
+    mutationFn: async () => {
+      const response = await apiRequest("POST", "/api/sync/meta");
+      return response.json();
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["/api/sync/status"] });
+      queryClient.invalidateQueries({ queryKey: ["/api/events"] });
+    },
+  });
+
+  const queryClient = useQueryClient();
+
+  if (isLoading) {
+    return (
+      <Card>
+        <CardHeader>
+          <CardTitle>Sync Management</CardTitle>
+          <CardDescription>Loading sync status...</CardDescription>
+        </CardHeader>
+      </Card>
+    );
+  }
+
+  const adapters = Array.isArray(syncStatus) ? syncStatus : [];
+
+  return (
+    <Card>
+      <CardHeader>
+        <CardTitle className="flex items-center gap-2">
+          <Activity className="h-5 w-5" />
+          Platform Sync Management
+        </CardTitle>
+        <CardDescription>
+          Manage data synchronization with your e-commerce platforms
+        </CardDescription>
+      </CardHeader>
+      <CardContent className="space-y-6">
+        {/* Shopify Sync */}
+        <div className="flex items-center justify-between p-4 border rounded-lg">
+          <div className="flex items-center space-x-3">
+            <div className="p-2 bg-green-100 dark:bg-green-900/20 rounded-lg">
+              <ShoppingCart className="h-5 w-5 text-green-600 dark:text-green-400" />
+            </div>
+            <div>
+              <h3 className="font-medium">Shopify</h3>
+              <p className="text-sm text-muted-foreground">
+                Inventory levels and stock alerts
+              </p>
+              {adapters.find((a: any) => a.adapter === "shopify")?.lastSyncAt && (
+                <p className="text-xs text-muted-foreground">
+                  Last sync: {formatDistanceToNow(new Date(adapters.find((a: any) => a.adapter === "shopify").lastSyncAt))} ago
+                </p>
+              )}
+            </div>
+          </div>
+          <div className="flex items-center gap-3">
+            <Badge variant={
+              adapters.find((a: any) => a.adapter === "shopify")?.status === "success" 
+                ? "default" 
+                : adapters.find((a: any) => a.adapter === "shopify")?.status === "error" 
+                ? "destructive" 
+                : "secondary"
+            }>
+              {adapters.find((a: any) => a.adapter === "shopify")?.status || "never"}
+            </Badge>
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={() => shopifySync.mutate()}
+              disabled={shopifySync.isPending}
+            >
+              {shopifySync.isPending ? (
+                <RefreshCw className="h-4 w-4 animate-spin" />
+              ) : (
+                <RefreshCw className="h-4 w-4" />
+              )}
+              Sync Now
+            </Button>
+          </div>
+        </div>
+
+        {/* Amazon Sync */}
+        <div className="flex items-center justify-between p-4 border rounded-lg">
+          <div className="flex items-center space-x-3">
+            <div className="p-2 bg-orange-100 dark:bg-orange-900/20 rounded-lg">
+              <Package className="h-5 w-5 text-orange-600 dark:text-orange-400" />
+            </div>
+            <div>
+              <h3 className="font-medium">Amazon</h3>
+              <p className="text-sm text-muted-foreground">
+                Payment reconciliation and order matching
+              </p>
+              {adapters.find((a: any) => a.adapter === "amazon")?.lastSyncAt && (
+                <p className="text-xs text-muted-foreground">
+                  Last sync: {formatDistanceToNow(new Date(adapters.find((a: any) => a.adapter === "amazon").lastSyncAt))} ago
+                </p>
+              )}
+            </div>
+          </div>
+          <div className="flex items-center gap-3">
+            <Badge variant={
+              adapters.find((a: any) => a.adapter === "amazon")?.status === "success" 
+                ? "default" 
+                : adapters.find((a: any) => a.adapter === "amazon")?.status === "error" 
+                ? "destructive" 
+                : "secondary"
+            }>
+              {adapters.find((a: any) => a.adapter === "amazon")?.status || "never"}
+            </Badge>
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={() => amazonSync.mutate()}
+              disabled={amazonSync.isPending}
+            >
+              {amazonSync.isPending ? (
+                <RefreshCw className="h-4 w-4 animate-spin" />
+              ) : (
+                <RefreshCw className="h-4 w-4" />
+              )}
+              Sync Now
+            </Button>
+          </div>
+        </div>
+
+        {/* Meta Sync */}
+        <div className="flex items-center justify-between p-4 border rounded-lg">
+          <div className="flex items-center space-x-3">
+            <div className="p-2 bg-blue-100 dark:bg-blue-900/20 rounded-lg">
+              <TrendingDown className="h-5 w-5 text-blue-600 dark:text-blue-400" />
+            </div>
+            <div>
+              <h3 className="font-medium">Meta Ads</h3>
+              <p className="text-sm text-muted-foreground">
+                ROAS monitoring and performance alerts
+              </p>
+              {adapters.find((a: any) => a.adapter === "meta")?.lastSyncAt && (
+                <p className="text-xs text-muted-foreground">
+                  Last sync: {formatDistanceToNow(new Date(adapters.find((a: any) => a.adapter === "meta").lastSyncAt))} ago
+                </p>
+              )}
+            </div>
+          </div>
+          <div className="flex items-center gap-3">
+            <Badge variant={
+              adapters.find((a: any) => a.adapter === "meta")?.status === "success" 
+                ? "default" 
+                : adapters.find((a: any) => a.adapter === "meta")?.status === "error" 
+                ? "destructive" 
+                : "secondary"
+            }>
+              {adapters.find((a: any) => a.adapter === "meta")?.status || "never"}
+            </Badge>
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={() => metaSync.mutate()}
+              disabled={metaSync.isPending}
+            >
+              {metaSync.isPending ? (
+                <RefreshCw className="h-4 w-4 animate-spin" />
+              ) : (
+                <RefreshCw className="h-4 w-4" />
+              )}
+              Sync Now
+            </Button>
+          </div>
+        </div>
+
+        <div className="mt-6 p-4 bg-muted rounded-lg">
+          <h4 className="font-medium mb-2">Auto Sync</h4>
+          <p className="text-sm text-muted-foreground">
+            All platforms automatically sync every 30 minutes. You can manually trigger syncs above to get the latest data immediately.
+          </p>
+        </div>
+      </CardContent>
+    </Card>
   );
 }

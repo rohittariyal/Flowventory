@@ -2,6 +2,7 @@ import type { Express } from "express";
 import { createServer, type Server } from "http";
 import { setupAuth } from "./auth";
 import { storage } from "./storage";
+import { syncManager } from "./syncAdapters";
 import { onboardingSchema, platformConnectionSchema, createNotificationSchema, markNotificationReadSchema, type PlatformConnections } from "@shared/schema";
 
 // Authentication middleware
@@ -545,6 +546,48 @@ export function registerRoutes(app: Express): Server {
     } catch (error) {
       console.error("Error creating task from event:", error);
       res.status(500).json({ error: "Failed to create task from event" });
+    }
+  });
+
+  // Sync Adapter Routes - Admin/Manager only
+  app.post("/api/sync/shopify", requiresActionCenterAccess, async (req, res) => {
+    try {
+      const result = await syncManager.syncShopify();
+      res.json(result);
+    } catch (error) {
+      console.error("Shopify sync error:", error);
+      res.status(500).json({ error: "Failed to sync Shopify data" });
+    }
+  });
+
+  app.post("/api/sync/amazon", requiresActionCenterAccess, async (req, res) => {
+    try {
+      const result = await syncManager.syncAmazon();
+      res.json(result);
+    } catch (error) {
+      console.error("Amazon sync error:", error);
+      res.status(500).json({ error: "Failed to sync Amazon data" });
+    }
+  });
+
+  app.post("/api/sync/meta", requiresActionCenterAccess, async (req, res) => {
+    try {
+      const result = await syncManager.syncMeta();
+      res.json(result);
+    } catch (error) {
+      console.error("Meta sync error:", error);
+      res.status(500).json({ error: "Failed to sync Meta data" });
+    }
+  });
+
+  app.get("/api/sync/status", requiresActionCenterAccess, async (req, res) => {
+    try {
+      const { adapter } = req.query;
+      const status = syncManager.getSyncStatus(adapter as string);
+      res.json(status);
+    } catch (error) {
+      console.error("Sync status error:", error);
+      res.status(500).json({ error: "Failed to get sync status" });
     }
   });
 
