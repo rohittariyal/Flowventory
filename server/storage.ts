@@ -1,4 +1,4 @@
-import { type User, type InsertUser, type OnboardingData, type InsertOnboardingData, type PlatformConnections, type Organization, type TeamInvitation, type InviteTeamMemberData, type UpdateTeamMemberData, type Notification, type CreateNotificationData, type Event, type InsertEvent, type Task, type InsertTask, type CreateEventData, type CreateTaskData, type UpdateTaskData, type PurchaseOrder, type InsertPurchaseOrder } from "@shared/schema";
+import { type User, type InsertUser, type OnboardingData, type InsertOnboardingData, type PlatformConnections, type Organization, type TeamInvitation, type InviteTeamMemberData, type UpdateTeamMemberData, type Notification, type CreateNotificationData, type Event, type InsertEvent, type Task, type InsertTask, type CreateEventData, type CreateTaskData, type UpdateTaskData, type PurchaseOrder, type InsertPurchaseOrder, type Comment, type InsertComment, type Activity, type InsertActivity, type Rule, type InsertRule, type CreateCommentData, type CreateRuleData } from "@shared/schema";
 import { randomUUID } from "crypto";
 import session from "express-session";
 import createMemoryStore from "memorystore";
@@ -52,6 +52,18 @@ export interface IStorage {
   // Purchase Order methods
   createPurchaseOrder(poData: InsertPurchaseOrder): Promise<PurchaseOrder>;
   getPurchaseOrders(organizationId: string, filters?: { status?: string }): Promise<PurchaseOrder[]>;
+
+  // Task Collaboration methods
+  createComment(taskId: string, authorId: string, commentData: CreateCommentData): Promise<Comment>;
+  getTaskComments(taskId: string): Promise<Comment[]>;
+  getTaskActivity(taskId: string): Promise<Activity[]>;
+  createActivity(activityData: InsertActivity): Promise<Activity>;
+
+  // Rules methods
+  getRules(): Promise<Rule[]>;
+  createRule(ruleData: CreateRuleData): Promise<Rule>;
+  deleteRule(id: string): Promise<boolean>;
+  findMatchingRule(taskType: string): Promise<Rule | undefined>;
   getPurchaseOrder(id: string): Promise<PurchaseOrder | undefined>;
   updatePurchaseOrder(id: string, updates: Partial<PurchaseOrder>): Promise<PurchaseOrder | undefined>;
   deletePurchaseOrder(id: string): Promise<void>;
@@ -68,6 +80,9 @@ export class MemStorage implements IStorage {
   private events: Map<string, Event>;
   private tasks: Map<string, Task>;
   private purchaseOrders: Map<string, PurchaseOrder>;
+  private comments: Map<string, Comment>;
+  private activities: Map<string, Activity>;
+  private rules: Map<string, Rule>;
   public sessionStore: session.Store;
 
   constructor() {
@@ -79,6 +94,9 @@ export class MemStorage implements IStorage {
     this.events = new Map();
     this.tasks = new Map();
     this.purchaseOrders = new Map();
+    this.comments = new Map();
+    this.activities = new Map();
+    this.rules = new Map();
     this.sessionStore = new MemoryStore({
       checkPeriod: 86400000,
     });
@@ -88,6 +106,9 @@ export class MemStorage implements IStorage {
     
     // Initialize with sample events and tasks
     this.initializeSampleActionCenterData();
+    
+    // Initialize sample rules
+    this.initializeSampleRules();
   }
 
   private initializeSampleNotifications() {
@@ -520,21 +541,39 @@ export class MemStorage implements IStorage {
     const id = randomUUID();
     const now = new Date();
     
-    // Calculate default due dates based on task type
-    let defaultDueAt: Date | null = null;
-    if (!taskData.dueAt) {
+    // Apply matching rule if exists
+    const matchingRule = await this.findMatchingRule(taskData.type);
+    let finalAssigneeId = taskData.assigneeId;
+    let finalPriority = taskData.priority;
+    let finalDueAt = taskData.dueAt ? new Date(taskData.dueAt) : null;
+
+    if (matchingRule) {
+      // Apply rule overrides
+      if (!finalAssigneeId && matchingRule.assigneeId) {
+        finalAssigneeId = matchingRule.assigneeId;
+      }
+      if (!taskData.priority && matchingRule.priority) {
+        finalPriority = matchingRule.priority;
+      }
+      if (!finalDueAt && matchingRule.dueOffsetHours) {
+        finalDueAt = new Date(now.getTime() + matchingRule.dueOffsetHours * 60 * 60 * 1000);
+      }
+    }
+    
+    // Calculate default due dates if no rule applied and no dueAt provided
+    if (!finalDueAt) {
       switch (taskData.type) {
         case "RESTOCK":
-          defaultDueAt = new Date(now.getTime() + 24 * 60 * 60 * 1000); // +24 hours
+          finalDueAt = new Date(now.getTime() + 24 * 60 * 60 * 1000); // +24 hours
           break;
         case "RETRY_SYNC":
-          defaultDueAt = new Date(now.getTime() + 2 * 60 * 60 * 1000); // +2 hours
+          finalDueAt = new Date(now.getTime() + 2 * 60 * 60 * 1000); // +2 hours
           break;
         case "RECONCILE":
-          defaultDueAt = new Date(now.getTime() + 48 * 60 * 60 * 1000); // +48 hours
+          finalDueAt = new Date(now.getTime() + 48 * 60 * 60 * 1000); // +48 hours
           break;
         case "ADJUST_BUDGET":
-          defaultDueAt = new Date(now.getTime() + 72 * 60 * 60 * 1000); // +72 hours
+          finalDueAt = new Date(now.getTime() + 72 * 60 * 60 * 1000); // +72 hours
           break;
       }
     }
@@ -544,9 +583,9 @@ export class MemStorage implements IStorage {
       title: taskData.title,
       sourceEventId: taskData.sourceEventId || null,
       type: taskData.type,
-      assigneeId: taskData.assigneeId || null,
-      priority: taskData.priority,
-      dueAt: taskData.dueAt ? new Date(taskData.dueAt) : defaultDueAt,
+      assigneeId: finalAssigneeId || null,
+      priority: finalPriority || "P3",
+      dueAt: finalDueAt,
       status: "OPEN",
       notes: taskData.notes || null,
       createdAt: now,
@@ -554,6 +593,24 @@ export class MemStorage implements IStorage {
     };
     
     this.tasks.set(id, task);
+
+    // Create activity log for task creation
+    await this.createActivity({
+      id: randomUUID(),
+      taskId: id,
+      type: "STATUS_CHANGE",
+      meta: { 
+        action: "created",
+        status: "OPEN",
+        rule: matchingRule ? {
+          type: matchingRule.type,
+          assigneeId: matchingRule.assigneeId,
+          priority: matchingRule.priority,
+          dueOffsetHours: matchingRule.dueOffsetHours
+        } : null
+      },
+      createdAt: now,
+    });
     
     // Send notification for P1 tasks
     if (task.priority === "P1") {
@@ -633,12 +690,53 @@ export class MemStorage implements IStorage {
     const task = this.tasks.get(id);
     if (!task) return undefined;
     
+    const now = new Date();
     const updatedTask = { 
       ...task, 
       ...updates,
-      updatedAt: new Date(),
+      updatedAt: now,
       dueAt: updates.dueAt ? new Date(updates.dueAt) : task.dueAt,
     };
+    
+    // Log activity for changes
+    if (updates.status && updates.status !== task.status) {
+      await this.createActivity({
+        id: randomUUID(),
+        taskId: id,
+        type: "STATUS_CHANGE",
+        meta: { 
+          oldStatus: task.status,
+          newStatus: updates.status
+        },
+        createdAt: now,
+      });
+    }
+
+    if (updates.assigneeId !== undefined && updates.assigneeId !== task.assigneeId) {
+      await this.createActivity({
+        id: randomUUID(),
+        taskId: id,
+        type: "ASSIGN",
+        meta: { 
+          oldAssigneeId: task.assigneeId,
+          newAssigneeId: updates.assigneeId
+        },
+        createdAt: now,
+      });
+    }
+
+    if (updates.dueAt && updates.dueAt !== task.dueAt?.toISOString()) {
+      await this.createActivity({
+        id: randomUUID(),
+        taskId: id,
+        type: "DUE_CHANGE",
+        meta: { 
+          oldDueAt: task.dueAt,
+          newDueAt: updates.dueAt
+        },
+        createdAt: now,
+      });
+    }
     
     this.tasks.set(id, updatedTask);
     return updatedTask;
@@ -777,6 +875,118 @@ export class MemStorage implements IStorage {
 
   async deletePurchaseOrder(id: string): Promise<void> {
     this.purchaseOrders.delete(id);
+  }
+
+  // Initialize sample rules for auto-assignment
+  private async initializeSampleRules(): Promise<void> {
+    const sampleRules = [
+      {
+        id: "rule-restock",
+        type: "RESTOCK" as const,
+        assigneeId: "ops_user",
+        priority: "P2" as const,
+        dueOffsetHours: 24,
+        createdAt: new Date(),
+      },
+      {
+        id: "rule-reconcile", 
+        type: "RECONCILE" as const,
+        assigneeId: "finance_user",
+        priority: "P3" as const,
+        dueOffsetHours: 48,
+        createdAt: new Date(),
+      },
+      {
+        id: "rule-retry-sync",
+        type: "RETRY_SYNC" as const,
+        assigneeId: "tech_user", 
+        priority: "P1" as const,
+        dueOffsetHours: 2,
+        createdAt: new Date(),
+      }
+    ];
+
+    sampleRules.forEach(rule => {
+      this.rules.set(rule.id, rule);
+    });
+  }
+
+  // Task Collaboration methods
+  async createComment(taskId: string, authorId: string, commentData: CreateCommentData): Promise<Comment> {
+    const id = randomUUID();
+    const now = new Date();
+    
+    const comment: Comment = {
+      id,
+      taskId,
+      authorId,
+      message: commentData.message,
+      createdAt: now,
+    };
+    
+    this.comments.set(id, comment);
+
+    // Create activity for comment
+    await this.createActivity({
+      id: randomUUID(),
+      taskId,
+      type: "COMMENT",
+      meta: { commentId: id, authorId },
+      createdAt: now,
+    });
+    
+    return comment;
+  }
+
+  async getTaskComments(taskId: string): Promise<Comment[]> {
+    return Array.from(this.comments.values())
+      .filter(comment => comment.taskId === taskId)
+      .sort((a, b) => a.createdAt.getTime() - b.createdAt.getTime());
+  }
+
+  async getTaskActivity(taskId: string): Promise<Activity[]> {
+    return Array.from(this.activities.values())
+      .filter(activity => activity.taskId === taskId)
+      .sort((a, b) => b.createdAt.getTime() - a.createdAt.getTime());
+  }
+
+  async createActivity(activityData: InsertActivity): Promise<Activity> {
+    const activity: Activity = {
+      ...activityData,
+      createdAt: activityData.createdAt || new Date(),
+    };
+    
+    this.activities.set(activity.id, activity);
+    return activity;
+  }
+
+  // Rules methods
+  async getRules(): Promise<Rule[]> {
+    return Array.from(this.rules.values())
+      .sort((a, b) => a.createdAt.getTime() - b.createdAt.getTime());
+  }
+
+  async createRule(ruleData: CreateRuleData): Promise<Rule> {
+    const id = randomUUID();
+    const now = new Date();
+    
+    const rule: Rule = {
+      id,
+      ...ruleData,
+      createdAt: now,
+    };
+    
+    this.rules.set(id, rule);
+    return rule;
+  }
+
+  async deleteRule(id: string): Promise<boolean> {
+    return this.rules.delete(id);
+  }
+
+  async findMatchingRule(taskType: string): Promise<Rule | undefined> {
+    return Array.from(this.rules.values())
+      .find(rule => rule.type === taskType);
   }
 }
 

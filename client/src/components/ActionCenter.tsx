@@ -21,10 +21,13 @@ import {
   Activity,
   ShoppingCart,
   Filter,
-  User
+  User,
+  Eye
 } from "lucide-react";
 import { formatDistanceToNow } from "date-fns";
 import { apiRequest } from "@/lib/queryClient";
+import { TaskDetailsModal } from "./TaskDetailsModal";
+import { RulesManager } from "./RulesManager";
 
 interface Event {
   id: string;
@@ -79,6 +82,8 @@ export function ActionCenter() {
     overdue: false,
     mine: false,
   });
+  const [selectedTask, setSelectedTask] = useState<Task | null>(null);
+  const [taskDetailsOpen, setTaskDetailsOpen] = useState(false);
   const { user } = useAuth();
   const queryClient = useQueryClient();
 
@@ -239,11 +244,14 @@ export function ActionCenter() {
 
       {/* Main Content */}
       <Tabs value={selectedTab} onValueChange={setSelectedTab} className="space-y-4">
-        <TabsList>
+        <TabsList className={`grid w-full ${user?.role === "admin" ? "grid-cols-5" : "grid-cols-4"}`}>
           <TabsTrigger value="overview">Overview</TabsTrigger>
           <TabsTrigger value="events">Events</TabsTrigger>
           <TabsTrigger value="tasks">Tasks</TabsTrigger>
           <TabsTrigger value="sync">Sync</TabsTrigger>
+          {user?.role === "admin" && (
+            <TabsTrigger value="rules">Rules</TabsTrigger>
+          )}
         </TabsList>
 
         <TabsContent value="overview" className="space-y-4">
@@ -471,16 +479,29 @@ export function ActionCenter() {
                         </Badge>
                         <span className="font-medium">{task.title}</span>
                       </div>
-                      {task.status !== "DONE" && (
+                      <div className="flex gap-2">
                         <Button
-                          variant="outline"
+                          variant="ghost"
                           size="sm"
-                          onClick={() => resolveTaskMutation.mutate(task.id)}
-                          disabled={resolveTaskMutation.isPending}
+                          onClick={() => {
+                            setSelectedTask(task);
+                            setTaskDetailsOpen(true);
+                          }}
                         >
-                          Resolve
+                          <Eye className="h-4 w-4 mr-1" />
+                          Details
                         </Button>
-                      )}
+                        {task.status !== "DONE" && (
+                          <Button
+                            variant="outline"
+                            size="sm"
+                            onClick={() => resolveTaskMutation.mutate(task.id)}
+                            disabled={resolveTaskMutation.isPending}
+                          >
+                            Resolve
+                          </Button>
+                        )}
+                      </div>
                     </div>
                     <div className="text-xs text-muted-foreground space-y-1">
                       <p>Created: {formatDistanceToNow(new Date(task.createdAt))} ago</p>
@@ -507,7 +528,19 @@ export function ActionCenter() {
         <TabsContent value="sync" className="space-y-4">
           <SyncManagement />
         </TabsContent>
+
+        {user?.role === "admin" && (
+          <TabsContent value="rules" className="space-y-4">
+            <RulesManager />
+          </TabsContent>
+        )}
       </Tabs>
+
+      <TaskDetailsModal 
+        task={selectedTask}
+        open={taskDetailsOpen}
+        onOpenChange={setTaskDetailsOpen}
+      />
     </div>
   );
 }

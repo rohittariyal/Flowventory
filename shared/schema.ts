@@ -288,3 +288,55 @@ export type InsertTask = typeof tasks.$inferInsert;
 export type CreateEventData = z.infer<typeof createEventSchema>;
 export type CreateTaskData = z.infer<typeof createTaskSchema>;
 export type UpdateTaskData = z.infer<typeof updateTaskSchema>;
+
+// Task Collaboration tables
+export const comments = pgTable("comments", {
+  id: text("id").primaryKey(),
+  taskId: text("task_id").notNull().references(() => tasks.id, { onDelete: "cascade" }),
+  authorId: text("author_id").notNull().references(() => users.id),
+  message: text("message").notNull(),
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+});
+
+export const activities = pgTable("activities", {
+  id: text("id").primaryKey(),
+  taskId: text("task_id").notNull().references(() => tasks.id, { onDelete: "cascade" }),
+  type: text("type", { 
+    enum: ["STATUS_CHANGE", "ASSIGN", "COMMENT", "DUE_CHANGE"] 
+  }).notNull(),
+  meta: jsonb("meta"), // Additional data like old/new values
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+});
+
+export const rules = pgTable("rules", {
+  id: text("id").primaryKey(),
+  type: text("type", { 
+    enum: ["RESTOCK", "RECONCILE", "RETRY_SYNC", "ADJUST_BUDGET"] 
+  }).notNull().unique(),
+  assigneeId: text("assignee_id").references(() => users.id),
+  priority: text("priority", { enum: ["P1", "P2", "P3"] }),
+  dueOffsetHours: integer("due_offset_hours"),
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+});
+
+// Task collaboration schemas
+export const createCommentSchema = z.object({
+  message: z.string().min(1, "Comment cannot be empty"),
+});
+
+export const createRuleSchema = z.object({
+  type: z.enum(["RESTOCK", "RECONCILE", "RETRY_SYNC", "ADJUST_BUDGET"]),
+  assigneeId: z.string().optional(),
+  priority: z.enum(["P1", "P2", "P3"]).optional(),
+  dueOffsetHours: z.number().int().min(0).optional(),
+});
+
+// Task collaboration types
+export type Comment = typeof comments.$inferSelect;
+export type InsertComment = typeof comments.$inferInsert;
+export type Activity = typeof activities.$inferSelect;
+export type InsertActivity = typeof activities.$inferInsert;
+export type Rule = typeof rules.$inferSelect;
+export type InsertRule = typeof rules.$inferInsert;
+export type CreateCommentData = z.infer<typeof createCommentSchema>;
+export type CreateRuleData = z.infer<typeof createRuleSchema>;

@@ -591,6 +591,94 @@ export function registerRoutes(app: Express): Server {
     }
   });
 
+  // Task Collaboration routes - Comments and Activity
+  app.post("/api/tasks/:id/comments", requiresActionCenterAccess, async (req, res) => {
+    try {
+      const { message } = req.body;
+      if (!message || message.trim() === '') {
+        return res.status(400).json({ error: "Comment message is required" });
+      }
+
+      const taskId = req.params.id;
+      const authorId = req.user!.id;
+      const comment = await storage.createComment(taskId, authorId, { message: message.trim() });
+      res.status(201).json(comment);
+    } catch (error) {
+      console.error("Error creating comment:", error);
+      res.status(500).json({ error: "Failed to create comment" });
+    }
+  });
+
+  app.get("/api/tasks/:id/comments", requiresActionCenterAccess, async (req, res) => {
+    try {
+      const taskId = req.params.id;
+      const comments = await storage.getTaskComments(taskId);
+      res.json(comments);
+    } catch (error) {
+      console.error("Error fetching task comments:", error);
+      res.status(500).json({ error: "Failed to fetch task comments" });
+    }
+  });
+
+  app.get("/api/tasks/:id/activity", requiresActionCenterAccess, async (req, res) => {
+    try {
+      const taskId = req.params.id;
+      const activity = await storage.getTaskActivity(taskId);
+      res.json(activity);
+    } catch (error) {
+      console.error("Error fetching task activity:", error);
+      res.status(500).json({ error: "Failed to fetch task activity" });
+    }
+  });
+
+  // Task Assignment Rules - Admin only
+  const requiresAdminAccess = (req: any, res: any, next: any) => {
+    if (!req.isAuthenticated()) {
+      return res.sendStatus(401);
+    }
+    
+    const user = req.user;
+    if (!user || user.role !== "admin") {
+      return res.sendStatus(403); // Forbidden - only admin can manage rules
+    }
+    
+    next();
+  };
+
+  app.get("/api/rules", requiresAdminAccess, async (req, res) => {
+    try {
+      const rules = await storage.getRules();
+      res.json(rules);
+    } catch (error) {
+      console.error("Error fetching rules:", error);
+      res.status(500).json({ error: "Failed to fetch rules" });
+    }
+  });
+
+  app.post("/api/rules", requiresAdminAccess, async (req, res) => {
+    try {
+      const ruleData = req.body;
+      const rule = await storage.createRule(ruleData);
+      res.status(201).json(rule);
+    } catch (error) {
+      console.error("Error creating rule:", error);
+      res.status(500).json({ error: "Failed to create rule" });
+    }
+  });
+
+  app.delete("/api/rules/:id", requiresAdminAccess, async (req, res) => {
+    try {
+      const success = await storage.deleteRule(req.params.id);
+      if (!success) {
+        return res.status(404).json({ error: "Rule not found" });
+      }
+      res.json({ message: "Rule deleted successfully" });
+    } catch (error) {
+      console.error("Error deleting rule:", error);
+      res.status(500).json({ error: "Failed to delete rule" });
+    }
+  });
+
   // Purchase Orders API routes - Admin and Manager only
   app.post("/api/purchase-orders", requiresActionCenterAccess, async (req, res) => {
     try {
