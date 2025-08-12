@@ -22,6 +22,7 @@ export const users = pgTable("users", {
   organizationId: varchar("organization_id").references(() => organizations.id),
   onboardingComplete: text("onboarding_complete").default("false"),
   platformConnections: jsonb("platform_connections").default({}),
+  baseCurrency: text("base_currency", { enum: ["INR", "GBP", "AED", "SGD", "USD"] }).default("INR"),
   invitedBy: text("invited_by"), // Email of admin who invited them
   joinedAt: timestamp("joined_at").defaultNow(),
   createdAt: timestamp("created_at").defaultNow(),
@@ -340,3 +341,63 @@ export type Rule = typeof rules.$inferSelect;
 export type InsertRule = typeof rules.$inferInsert;
 export type CreateCommentData = z.infer<typeof createCommentSchema>;
 export type CreateRuleData = z.infer<typeof createRuleSchema>;
+
+// Reconciliation Schema
+export const reconBatches = pgTable("recon_batches", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  workspaceId: varchar("workspace_id").notNull(),
+  source: text("source", { enum: ["Amazon", "Shopify", "Flipkart", "Other"] }).notNull(),
+  region: text("region", { enum: ["UK", "UAE", "SG", "US", "IN", "EU", "GLOBAL"] }).notNull(),
+  periodFrom: timestamp("period_from"),
+  periodTo: timestamp("period_to"),
+  inputCurrencies: text("input_currencies").array().notNull(),
+  baseCurrency: text("base_currency", { enum: ["INR", "GBP", "AED", "SGD", "USD"] }).notNull(),
+  expectedBaseTotal: integer("expected_base_total").notNull().default(0),
+  paidBaseTotal: integer("paid_base_total").notNull().default(0),
+  diffBaseTotal: integer("diff_base_total").notNull().default(0),
+  ordersTotal: integer("orders_total").notNull().default(0),
+  mismatchedCount: integer("mismatched_count").notNull().default(0),
+  createdAt: timestamp("created_at").defaultNow(),
+});
+
+export const reconRows = pgTable("recon_rows", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  batchId: varchar("batch_id").notNull().references(() => reconBatches.id, { onDelete: "cascade" }),
+  orderId: text("order_id").notNull(),
+  currency: text("currency").notNull(),
+  gross: integer("gross").notNull(), // in cents
+  fees: integer("fees").notNull(), // in cents
+  tax: integer("tax").notNull(), // in cents
+  expectedNet: integer("expected_net").notNull(), // in cents
+  paid: integer("paid").notNull(), // in cents
+  diff: integer("diff").notNull(), // in cents
+  expectedNetBase: integer("expected_net_base").notNull(), // in base currency cents
+  paidBase: integer("paid_base").notNull(), // in base currency cents
+  diffBase: integer("diff_base").notNull(), // in base currency cents
+  status: text("status", { enum: ["PENDING", "PARTIAL", "RESOLVED"] }).default("PENDING").notNull(),
+  taskId: varchar("task_id").references(() => tasks.id),
+  eventId: varchar("event_id").references(() => events.id),
+  notes: text("notes"),
+  createdAt: timestamp("created_at").defaultNow(),
+  updatedAt: timestamp("updated_at").defaultNow(),
+});
+
+// Reconciliation schemas
+export const reconIngestSchema = z.object({
+  source: z.enum(["Amazon", "Shopify", "Flipkart", "Other"]),
+  region: z.enum(["UK", "UAE", "SG", "US", "IN", "EU", "GLOBAL"]),
+  periodFrom: z.string().optional(),
+  periodTo: z.string().optional(),
+});
+
+export const updateReconRowSchema = z.object({
+  status: z.enum(["PENDING", "PARTIAL", "RESOLVED"]).optional(),
+  notes: z.string().optional(),
+});
+
+export type ReconBatch = typeof reconBatches.$inferSelect;
+export type InsertReconBatch = typeof reconBatches.$inferInsert;
+export type ReconRow = typeof reconRows.$inferSelect;
+export type InsertReconRow = typeof reconRows.$inferInsert;
+export type ReconIngestData = z.infer<typeof reconIngestSchema>;
+export type UpdateReconRowData = z.infer<typeof updateReconRowSchema>;

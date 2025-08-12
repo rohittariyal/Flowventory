@@ -1,4 +1,4 @@
-import { type User, type InsertUser, type OnboardingData, type InsertOnboardingData, type PlatformConnections, type Organization, type TeamInvitation, type InviteTeamMemberData, type UpdateTeamMemberData, type Notification, type CreateNotificationData, type Event, type InsertEvent, type Task, type InsertTask, type CreateEventData, type CreateTaskData, type UpdateTaskData, type PurchaseOrder, type InsertPurchaseOrder, type Comment, type InsertComment, type Activity, type InsertActivity, type Rule, type InsertRule, type CreateCommentData, type CreateRuleData } from "@shared/schema";
+import { type User, type InsertUser, type OnboardingData, type InsertOnboardingData, type PlatformConnections, type Organization, type TeamInvitation, type InviteTeamMemberData, type UpdateTeamMemberData, type Notification, type CreateNotificationData, type Event, type InsertEvent, type Task, type InsertTask, type CreateEventData, type CreateTaskData, type UpdateTaskData, type PurchaseOrder, type InsertPurchaseOrder, type Comment, type InsertComment, type Activity, type InsertActivity, type Rule, type InsertRule, type CreateCommentData, type CreateRuleData, type ReconBatch, type InsertReconBatch, type ReconRow, type InsertReconRow, type ReconIngestData, type UpdateReconRowData } from "@shared/schema";
 import { randomUUID } from "crypto";
 import session from "express-session";
 import createMemoryStore from "memorystore";
@@ -67,6 +67,16 @@ export interface IStorage {
   getPurchaseOrder(id: string): Promise<PurchaseOrder | undefined>;
   updatePurchaseOrder(id: string, updates: Partial<PurchaseOrder>): Promise<PurchaseOrder | undefined>;
   deletePurchaseOrder(id: string): Promise<void>;
+
+  // Reconciliation methods
+  createReconBatch(batchData: InsertReconBatch): Promise<ReconBatch>;
+  createReconRow(rowData: InsertReconRow): Promise<ReconRow>;
+  getReconBatches(filters?: { region?: string, source?: string, limit?: number, offset?: number }): Promise<ReconBatch[]>;
+  getReconBatch(id: string): Promise<ReconBatch | undefined>;
+  getReconRows(batchId: string, filters?: { status?: string, hasDiff?: boolean, limit?: number, offset?: number }): Promise<ReconRow[]>;
+  getReconRow(id: string): Promise<ReconRow | undefined>;
+  updateReconRow(id: string, updates: UpdateReconRowData): Promise<ReconRow | undefined>;
+  updateReconBatchTotals(batchId: string, totals: { expectedBaseTotal: number, paidBaseTotal: number, diffBaseTotal: number, ordersTotal: number, mismatchedCount: number }): Promise<void>;
   
   sessionStore: session.Store;
 }
@@ -83,6 +93,8 @@ export class MemStorage implements IStorage {
   private comments: Map<string, Comment>;
   private activities: Map<string, Activity>;
   private rules: Map<string, Rule>;
+  private reconBatches: Map<string, ReconBatch>;
+  private reconRows: Map<string, ReconRow>;
   public sessionStore: session.Store;
 
   constructor() {
@@ -97,6 +109,8 @@ export class MemStorage implements IStorage {
     this.comments = new Map();
     this.activities = new Map();
     this.rules = new Map();
+    this.reconBatches = new Map();
+    this.reconRows = new Map();
     this.sessionStore = new MemoryStore({
       checkPeriod: 86400000,
     });
@@ -987,6 +1001,108 @@ export class MemStorage implements IStorage {
   async findMatchingRule(taskType: string): Promise<Rule | undefined> {
     return Array.from(this.rules.values())
       .find(rule => rule.type === taskType);
+  }
+
+  // Reconciliation Methods
+  async createReconBatch(batchData: InsertReconBatch): Promise<ReconBatch> {
+    const batch: ReconBatch = {
+      ...batchData,
+      id: batchData.id || randomUUID(),
+      createdAt: new Date(),
+    };
+    this.reconBatches.set(batch.id, batch);
+    return batch;
+  }
+
+  async createReconRow(rowData: InsertReconRow): Promise<ReconRow> {
+    const row: ReconRow = {
+      ...rowData,
+      id: rowData.id || randomUUID(),
+      status: rowData.status || "PENDING",
+      createdAt: new Date(),
+      updatedAt: new Date(),
+    };
+    this.reconRows.set(row.id, row);
+    return row;
+  }
+
+  async getReconBatches(filters?: { region?: string, source?: string, limit?: number, offset?: number }): Promise<ReconBatch[]> {
+    let batches = Array.from(this.reconBatches.values());
+    
+    if (filters?.region) {
+      batches = batches.filter(b => b.region === filters.region);
+    }
+    if (filters?.source) {
+      batches = batches.filter(b => b.source === filters.source);
+    }
+    
+    // Sort by createdAt desc
+    batches.sort((a, b) => (b.createdAt?.getTime() || 0) - (a.createdAt?.getTime() || 0));
+    
+    if (filters?.offset) {
+      batches = batches.slice(filters.offset);
+    }
+    if (filters?.limit) {
+      batches = batches.slice(0, filters.limit);
+    }
+    
+    return batches;
+  }
+
+  async getReconBatch(id: string): Promise<ReconBatch | undefined> {
+    return this.reconBatches.get(id);
+  }
+
+  async getReconRows(batchId: string, filters?: { status?: string, hasDiff?: boolean, limit?: number, offset?: number }): Promise<ReconRow[]> {
+    let rows = Array.from(this.reconRows.values()).filter(r => r.batchId === batchId);
+    
+    if (filters?.status) {
+      rows = rows.filter(r => r.status === filters.status);
+    }
+    if (filters?.hasDiff) {
+      rows = rows.filter(r => Math.abs(r.diffBase) > 1); // More than 1 cent difference
+    }
+    
+    if (filters?.offset) {
+      rows = rows.slice(filters.offset);
+    }
+    if (filters?.limit) {
+      rows = rows.slice(0, filters.limit);
+    }
+    
+    return rows;
+  }
+
+  async getReconRow(id: string): Promise<ReconRow | undefined> {
+    return this.reconRows.get(id);
+  }
+
+  async updateReconRow(id: string, updates: UpdateReconRowData): Promise<ReconRow | undefined> {
+    const row = this.reconRows.get(id);
+    if (!row) return undefined;
+    
+    const updatedRow: ReconRow = {
+      ...row,
+      ...updates,
+      updatedAt: new Date(),
+    };
+    this.reconRows.set(id, updatedRow);
+    return updatedRow;
+  }
+
+  async updateReconBatchTotals(batchId: string, totals: { expectedBaseTotal: number, paidBaseTotal: number, diffBaseTotal: number, ordersTotal: number, mismatchedCount: number }): Promise<void> {
+    const batch = this.reconBatches.get(batchId);
+    if (!batch) return;
+    
+    const updatedBatch: ReconBatch = {
+      ...batch,
+      expectedBaseTotal: totals.expectedBaseTotal,
+      paidBaseTotal: totals.paidBaseTotal,
+      diffBaseTotal: totals.diffBaseTotal,
+      ordersTotal: totals.ordersTotal,
+      mismatchedCount: totals.mismatchedCount,
+    };
+    this.reconBatches.set(batchId, updatedBatch);
   }
 }
 

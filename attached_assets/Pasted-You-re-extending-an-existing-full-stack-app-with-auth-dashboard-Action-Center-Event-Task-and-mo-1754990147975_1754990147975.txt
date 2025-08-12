@@ -1,0 +1,161 @@
+You’re extending an existing full-stack app with auth, dashboard, Action Center (Event/Task), and mock adapters already in place.
+Add **Global Payment Reconciliation V1**. Keep code style, theme, and routing consistent. No redesigns.
+ 
+# Goals
+- Ingest marketplace payout + orders data (CSV/JSON) for ANY region
+- Compute per-order differences with tax/fee awareness
+- Multi-currency support with baseCurrency conversion (e.g., INR, GBP, AED, SGD, USD)
+- Create/Link RECONCILE tasks automatically for mismatches (idempotent)
+- Reconciliation UI: batches list + batch detail table with row actions
+ 
+# Data Models (Mongo/Mongoose; adapt if different ORM)
+Workspace (assume exists): add fields
+- baseCurrency: "INR" | "GBP" | "AED" | "SGD" | "USD" (default "INR")
+ 
+ReconBatch:
+- _id
+- workspaceId
+- source: "Amazon" | "Shopify" | "Flipkart" | "Other"
+- region: "UK" | "UAE" | "SG" | "US" | "IN" | "EU" | "GLOBAL"
+- period: { from: Date, to: Date }  // optional textual e.g., "2025-08-01..2025-08-08"
+- inputCurrencies: [string]         // e.g., ["GBP","USD"]
+- baseCurrency: string              // copy from workspace at ingest
+- totals: { expectedBase: number, paidBase: number, diffBase: number }
+- counts: { ordersTotal: number, mismatched: number }
+- createdAt
+ 
+ReconRow:
+- _id
+- batchId (ref ReconBatch)
+- orderId: string
+- currency: string                // currency of the payout/order line
+- gross: number                   // in row currency
+- fees: number                    // platform fees
+- tax: number                     // VAT/GST/SalesTax captured from input
+- expectedNet: number             // computed (gross - fees - tax) in row currency
+- paid: number                    // paid amount (in row currency)
+- diff: number                    // paid - expectedNet (row currency)
+- expectedNetBase: number         // converted to baseCurrency
+- paidBase: number
+- diffBase: number
+- status: "PENDING" | "PARTIAL" | "RESOLVED" (default "PENDING")
+- taskId?: ObjectId (ref Task)
+- eventId?: ObjectId (ref Event)
+- notes?: string
+- createdAt, updatedAt
+ 
+# Currency Conversion
+Create a CurrencyService with pluggable providers:
+- getRate(from, to): number
+- v1: use a static, deterministic rate map kept in code (GBP↔USD↔INR↔AED↔SGD) for now
+- Add .env toggle FUTURE_FOREX_PROVIDER to swap later
+- If from==to, rate=1.0
+ 
+# Endpoints
+POST /api/recon/ingest
+- Accept multipart/form-data with files:
+  - orders: CSV or JSON (fields: orderId, gross, fees, tax, currency) OR (orderId, netExpected, currency) if fees/tax are pre-netted
+  - payouts: CSV or JSON (fields: orderId, paid, currency) OR period total (`totalPaid`) with per-order paid optional
+- Query/body fields: { source, region, periodFrom?, periodTo? }
+- Parse files, normalize rows by orderId
+- Compute expectedNet = (gross - fees - tax) if provided; else use provided netExpected
+- Join with paid by orderId (if missing, treat paid=0)
+- Convert expectedNet/paid to workspace.baseCurrency via CurrencyService
+- Create ReconBatch + ReconRow[]
+- For rows where abs(diffBase) > 0.01, create (or upsert) an Event type PAYMENT_MISMATCH with payload {orderId, currency, expectedNet, paid, diff, expectedNetBase, paidBase, diffBase, source, region}
+  - Then create/link a Task type RECONCILE (idempotent via unique sourceEventId)
+- Return { batchId, counts, totals }
+ 
+GET /api/recon/batches?region=&source=&limit=&offset=
+- List batches (most recent first) with totals/counts
+ 
+GET /api/recon/batches/:id
+- Return batch header + paginated rows (filters: status=, hasDiff=true)
+ 
+POST /api/recon/rows/:rowId/create-task
+- If no taskId, create/link RECONCILE task to existing Event (or create one) and set row.taskId
+- Return row + task
+ 
+PATCH /api/recon/rows/:rowId
+- Update { status?, notes? } (e.g., mark PARTIAL/RESOLVED, add notes)
+ 
+# Events/Tasks Integration (reuse existing models)
+Event.type: add "PAYMENT_MISMATCH"
+Task.type: add "RECONCILE"
+- Auto-assign by your existing Rules (Finance role) if rules exist
+- When Task is marked DONE (existing /api/tasks/:id/resolve), also set linked ReconRow.status="RESOLVED"
+ 
+# Frontend (React; keep theme/layout)
+Add sidebar item: "Reconciliation" (under Finance)
+Routes:
+- /recon  -> BatchesList
+- /recon/:batchId -> BatchDetail
+ 
+BatchesList
+- Table: CreatedAt | Source | Region | Period | Orders | Mismatches | Diff (Base)
+- Button: "New Reconciliation"
+  - Modal to upload orders & payouts (CSV/JSON), select source, region; POST /api/recon/ingest
+  - After success, navigate to /recon/:batchId
+ 
+BatchDetail
+- Header: totals cards (Expected, Paid, Diff) in baseCurrency
+- Filters: status (All/Pending/Partial/Resolved), onlyMismatches (toggle)
+- Table columns:
+  - OrderID | Currency | Gross | Fees | Tax | ExpectedNet | Paid | Diff | Diff (Base) | Status | Actions
+- Row actions:
+  - Create/Open Task (idempotent)
+  - Mark Resolved (sets status=RESOLVED)
+  - Notes (editable textarea/inline modal)
+- Footer: totals row pinned, pagination
+ 
+# CSV Parsing
+- Use fast-csv or papaparse server-side
+- Accept headers in any case (normalize keys)
+- Ignore blank lines; trim spaces
+- Robust number parsing ("," thousand separators)
+ 
+# Idempotency & Indexes
+- Unique index on Task.sourceEventId (already used elsewhere)
+- ReconRow: index on (batchId, orderId)
+- If ingest called twice for same period+source+region with identical rows, create a new batch (don’t mutate old) — we want history
+ 
+# Seeds / Mocks
+Place samples in /server/mock/recon/*
+- orders.uk.amazon.csv:
+  orderId,currency,gross,fees,tax
+  AMZ-UK-1001,GBP,39.99,6.00,6.67
+  AMZ-UK-1002,GBP,21.00,3.15,3.50
+  AMZ-UK-1003,GBP,15.00,2.25,2.50
+- payouts.uk.amazon.csv:
+  orderId,currency,paid
+  AMZ-UK-1001,GBP,26.90
+  AMZ-UK-1002,GBP,14.20
+  AMZ-UK-1003,GBP,10.10
+ 
+- orders.us.amazon.csv / payouts.us.amazon.csv (USD)
+- orders.uae.amazon.csv / payouts.uae.amazon.csv (AED)
+- orders.sg.amazon.csv / payouts.sg.amazon.csv (SGD)
+ 
+CurrencyService static map (example):
+  { "GBP->INR": 105, "USD->INR": 84, "AED->INR": 22.8, "SGD->INR": 62,
+    "INR->GBP": 1/105, "INR->USD": 1/84, ... }
+Also include cross conversions via USD pivot if pair missing.
+ 
+# Acceptance Criteria
+- Can upload CSV/JSON for at least two regions (e.g., UK=GBP, US=USD) and create a batch each
+- Batches list shows correct totals and mismatches count
+- Batch detail computes accurate per-order diff and baseCurrency conversions
+- For each mismatched row, a PAYMENT_MISMATCH Event and a linked RECONCILE Task are created once (idempotent)
+- Marking a RECONCILE task DONE updates its ReconRow to RESOLVED
+- UI works with your existing theme and routing; no global style changes
+ 
+# Nice-to-have (if time permits)
+- Download CSV of mismatches
+- Batch notes & tags (e.g., “Amazon Payout Aug W1 (UK)”)
+- Re-run reconciliation on a batch (new batch version created)
+ 
+Implement all server routes, models, minimal UI, mocks, and a README snippet with example curl:
+curl -F "orders=@server/mock/recon/orders.uk.amazon.csv" \
+     -F "payouts=@server/mock/recon/payouts.uk.amazon.csv" \
+     -F source=Amazon -F region=UK \
+     http://localhost:3000/api/recon/ingest

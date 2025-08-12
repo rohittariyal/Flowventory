@@ -3,6 +3,10 @@
 This is a comprehensive business intelligence dashboard application built with React and Express. It features user authentication, role-based access control, post-login onboarding, and a conditional dashboard UI with dark theme and light green accents. The application provides AI-powered business insights, inventory management, sales intelligence, customer analytics, and return abuse detection based on user roles and onboarding preferences.
 
 ## Recent Changes (Latest First)
+- **2025-01-08**: Implemented Global Payment Reconciliation V1 system with automated matching algorithms and multi-currency support
+- **2025-01-08**: Created reconciliation service with CSV parsing, currency conversion, and payment mismatch detection
+- **2025-01-08**: Built comprehensive reconciliation UI with batch management and detailed row-level views
+- **2025-01-08**: Added reconciliation API routes for file upload, batch retrieval, and task creation
 - **2025-01-08**: Added default due dates for task types (RESTOCK: +24h, RETRY_SYNC: +2h, RECONCILE: +48h)
 - **2025-01-08**: Implemented overdue count and "Mine" filter chips in Action Center with real-time counts
 - **2025-01-08**: Enhanced task display with overdue highlighting and improved due date formatting
@@ -47,6 +51,31 @@ This is a comprehensive business intelligence dashboard application built with R
 # User Preferences
 
 Preferred communication style: Simple, everyday language.
+
+## Global Payment Reconciliation V1 System
+
+### Core Features
+- **Multi-Platform Support**: Amazon UK/US, Shopify, Flipkart, and other marketplace data ingestion
+- **Multi-Currency Processing**: Automated conversion to base currency (INR, GBP, AED, SGD, USD)
+- **Automated Matching**: Intelligent order-to-payout reconciliation with configurable tolerance levels
+- **Mismatch Detection**: Real-time identification of payment discrepancies with severity classification
+- **Task Integration**: Automatic RECONCILE task creation for significant mismatches (>$10 = P1 priority)
+- **Comprehensive UI**: Batch management dashboard with detailed row-level investigation views
+
+### Technical Implementation
+- **Backend Service**: `server/reconService.ts` - Handles CSV parsing, currency conversion, and matching algorithms
+- **API Routes**: `/api/recon/*` endpoints for file upload, batch management, and row operations
+- **Frontend Pages**: Reconciliation dashboard (`/recon`) and detail view (`/recon/:batchId`)
+- **Database Schema**: ReconBatch and ReconRow models with full audit trail support
+- **File Processing**: Multer-based CSV upload with normalized header processing
+
+### Data Flow
+1. **Upload**: CSV files (orders + payouts) uploaded via web interface
+2. **Processing**: Automated parsing, normalization, and currency conversion
+3. **Matching**: Order-to-payout matching with difference calculations
+4. **Analysis**: Mismatch detection and severity classification
+5. **Action**: Automatic task creation for discrepancies requiring investigation
+6. **Resolution**: Manual status tracking and notes for each reconciliation row
 
 # System Architecture
 

@@ -3,7 +3,9 @@ import { createServer, type Server } from "http";
 import { setupAuth } from "./auth";
 import { storage } from "./storage";
 import { syncManager } from "./syncAdapters";
-import { onboardingSchema, platformConnectionSchema, createNotificationSchema, markNotificationReadSchema, type PlatformConnections } from "@shared/schema";
+import { onboardingSchema, platformConnectionSchema, createNotificationSchema, markNotificationReadSchema, reconIngestSchema, updateReconRowSchema, type PlatformConnections } from "@shared/schema";
+import { ReconciliationService } from "./reconService";
+import multer from "multer";
 
 // Authentication middleware
 function requireAuth(req: any, res: any, next: any) {
@@ -739,6 +741,140 @@ export function registerRoutes(app: Express): Server {
     } catch (error) {
       console.error("Error creating test P1 task:", error);
       res.status(500).json({ error: "Failed to create test task" });
+    }
+  });
+
+  // Reconciliation API routes
+  const upload = multer({ storage: multer.memoryStorage() });
+  
+  app.post("/api/recon/ingest", requireAuth, upload.fields([
+    { name: 'orders', maxCount: 1 },
+    { name: 'payouts', maxCount: 1 }
+  ]), async (req, res) => {
+    try {
+      const files = req.files as { [fieldname: string]: Express.Multer.File[] };
+      
+      if (!files.orders || !files.payouts) {
+        return res.status(400).json({ error: "Both orders and payouts files are required" });
+      }
+      
+      const ordersFile = files.orders[0];
+      const payoutsFile = files.payouts[0];
+      
+      // Validate ingest data
+      const ingestData = reconIngestSchema.parse({
+        source: req.body.source,
+        region: req.body.region,
+        periodFrom: req.body.periodFrom,
+        periodTo: req.body.periodTo,
+      });
+      
+      // Use user as workspace ID and get base currency
+      const workspaceId = req.user!.id;
+      const baseCurrency = req.user!.baseCurrency || 'INR';
+      
+      const result = await ReconciliationService.ingestReconciliation(
+        ordersFile.buffer,
+        payoutsFile.buffer,
+        ingestData,
+        workspaceId,
+        baseCurrency
+      );
+      
+      res.json(result);
+    } catch (error) {
+      console.error("Reconciliation ingest error:", error);
+      res.status(500).json({ error: "Failed to process reconciliation data" });
+    }
+  });
+  
+  app.get("/api/recon/batches", requireAuth, async (req, res) => {
+    try {
+      const { region, source, limit, offset } = req.query;
+      const filters = {
+        region: region as string,
+        source: source as string,
+        limit: limit ? parseInt(limit as string) : undefined,
+        offset: offset ? parseInt(offset as string) : undefined,
+      };
+      
+      const batches = await storage.getReconBatches(filters);
+      res.json(batches);
+    } catch (error) {
+      console.error("Error fetching recon batches:", error);
+      res.status(500).json({ error: "Failed to fetch batches" });
+    }
+  });
+  
+  app.get("/api/recon/batches/:id", requireAuth, async (req, res) => {
+    try {
+      const batch = await storage.getReconBatch(req.params.id);
+      if (!batch) {
+        return res.status(404).json({ error: "Batch not found" });
+      }
+      
+      const { status, hasDiff, limit, offset } = req.query;
+      const filters = {
+        status: status as string,
+        hasDiff: hasDiff === 'true',
+        limit: limit ? parseInt(limit as string) : undefined,
+        offset: offset ? parseInt(offset as string) : undefined,
+      };
+      
+      const rows = await storage.getReconRows(batch.id, filters);
+      
+      res.json({ batch, rows });
+    } catch (error) {
+      console.error("Error fetching recon batch:", error);
+      res.status(500).json({ error: "Failed to fetch batch details" });
+    }
+  });
+  
+  app.post("/api/recon/rows/:rowId/create-task", requireAuth, async (req, res) => {
+    try {
+      const row = await storage.getReconRow(req.params.rowId);
+      if (!row) {
+        return res.status(404).json({ error: "Reconciliation row not found" });
+      }
+      
+      // Check if task already exists
+      if (row.notes && row.notes.includes('Task:')) {
+        return res.json({ message: "Task already exists for this row", row });
+      }
+      
+      // Create RECONCILE task
+      const task = await storage.createTask({
+        title: `Reconcile payment mismatch for order ${row.orderId}`,
+        type: "RECONCILE",
+        priority: Math.abs(row.diffBase) > 1000 ? "P1" : "P2", // > $10 = P1
+        notes: `Payment mismatch: Expected ${row.expectedNet/100} ${row.currency}, Paid ${row.paid/100} ${row.currency}`,
+      });
+      
+      // Update row with task reference
+      const updatedRow = await storage.updateReconRow(row.id, {
+        notes: `${row.notes || ''} Task: ${task.id}`.trim()
+      });
+      
+      res.json({ task, row: updatedRow });
+    } catch (error) {
+      console.error("Error creating task for recon row:", error);
+      res.status(500).json({ error: "Failed to create task" });
+    }
+  });
+  
+  app.patch("/api/recon/rows/:rowId", requireAuth, async (req, res) => {
+    try {
+      const updates = updateReconRowSchema.parse(req.body);
+      const updatedRow = await storage.updateReconRow(req.params.rowId, updates);
+      
+      if (!updatedRow) {
+        return res.status(404).json({ error: "Reconciliation row not found" });
+      }
+      
+      res.json(updatedRow);
+    } catch (error) {
+      console.error("Error updating recon row:", error);
+      res.status(500).json({ error: "Failed to update reconciliation row" });
     }
   });
 
