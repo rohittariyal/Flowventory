@@ -1,0 +1,65 @@
+You’re extending my existing app (Node/Express + React). Keep current styles and routing. Do NOT refactor unrelated code.
+ 
+Goal: Add 5 small features:
+1) Inline PO status updates
+2) Inventory search + filter
+3) Low-stock row highlight
+4) Task link on PO detail (create if missing)
+5) Export POs to CSV (client-side)
+ 
+--- 1) Inline PO Status Updates ---
+Backend:
+- Ensure PATCH /api/po/:id exists. If not, add it:
+  Body: { status: "DRAFT"|"SENT"|"RECEIVED"|"CANCELLED" }
+  Update PurchaseOrder.status and return updated doc.
+ 
+Frontend (/purchase-orders list):
+- Add a Status control per row (dropdown or small buttons).
+- On change, call PATCH /api/po/:id; optimistic update + toast on success.
+- No page reloads; keep current visuals.
+ 
+--- 2) Inventory Search + Filter ---
+Frontend (Inventory page):
+- Add a text input above the table: placeholder "Search SKU / Supplier / Category".
+- Filter rows client-side by case-insensitive substring match across available fields.
+- Debounce 200ms. If no results, show a simple "No matches" state.
+ 
+--- 3) Low-Stock Highlight ---
+Frontend (Inventory table):
+- For rows with stock <= threshold, add a subtle alert style (same theme colors):
+  - e.g., background tint or left border. No new theme globals.
+- Keep accessibility: ensure text contrast remains readable.
+ 
+--- 4) Task Link on PO Detail ---
+Schema/Backend (minimal):
+- If Task already supports arbitrary metadata, use that.
+- If not, add optional field to Task: poId: ObjectId (indexed, non-required).
+ 
+Endpoints:
+- GET /api/tasks?poId=<id> -> return tasks filtered by poId if provided.
+- POST /api/tasks  (already exists): allow body { title, type:"RESTOCK", poId, notes? } to create a new task.
+ 
+Frontend (PO detail page):
+- Show "Linked Task" section:
+  - If a task with poId exists, render a link: "Open in Action Center".
+  - Else show button "Create RESTOCK Task" -> POST /api/tasks with { title:`Restock PO ${po.number||_id}`, type:"RESTOCK", poId }.
+  - On success, replace button with the link. Toast on create.
+ 
+--- 5) Export POs to CSV ---
+Frontend (/purchase-orders list):
+- Add button "Export CSV".
+- Client-side generate CSV of the current (filtered) table:
+  Columns: createdAt, supplierName, sku(s) or item count, qty total, status.
+- Trigger a download using a Blob; no server route required.
+ 
+--- Acceptance Criteria ---
+- Changing PO status in the list updates instantly (optimistic) and persists on refresh.
+- Inventory search filters rows as you type; clears when input cleared.
+- Low-stock rows are visually highlighted without breaking dark/light themes.
+- PO detail shows a linked RESTOCK task if present; can create one if missing.
+- Export CSV downloads a file reflecting current list/filter.
+ 
+--- Notes ---
+- Keep code minimal; match existing patterns (fetch/axios hooks, components, toasts).
+- Do not change global styles; apply styles via existing utility classes or scoped CSS.
+- Add light logging for PATCH /api/po/:id and POST /api/tasks for debugging.

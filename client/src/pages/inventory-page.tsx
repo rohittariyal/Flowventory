@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useMemo } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
@@ -9,7 +9,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { AlertTriangle, Package, Plus, FileText, CheckCircle } from "lucide-react";
+import { AlertTriangle, Package, Plus, FileText, CheckCircle, Search } from "lucide-react";
 import { apiRequest } from "@/lib/queryClient";
 import { useToast } from "@/hooks/use-toast";
 
@@ -53,6 +53,20 @@ function InventoryPage() {
     quantity: "20",
     notes: ""
   });
+  
+  // Feature 2: Search and filter
+  const [searchQuery, setSearchQuery] = useState("");
+  
+  // Filter inventory data based on search query
+  const filteredInventory = useMemo(() => {
+    if (!searchQuery.trim()) return INVENTORY_DATA;
+    
+    const query = searchQuery.toLowerCase().trim();
+    return INVENTORY_DATA.filter(item => 
+      item.sku.toLowerCase().includes(query) ||
+      item.channels.some(channel => channel.toLowerCase().includes(query))
+    );
+  }, [searchQuery]);
 
   // Create task from event mutation
   const createTaskMutation = useMutation({
@@ -115,9 +129,14 @@ function InventoryPage() {
     }
   });
 
-  const getRowClassName = (daysCover: number) => {
-    if (daysCover <= 2) return "bg-red-50 dark:bg-red-950/20 border-red-200 dark:border-red-800";
-    if (daysCover <= 5) return "bg-amber-50 dark:bg-amber-950/20 border-amber-200 dark:border-amber-800";
+  // Feature 3: Low-stock highlight with accessibility
+  const getRowClassName = (item: InventoryItem) => {
+    const isLowStock = item.stock <= item.threshold;
+    if (isLowStock) {
+      return "bg-red-50 dark:bg-red-950/20 border-l-4 border-l-red-500 dark:border-l-red-400";
+    }
+    if (item.daysCover <= 2) return "bg-red-50 dark:bg-red-950/20 border-red-200 dark:border-red-800";
+    if (item.daysCover <= 5) return "bg-amber-50 dark:bg-amber-950/20 border-amber-200 dark:border-amber-800";
     return "";
   };
 
@@ -169,6 +188,19 @@ function InventoryPage() {
           </div>
         </CardHeader>
         <CardContent className="px-3 sm:px-6">
+          {/* Feature 2: Search input */}
+          <div className="mb-4">
+            <div className="relative">
+              <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-muted-foreground h-4 w-4" />
+              <Input
+                placeholder="Search SKU / Supplier / Category"
+                value={searchQuery}
+                onChange={(e) => setSearchQuery(e.target.value)}
+                className="pl-10"
+              />
+            </div>
+          </div>
+
           <div className="rounded-md border overflow-x-auto">
             <Table>
               <TableHeader>
@@ -182,10 +214,17 @@ function InventoryPage() {
                 </TableRow>
               </TableHeader>
               <TableBody>
-                {INVENTORY_DATA.map((item) => (
+                {filteredInventory.length === 0 && searchQuery.trim() ? (
+                  <TableRow>
+                    <TableCell colSpan={6} className="text-center py-8 text-muted-foreground">
+                      No matches found for "{searchQuery}"
+                    </TableCell>
+                  </TableRow>
+                ) : (
+                  filteredInventory.map((item) => (
                   <TableRow 
                     key={item.sku} 
-                    className={getRowClassName(item.daysCover)}
+                    className={getRowClassName(item)}
                   >
                     <TableCell className="font-medium">{item.sku}</TableCell>
                     <TableCell>
@@ -251,7 +290,8 @@ function InventoryPage() {
                       </div>
                     </TableCell>
                   </TableRow>
-                ))}
+                  ))
+                )}
               </TableBody>
             </Table>
           </div>

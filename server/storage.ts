@@ -90,6 +90,11 @@ export interface IStorage {
   updateReconRow(id: string, updates: UpdateReconRowData): Promise<ReconRow | undefined>;
   updateReconBatchTotals(batchId: string, totals: { expectedBaseTotal: number, paidBaseTotal: number, diffBaseTotal: number, ordersTotal: number, mismatchedCount: number }): Promise<void>;
   
+  // Simple Purchase Order methods
+  createSimplePurchaseOrder(poData: InsertSimplePurchaseOrder): Promise<SimplePurchaseOrder>;
+  getSimplePurchaseOrders(): Promise<SimplePurchaseOrder[]>;
+  updateSimplePurchaseOrderStatus(id: string, status: string): Promise<SimplePurchaseOrder | undefined>;
+  
   sessionStore: session.Store;
 }
 
@@ -1141,6 +1146,18 @@ export class MemStorage implements IStorage {
   async getSimplePurchaseOrders(): Promise<SimplePurchaseOrder[]> {
     return Array.from(this.simplePurchaseOrders.values())
       .sort((a, b) => b.createdAt!.getTime() - a.createdAt!.getTime());
+  }
+
+  async updateSimplePurchaseOrderStatus(id: string, status: string): Promise<SimplePurchaseOrder | undefined> {
+    const po = this.simplePurchaseOrders.get(id);
+    if (!po) return undefined;
+    
+    const updatedPo: SimplePurchaseOrder = {
+      ...po,
+      status: status as "DRAFT" | "SENT" | "RECEIVED",
+    };
+    this.simplePurchaseOrders.set(id, updatedPo);
+    return updatedPo;
   }
 
   // Restock Autopilot - Supplier methods

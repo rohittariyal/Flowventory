@@ -474,13 +474,14 @@ export function registerRoutes(app: Express): Server {
   // Action Center Tasks API routes
   app.get("/api/tasks", requiresActionCenterAccess, async (req, res) => {
     try {
-      const { status, assigneeId, type, priority, overdue } = req.query;
+      const { status, assigneeId, type, priority, overdue, poId } = req.query;
       const filters = {
         status: status as string,
         assigneeId: assigneeId as string,
         type: type as string,
         priority: priority as string,
         overdue: overdue === "true",
+        poId: poId as string,
       };
       
       const tasks = await storage.getTasks(filters);
@@ -1298,6 +1299,26 @@ export function registerRoutes(app: Express): Server {
     } catch (error) {
       console.error("Error fetching simple purchase orders:", error);
       res.status(500).json({ error: "Failed to fetch purchase orders" });
+    }
+  });
+
+  // PATCH /api/simple-po/:id for status updates
+  app.patch("/api/simple-po/:id", async (req, res) => {
+    try {
+      const { id } = req.params;
+      const { status } = req.body;
+
+      if (!status || !["DRAFT", "SENT", "RECEIVED", "CANCELLED"].includes(status)) {
+        return res.status(400).json({ error: "Invalid status. Must be DRAFT, SENT, RECEIVED, or CANCELLED" });
+      }
+
+      const updatedPo = await storage.updateSimplePurchaseOrderStatus(id, status);
+      console.log("[PO] status updated", id, "->", status);
+      
+      res.json(updatedPo);
+    } catch (error) {
+      console.error("[PO] status update error", error);
+      res.status(500).json({ error: "Failed to update PO status", detail: String((error as any)?.message || error) });
     }
   });
 

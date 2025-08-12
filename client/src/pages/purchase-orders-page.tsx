@@ -3,7 +3,8 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
-import { FileText, Package, RefreshCw } from "lucide-react";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { FileText, Package, RefreshCw, Download } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 
 interface PurchaseOrder {
@@ -11,7 +12,7 @@ interface PurchaseOrder {
   sku: string;
   qty: number;
   supplierName: string;
-  status: "DRAFT" | "SENT" | "RECEIVED";
+  status: "DRAFT" | "SENT" | "RECEIVED" | "CANCELLED";
   date: string;
   createdAt: string;
 }
@@ -66,6 +67,71 @@ function PurchaseOrdersPage() {
     return date.toLocaleDateString() + " " + date.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
   };
 
+  // Feature 1: Inline status updates
+  const updatePOStatus = async (id: string, newStatus: string) => {
+    try {
+      // Optimistic update
+      setPurchaseOrders(prev => 
+        prev.map(po => po.id === id ? { ...po, status: newStatus as any } : po)
+      );
+
+      const response = await fetch(`/api/simple-po/${id}`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ status: newStatus })
+      });
+
+      if (!response.ok) {
+        // Revert on error
+        setPurchaseOrders(prev => 
+          prev.map(po => po.id === id ? { ...po, status: purchaseOrders.find(p => p.id === id)?.status || "DRAFT" } : po)
+        );
+        throw new Error("Failed to update status");
+      }
+
+      toast({
+        title: "Status Updated",
+        description: `Purchase order status changed to ${newStatus}`,
+      });
+    } catch (error) {
+      console.error("Error updating PO status:", error);
+      toast({
+        title: "Error",
+        description: "Failed to update purchase order status",
+        variant: "destructive"
+      });
+    }
+  };
+
+  // Feature 5: Export to CSV
+  const exportToCSV = () => {
+    const headers = ["Created At", "Supplier Name", "SKU", "Quantity", "Status"];
+    const csvData = purchaseOrders.map(po => [
+      formatDate(po.createdAt),
+      po.supplierName,
+      po.sku,
+      po.qty.toString(),
+      po.status
+    ]);
+
+    const csvContent = [headers, ...csvData]
+      .map(row => row.map(field => `"${field}"`).join(","))
+      .join("\n");
+
+    const blob = new Blob([csvContent], { type: "text/csv;charset=utf-8;" });
+    const link = document.createElement("a");
+    link.href = URL.createObjectURL(blob);
+    link.download = `purchase-orders-${new Date().toISOString().split('T')[0]}.csv`;
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+    
+    toast({
+      title: "Export Complete",
+      description: `Exported ${purchaseOrders.length} purchase orders to CSV`,
+    });
+  };
+
   return (
     <div className="container mx-auto p-3 sm:p-6 space-y-4 sm:space-y-6">
       <Card>
@@ -80,16 +146,28 @@ function PurchaseOrdersPage() {
                 </CardDescription>
               </div>
             </div>
-            <Button 
-              variant="outline" 
-              size="sm"
-              onClick={fetchPurchaseOrders}
-              disabled={loading}
-              className="shrink-0"
-            >
-              <RefreshCw className={`h-4 w-4 ${loading ? 'animate-spin' : ''}`} />
-              <span className="hidden sm:inline ml-2">Refresh</span>
-            </Button>
+            <div className="flex gap-2">
+              <Button 
+                variant="outline" 
+                size="sm"
+                onClick={exportToCSV}
+                disabled={loading || purchaseOrders.length === 0}
+                className="shrink-0"
+              >
+                <Download className="h-4 w-4" />
+                <span className="hidden sm:inline ml-2">Export CSV</span>
+              </Button>
+              <Button 
+                variant="outline" 
+                size="sm"
+                onClick={fetchPurchaseOrders}
+                disabled={loading}
+                className="shrink-0"
+              >
+                <RefreshCw className={`h-4 w-4 ${loading ? 'animate-spin' : ''}`} />
+                <span className="hidden sm:inline ml-2">Refresh</span>
+              </Button>
+            </div>
           </div>
         </CardHeader>
 
@@ -129,9 +207,20 @@ function PurchaseOrdersPage() {
                       <TableCell>{po.qty}</TableCell>
                       <TableCell>{po.supplierName}</TableCell>
                       <TableCell>
-                        <Badge variant={getStatusBadge(po.status)}>
-                          {po.status}
-                        </Badge>
+                        <Select
+                          value={po.status}
+                          onValueChange={(newStatus) => updatePOStatus(po.id, newStatus)}
+                        >
+                          <SelectTrigger className="w-32">
+                            <SelectValue />
+                          </SelectTrigger>
+                          <SelectContent>
+                            <SelectItem value="DRAFT">DRAFT</SelectItem>
+                            <SelectItem value="SENT">SENT</SelectItem>
+                            <SelectItem value="RECEIVED">RECEIVED</SelectItem>
+                            <SelectItem value="CANCELLED">CANCELLED</SelectItem>
+                          </SelectContent>
+                        </Select>
                       </TableCell>
                     </TableRow>
                   ))}
