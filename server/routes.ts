@@ -745,46 +745,93 @@ export function registerRoutes(app: Express): Server {
   });
 
   // Reconciliation API routes
-  const upload = multer({ storage: multer.memoryStorage() });
+  const upload = multer({ 
+    storage: multer.memoryStorage(),
+    limits: {
+      fileSize: 10 * 1024 * 1024, // 10MB limit per file
+      files: 2
+    }
+  });
   
   app.post("/api/recon/ingest", requireAuth, upload.fields([
     { name: 'orders', maxCount: 1 },
     { name: 'payouts', maxCount: 1 }
   ]), async (req, res) => {
+    console.log('🔄 Reconciliation ingest request started');
+    
     try {
       const files = req.files as { [fieldname: string]: Express.Multer.File[] };
+      console.log('📁 Files received:', Object.keys(files || {}).join(', '));
       
-      if (!files.orders || !files.payouts) {
-        return res.status(400).json({ error: "Both orders and payouts files are required" });
+      // Validate required orders file
+      if (!files.orders || !files.orders[0]) {
+        console.warn('❌ Missing orders file');
+        return res.status(400).json({ error: "Orders file is required" });
       }
       
       const ordersFile = files.orders[0];
-      const payoutsFile = files.payouts[0];
+      const payoutsFile = files.payouts?.[0] || null;
       
-      // Validate ingest data
-      const ingestData = reconIngestSchema.parse({
-        source: req.body.source,
-        region: req.body.region,
-        periodFrom: req.body.periodFrom,
-        periodTo: req.body.periodTo,
-      });
+      console.log(`📊 Processing orders file: ${ordersFile.originalname} (${ordersFile.size} bytes)`);
+      if (payoutsFile) {
+        console.log(`💰 Processing payouts file: ${payoutsFile.originalname} (${payoutsFile.size} bytes)`);
+      } else {
+        console.log('💰 No payouts file provided, will use default paid=0');
+      }
+      
+      // Validate ingest data with error handling
+      let ingestData;
+      try {
+        ingestData = reconIngestSchema.parse({
+          source: req.body.source,
+          region: req.body.region,
+          periodFrom: req.body.periodFrom,
+          periodTo: req.body.periodTo,
+        });
+        console.log('✅ Ingest data validated:', ingestData);
+      } catch (validationError) {
+        console.error('❌ Validation error:', validationError);
+        return res.status(400).json({ 
+          error: "Invalid ingest data",
+          details: validationError instanceof Error ? validationError.message : 'Unknown validation error'
+        });
+      }
       
       // Use user as workspace ID and get base currency
       const workspaceId = req.user!.id;
       const baseCurrency = req.user!.baseCurrency || 'INR';
       
-      const result = await ReconciliationService.ingestReconciliation(
+      console.log(`🏢 Processing for workspace: ${workspaceId}, base currency: ${baseCurrency}`);
+      
+      // Process reconciliation with timeout
+      const timeout = new Promise((_, reject) => {
+        setTimeout(() => reject(new Error('Processing timeout after 5 minutes')), 5 * 60 * 1000);
+      });
+      
+      const reconciliationPromise = ReconciliationService.ingestReconciliation(
         ordersFile.buffer,
-        payoutsFile.buffer,
+        payoutsFile?.buffer || null,
         ingestData,
         workspaceId,
         baseCurrency
       );
       
+      const result = await Promise.race([reconciliationPromise, timeout]);
+      
+      console.log('🎉 Reconciliation completed successfully');
       res.json(result);
+      
     } catch (error) {
-      console.error("Reconciliation ingest error:", error);
-      res.status(500).json({ error: "Failed to process reconciliation data" });
+      console.error("❌ Reconciliation ingest error:", error);
+      
+      // Ensure we always send a response
+      if (!res.headersSent) {
+        const errorMessage = error instanceof Error ? error.message : 'Unknown error occurred';
+        res.status(500).json({ 
+          error: "Failed to process reconciliation data",
+          details: errorMessage
+        });
+      }
     }
   });
   

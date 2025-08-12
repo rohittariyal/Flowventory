@@ -1,45 +1,39 @@
-// Currency conversion service with static rates for v1
+// In-memory currency conversion service with static rates
 export class CurrencyService {
-  private static rates: Record<string, number> = {
-    // Base conversions to USD (for cross-currency calculations)
-    "USD": 1.0,
-    "GBP": 1.25,  // 1 GBP = 1.25 USD
-    "EUR": 1.05,  // 1 EUR = 1.05 USD
-    "INR": 0.012, // 1 INR = 0.012 USD
-    "AED": 0.272, // 1 AED = 0.272 USD
-    "SGD": 0.74,  // 1 SGD = 0.74 USD
+  // Static exchange rates (base: USD)
+  private static readonly rates: Record<string, number> = {
+    USD: 1.0,
+    GBP: 0.79,    // 1 USD = 0.79 GBP
+    EUR: 0.85,    // 1 USD = 0.85 EUR
+    INR: 83.12,   // 1 USD = 83.12 INR
+    AED: 3.67,    // 1 USD = 3.67 AED
+    SGD: 1.34,    // 1 USD = 1.34 SGD
   };
 
-  static getRate(from: string, to: string): number {
-    if (from === to) return 1.0;
+  // Convert amount from source currency to target currency
+  static convert(amount: number, fromCurrency: string, toCurrency: string): number {
+    if (fromCurrency === toCurrency) return amount;
     
-    // Check if we have a direct conversion
-    const directKey = `${from}->${to}`;
-    if (this.rates[directKey]) {
-      return this.rates[directKey];
-    }
-
-    // Use USD as pivot for cross-currency conversion
-    const fromToUsd = this.rates[from];
-    const usdToTarget = 1 / this.rates[to];
+    const fromRate = this.rates[fromCurrency.toUpperCase()];
+    const toRate = this.rates[toCurrency.toUpperCase()];
     
-    if (!fromToUsd || !this.rates[to]) {
-      throw new Error(`Currency conversion not supported: ${from} to ${to}`);
+    if (!fromRate || !toRate) {
+      console.warn(`Currency conversion not supported: ${fromCurrency} -> ${toCurrency}, using 1:1 rate`);
+      return amount;
     }
-
-    return fromToUsd * usdToTarget;
+    
+    // Convert to USD first, then to target currency
+    const usdAmount = amount / fromRate;
+    return usdAmount * toRate;
   }
 
-  static convert(amount: number, from: string, to: string): number {
-    const rate = this.getRate(from, to);
-    return Math.round(amount * rate * 100) / 100; // Round to 2 decimal places
-  }
-
-  static convertToBase(amount: number, from: string, baseCurrency: string): number {
-    return this.convert(amount, from, baseCurrency);
-  }
-
+  // Get supported currencies
   static getSupportedCurrencies(): string[] {
     return Object.keys(this.rates);
+  }
+
+  // Check if currency is supported
+  static isSupported(currency: string): boolean {
+    return currency.toUpperCase() in this.rates;
   }
 }

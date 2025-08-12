@@ -3,6 +3,9 @@
 This is a comprehensive business intelligence dashboard application built with React and Express. It features user authentication, role-based access control, post-login onboarding, and a conditional dashboard UI with dark theme and light green accents. The application provides AI-powered business insights, inventory management, sales intelligence, customer analytics, and return abuse detection based on user roles and onboarding preferences.
 
 ## Recent Changes (Latest First)
+- **2025-01-08**: Fixed /api/recon/ingest endpoint hanging with comprehensive solution including Multer memory storage, robust CSV parsing (case-insensitive headers, handle commas in numbers), try/catch for duplicate keys, console logging, and guaranteed JSON responses
+- **2025-01-08**: Updated CurrencyService with static in-memory rates for GBP, USD, AED, SGD, INR to avoid external API calls
+- **2025-01-08**: Enhanced reconciliation service with detailed logging, timeout protection, and graceful error handling for duplicate events/tasks
 - **2025-01-08**: Implemented Global Payment Reconciliation V1 system with automated matching algorithms and multi-currency support
 - **2025-01-08**: Created reconciliation service with CSV parsing, currency conversion, and payment mismatch detection
 - **2025-01-08**: Built comprehensive reconciliation UI with batch management and detailed row-level views
