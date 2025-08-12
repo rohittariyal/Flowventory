@@ -1,0 +1,80 @@
+You’re fixing Purchase Order creation in my Node+Express+Mongo + React app.
+ 
+Symptoms:
+- “Suggest Reorder” modal opens and calls POST /api/po
+- No PO appears in DB or on /purchase-orders list
+ 
+Do the following EXACT changes:
+ 
+1) Backend: Model + Router
+- Create models/purchaseOrder.model.ts (or .js) with Mongoose:
+  const PurchaseOrderSchema = new Schema({
+    sku: { type: String, required: true },
+    qty: { type: Number, required: true, min: 1 },
+    supplierName: { type: String, required: true },
+    status: { type: String, enum: ["DRAFT","SENT","RECEIVED","CANCELLED"], default: "DRAFT" },
+    createdAt: { type: Date, default: Date.now }
+  });
+  export default mongoose.model("PurchaseOrder", PurchaseOrderSchema);
+ 
+- Create routes/po.routes.ts:
+  import express from "express";
+  import PurchaseOrder from "../models/purchaseOrder.model";
+  const router = express.Router();
+ 
+  // health
+  router.get("/health", (_req,res)=>res.json({ok:true}));
+ 
+  // create
+  router.post("/", async (req,res) => {
+    try {
+      const { sku, qty, supplierName } = req.body || {};
+      if (!sku || !qty || !supplierName) return res.status(400).json({ error: "Missing sku/qty/supplierName" });
+      const po = await PurchaseOrder.create({ sku, qty, supplierName });
+      console.log("[PO] created", po._id, sku, qty, supplierName);
+      return res.status(201).json(po);
+    } catch (e) {
+      console.error("[PO] create error", e);
+      return res.status(500).json({ error: "PO create failed", detail: String(e?.message || e) });
+    }
+  });
+ 
+  // list
+  router.get("/", async (_req,res) => {
+    const list = await PurchaseOrder.find().sort({ createdAt: -1 }).lean();
+    return res.json(list);
+  });
+ 
+  export default router;
+ 
+- In server index/app file:
+  - Ensure JSON body parser BEFORE routes: app.use(express.json());
+  - Mount router with correct prefix: app.use("/api/po", poRouter);
+  - Ensure CORS is enabled for the client origin.
+ 
+2) Frontend: API call correctness
+- In the Inventory “Create Purchase Order” action, POST to EXACT path "/api/po" with:
+  fetch("/api/po", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ sku, qty: Number(qty), supplierName })
+  })
+  .then(r => r.ok ? r.json() : r.json().then(e=>Promise.reject(e)))
+  .then(() => toast.success("PO Created"))
+  .catch(err => toast.error(err?.error || "PO failed"));
+ 
+- Add a quick PO list page (route “/purchase-orders”):
+  - On mount, GET "/api/po"
+  - Render table with createdAt, sku, qty, supplierName, status
+ 
+3) Sanity hooks / logging
+- Add console.log on server when POST /api/po is hit and when a PO is created.
+- Add a GET /api/po/health that returns {ok:true} for quick connectivity checks.
+ 
+4) Acceptance tests (must pass):
+- Hitting GET /api/po/health returns {ok:true}
+- From UI, creating a PO returns 201 and shows “PO Created” toast
+- Visiting /purchase-orders shows the new PO at the top
+- Server logs include “[PO] created <id> ...”
+ 
+DO NOT refactor unrelated code, routes, or styling. Keep changes minimal and focused on making PO creation work.

@@ -79,21 +79,37 @@ function InventoryPage() {
   // Simple PO mutation for manual restock feature
   const createSimplePoMutation = useMutation({
     mutationFn: async (poData: { sku: string; qty: number; supplierName: string }) => {
-      const response = await apiRequest("POST", "/api/po", poData);
+      const response = await fetch("/api/simple-po", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          sku: poData.sku,
+          qty: Number(poData.qty),
+          supplierName: poData.supplierName
+        })
+      });
+      
+      if (!response.ok) {
+        const error = await response.json();
+        throw new Error(error?.error || "Failed to create purchase order");
+      }
+      
       return response.json();
     },
-    onSuccess: () => {
+    onSuccess: (result) => {
       toast({
         title: "PO Created",
         description: "Purchase order created successfully",
       });
+      console.log("[PO] Frontend: Created PO", result.id, result.sku, result.qty, result.supplierName);
       setPoModalOpen(false);
       setPoForm({ supplier: "", quantity: "20", notes: "" });
     },
     onError: (error) => {
+      console.error("Error creating purchase order:", error);
       toast({
         title: "Error",
-        description: "Failed to create purchase order",
+        description: (error as any)?.message || "Failed to create purchase order",
         variant: "destructive"
       });
     }

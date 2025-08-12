@@ -13,6 +13,7 @@ import ReconciliationPage from "@/pages/reconciliation-page";
 import ReconciliationDetailPage from "@/pages/reconciliation-detail-page";
 import ActionCenterPage from "@/pages/action-center-page";
 import InventoryPage from "@/pages/inventory-page";
+import PurchaseOrdersPage from "@/pages/purchase-orders-page";
 import { ProtectedRoute } from "./lib/protected-route";
 
 function Router() {
@@ -23,6 +24,7 @@ function Router() {
       <ProtectedRoute path="/team" component={TeamPage} />
       <ProtectedRoute path="/action-center" component={ActionCenterPage} />
       <ProtectedRoute path="/inventory" component={InventoryPage} />
+      <ProtectedRoute path="/purchase-orders" component={PurchaseOrdersPage} />
       <ProtectedRoute path="/recon" component={ReconciliationPage} />
       <ProtectedRoute path="/recon/:batchId" component={ReconciliationDetailPage} />
       <Route path="/auth" component={AuthPage} />

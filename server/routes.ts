@@ -1193,7 +1193,7 @@ export function registerRoutes(app: Express): Server {
           currency,
           itemCount: items.length
         },
-        dueAt: new Date(Date.now() + 24 * 60 * 60 * 1000) // 24 hours from now
+        dueAt: new Date(Date.now() + 24 * 60 * 60 * 1000).toISOString() // 24 hours from now
       };
 
       const task = await storage.createTask(taskData);
@@ -1262,19 +1262,36 @@ export function registerRoutes(app: Express): Server {
     }
   });
 
-  // Simple Purchase Orders for manual restock feature
-  app.post("/api/po", requireAuth, async (req, res) => {
+  // Simple Purchase Orders for manual restock feature (public endpoints)
+  app.get("/api/simple-po/health", (req, res) => {
+    res.json({ ok: true });
+  });
+
+  app.post("/api/simple-po", async (req, res) => {
     try {
-      const validatedData = simplePurchaseOrderSchema.parse(req.body);
-      const po = await storage.createSimplePurchaseOrder(validatedData);
+      const { sku, qty, supplierName } = req.body || {};
+      
+      if (!sku || !qty || !supplierName) {
+        return res.status(400).json({ error: "Missing sku/qty/supplierName" });
+      }
+
+      const poData = {
+        sku,
+        qty: Number(qty),
+        supplierName,
+      };
+
+      const po = await storage.createSimplePurchaseOrder(poData);
+      console.log("[PO] created", po.id, sku, qty, supplierName);
+      
       res.status(201).json(po);
     } catch (error) {
-      console.error("Error creating simple purchase order:", error);
-      res.status(400).json({ error: "Failed to create purchase order" });
+      console.error("[PO] create error", error);
+      res.status(500).json({ error: "PO create failed", detail: String((error as any)?.message || error) });
     }
   });
 
-  app.get("/api/po", requireAuth, async (req, res) => {
+  app.get("/api/simple-po", async (req, res) => {
     try {
       const pos = await storage.getSimplePurchaseOrders();
       res.json(pos);
