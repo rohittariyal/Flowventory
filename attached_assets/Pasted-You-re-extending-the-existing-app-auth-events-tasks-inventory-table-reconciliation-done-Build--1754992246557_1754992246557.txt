@@ -1,0 +1,113 @@
+You’re extending the existing app (auth, events/tasks, inventory table, reconciliation done).
+Build **Restock Autopilot V1**: supplier catalog + AI reorder suggestion + PO drafts.
+Keep code style and UI theme consistent. No global redesigns.
+ 
+# Goals
+- Store suppliers per SKU, lead times, MOQs, pack sizes, and unit costs (multi-currency)
+- From Inventory rows with low stock, click “Suggest Reorder” → get qty recommendation (days-cover based)
+- “Create PO” modal auto-fills supplier, currency, unit price, tax; saves a Purchase Order draft
+- Optional: send PO PDF/email to supplier (configurable)
+- Create/link a RESTOCK task automatically (idempotent) with the PO attached
+ 
+# Data Models (Mongo/Mongoose; adapt to ORM)
+Supplier {
+  _id, workspaceId,
+  name, email?, phone?,
+  currency: "INR"|"GBP"|"USD"|"AED"|"SGD",
+  address?: string,
+  skus: [{
+    sku: string,
+    unitCost: number,
+    packSize?: number,          // e.g., sold in 12s
+    moq?: number,
+    leadTimeDays: number
+  }],
+  notes?: string,
+  createdAt, updatedAt
+}
+ 
+ReorderPolicy {
+  _id, workspaceId, sku: string,
+  targetDaysCover: number,      // e.g., 14
+  safetyDays: number,           // e.g., 3
+  maxDaysCover?: number         // cap to avoid overstock
+}
+ 
+PurchaseOrder {
+  _id, workspaceId,
+  supplierId, supplierName, supplierEmail?,
+  currency, status: "DRAFT"|"SENT"|"RECEIVED"|"CANCELLED",
+  items: [{
+    sku, name?, qty, unitCost, taxRate?, subtotal, taxAmount, total
+  }],
+  totals: { subtotal, tax, grandTotal },
+  notes?: string,
+  linkedTaskId?: ObjectId,
+  createdAt, updatedAt
+}
+ 
+# Services
+- CurrencyService (reuse): convert supplier currency to workspace.baseCurrency for analytics display only (store original currency on PO)
+- ReorderService.suggestQty({ sku, stock, dailySales, leadTimeDays, targetDaysCover, safetyDays, packSize, moq }):
+    // naive v1 formula
+    demandWindow = (leadTimeDays + safetyDays + targetDaysCover)
+    recommended = ceil( max(0, demandWindow * dailySales - stock) )
+    if (packSize) recommended = ceil(recommended / packSize) * packSize
+    if (moq) recommended = max(recommended, moq)
+    return recommended
+ 
+# Endpoints
+GET  /api/suppliers?sku=SKU   -> list suppliers for a sku
+POST /api/suppliers           -> create/update supplier (basic CRUD endpoints as needed)
+ 
+GET  /api/reorder/policy?sku=SKU
+POST /api/reorder/policy      -> upsert policy per sku
+ 
+POST /api/reorder/suggest
+Body: { sku, stock, dailySales, supplierId? }
+- If supplierId not provided, pick the first supplier with that SKU.
+- Load supplier.skus[sku], ReorderPolicy[sku]; compute qty via ReorderService.
+- Return { recommendedQty, supplier, policy, unitCost, leadTimeDays }
+ 
+POST /api/po
+Body: {
+  supplierId, currency, items: [{ sku, qty }], notes?
+}
+- Fetch supplier + sku pricing/pack/tax details
+- Build PO in supplier currency; compute totals (tax optional)
+- Create RESTOCK task (idempotent, sourceEventId can be the latest INVENTORY_LOW event for that sku if available)
+- Return { po, task }
+ 
+PATCH /api/po/:id/status
+- Update to SENT/RECEIVED/CANCELLED
+- If SENT and email config present, send email with simple PO PDF/HTML
+ 
+# Frontend (React; keep existing theme)
+Inventory Table:
+- Add button on low-stock rows: “Suggest Reorder”
+  - Calls POST /api/reorder/suggest
+  - Shows modal with: supplier, unit cost, lead time, recommended qty (editable)
+  - CTA: “Create PO” -> POST /api/po; on success, toast + link to the created PO and Action Center task
+ 
+New pages:
+- Suppliers (basic table + CRUD modal)
+  Columns: Name, Currency, SKUs count, Last updated
+- Purchase Orders (list + detail)
+  List columns: CreatedAt, Supplier, Status, Items count, Grand Total (show original currency + baseCurrency in small text)
+  Detail: items table, totals, status dropdown, notes, “Send Email” button if email configured
+ 
+# Email (optional v1)
+- If SMTP envs exist, allow sending PO as simple HTML email to supplierEmail with items & totals.
+ 
+# Acceptance Criteria
+- From an Inventory low-stock row, “Suggest Reorder” returns a sensible qty using leadTime and targetDaysCover
+- Creating a PO generates a DRAFT with correct currency/totals and creates/links a RESTOCK task (idempotent)
+- PO List and Detail pages render without console errors
+- Changing PO status to SENT works; RECEIVED doesn’t break (no stock mutation yet)
+- Suppliers CRUD works; supplier.skus mapping editable
+ 
+# Seeds
+- supplier.sample.json (UK GBP): { name:"Alpha Textiles UK", currency:"GBP", skus:[{ sku:"SKU-GREEN-TEE", unitCost:4.2, packSize:12, moq:24, leadTimeDays:5 }] }
+- reorder.policy.sample.json: { sku:"SKU-GREEN-TEE", targetDaysCover:14, safetyDays:3 }
+ 
+Keep changes minimal and consistent. Generate models, routes, basic UI, and wire Inventory “Suggest Reorder” and “Create PO” flows end-to-end.

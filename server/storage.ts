@@ -1,4 +1,4 @@
-import { type User, type InsertUser, type OnboardingData, type InsertOnboardingData, type PlatformConnections, type Organization, type TeamInvitation, type InviteTeamMemberData, type UpdateTeamMemberData, type Notification, type CreateNotificationData, type Event, type InsertEvent, type Task, type InsertTask, type CreateEventData, type CreateTaskData, type UpdateTaskData, type PurchaseOrder, type InsertPurchaseOrder, type Comment, type InsertComment, type Activity, type InsertActivity, type Rule, type InsertRule, type CreateCommentData, type CreateRuleData, type ReconBatch, type InsertReconBatch, type ReconRow, type InsertReconRow, type ReconIngestData, type UpdateReconRowData } from "@shared/schema";
+import { type User, type InsertUser, type OnboardingData, type InsertOnboardingData, type PlatformConnections, type Organization, type TeamInvitation, type InviteTeamMemberData, type UpdateTeamMemberData, type Notification, type CreateNotificationData, type Event, type InsertEvent, type Task, type InsertTask, type CreateEventData, type CreateTaskData, type UpdateTaskData, type PurchaseOrder, type InsertPurchaseOrder, type Comment, type InsertComment, type Activity, type InsertActivity, type Rule, type InsertRule, type CreateCommentData, type CreateRuleData, type ReconBatch, type InsertReconBatch, type ReconRow, type InsertReconRow, type ReconIngestData, type UpdateReconRowData, type Supplier, type InsertSupplier, type ReorderPolicy, type InsertReorderPolicy, type ReorderSuggestData, type UpdatePurchaseOrderStatusData } from "@shared/schema";
 import { randomUUID } from "crypto";
 import session from "express-session";
 import createMemoryStore from "memorystore";
@@ -73,6 +73,18 @@ export interface IStorage {
   createReconRow(rowData: InsertReconRow): Promise<ReconRow>;
   getReconBatches(filters?: { region?: string, source?: string, limit?: number, offset?: number }): Promise<ReconBatch[]>;
   getReconBatch(id: string): Promise<ReconBatch | undefined>;
+
+  // Restock Autopilot - Supplier methods
+  createSupplier(supplierData: InsertSupplier): Promise<Supplier>;
+  getSuppliers(workspaceId: string, filters?: { sku?: string }): Promise<Supplier[]>;
+  getSupplier(id: string): Promise<Supplier | undefined>;
+  updateSupplier(id: string, updates: Partial<Supplier>): Promise<Supplier | undefined>;
+  deleteSupplier(id: string): Promise<void>;
+
+  // Restock Autopilot - Reorder Policy methods
+  createReorderPolicy(policyData: InsertReorderPolicy): Promise<ReorderPolicy>;
+  getReorderPolicy(workspaceId: string, sku: string): Promise<ReorderPolicy | undefined>;
+  updateReorderPolicy(workspaceId: string, sku: string, updates: Partial<ReorderPolicy>): Promise<ReorderPolicy | undefined>;
   getReconRows(batchId: string, filters?: { status?: string, hasDiff?: boolean, limit?: number, offset?: number }): Promise<ReconRow[]>;
   getReconRow(id: string): Promise<ReconRow | undefined>;
   updateReconRow(id: string, updates: UpdateReconRowData): Promise<ReconRow | undefined>;
@@ -95,6 +107,8 @@ export class MemStorage implements IStorage {
   private rules: Map<string, Rule>;
   private reconBatches: Map<string, ReconBatch>;
   private reconRows: Map<string, ReconRow>;
+  private suppliers: Map<string, Supplier>;
+  private reorderPolicies: Map<string, ReorderPolicy>;
   public sessionStore: session.Store;
 
   constructor() {
@@ -111,6 +125,8 @@ export class MemStorage implements IStorage {
     this.rules = new Map();
     this.reconBatches = new Map();
     this.reconRows = new Map();
+    this.suppliers = new Map();
+    this.reorderPolicies = new Map();
     this.sessionStore = new MemoryStore({
       checkPeriod: 86400000,
     });
@@ -1103,6 +1119,96 @@ export class MemStorage implements IStorage {
       mismatchedCount: totals.mismatchedCount,
     };
     this.reconBatches.set(batchId, updatedBatch);
+  }
+
+  // Restock Autopilot - Supplier methods
+  async createSupplier(supplierData: InsertSupplier): Promise<Supplier> {
+    const id = randomUUID();
+    const now = new Date();
+    const supplier: Supplier = {
+      id,
+      ...supplierData,
+      createdAt: now,
+      updatedAt: now,
+    };
+    this.suppliers.set(id, supplier);
+    return supplier;
+  }
+
+  async getSuppliers(workspaceId: string, filters?: { sku?: string }): Promise<Supplier[]> {
+    let suppliers = Array.from(this.suppliers.values()).filter(s => s.workspaceId === workspaceId);
+
+    if (filters?.sku) {
+      suppliers = suppliers.filter(s => 
+        s.skus.some(skuData => skuData.sku === filters.sku)
+      );
+    }
+
+    return suppliers.sort((a, b) => b.updatedAt.getTime() - a.updatedAt.getTime());
+  }
+
+  async getSupplier(id: string): Promise<Supplier | undefined> {
+    return this.suppliers.get(id);
+  }
+
+  async updateSupplier(id: string, updates: Partial<Supplier>): Promise<Supplier | undefined> {
+    const supplier = this.suppliers.get(id);
+    if (!supplier) return undefined;
+
+    const updatedSupplier = {
+      ...supplier,
+      ...updates,
+      updatedAt: new Date(),
+    };
+
+    this.suppliers.set(id, updatedSupplier);
+    return updatedSupplier;
+  }
+
+  async deleteSupplier(id: string): Promise<void> {
+    this.suppliers.delete(id);
+  }
+
+  // Restock Autopilot - Reorder Policy methods
+  async createReorderPolicy(policyData: InsertReorderPolicy): Promise<ReorderPolicy> {
+    const id = randomUUID();
+    const now = new Date();
+    const policy: ReorderPolicy = {
+      id,
+      ...policyData,
+      createdAt: now,
+      updatedAt: now,
+    };
+
+    // Remove existing policy for this SKU if any
+    const existingKey = Array.from(this.reorderPolicies.entries())
+      .find(([_, p]) => p.workspaceId === policyData.workspaceId && p.sku === policyData.sku)?.[0];
+    
+    if (existingKey) {
+      this.reorderPolicies.delete(existingKey);
+    }
+
+    this.reorderPolicies.set(id, policy);
+    return policy;
+  }
+
+  async getReorderPolicy(workspaceId: string, sku: string): Promise<ReorderPolicy | undefined> {
+    return Array.from(this.reorderPolicies.values())
+      .find(p => p.workspaceId === workspaceId && p.sku === sku);
+  }
+
+  async updateReorderPolicy(workspaceId: string, sku: string, updates: Partial<ReorderPolicy>): Promise<ReorderPolicy | undefined> {
+    const policy = await this.getReorderPolicy(workspaceId, sku);
+    if (!policy) return undefined;
+
+    const updatedPolicy = {
+      ...policy,
+      ...updates,
+      updatedAt: new Date(),
+    };
+
+    this.reorderPolicies.set(policy.id, updatedPolicy);
+    return updatedPolicy;
   }
 }
 

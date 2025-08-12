@@ -3,7 +3,7 @@ import { createServer, type Server } from "http";
 import { setupAuth } from "./auth";
 import { storage } from "./storage";
 import { syncManager } from "./syncAdapters";
-import { onboardingSchema, platformConnectionSchema, createNotificationSchema, markNotificationReadSchema, reconIngestSchema, updateReconRowSchema, type PlatformConnections } from "@shared/schema";
+import { onboardingSchema, platformConnectionSchema, createNotificationSchema, markNotificationReadSchema, reconIngestSchema, updateReconRowSchema, insertSupplierSchema, insertReorderPolicySchema, reorderSuggestSchema, updatePurchaseOrderStatusSchema, type PlatformConnections } from "@shared/schema";
 import { ReconciliationService } from "./reconService";
 import multer from "multer";
 
@@ -922,6 +922,343 @@ export function registerRoutes(app: Express): Server {
     } catch (error) {
       console.error("Error updating recon row:", error);
       res.status(500).json({ error: "Failed to update reconciliation row" });
+    }
+  });
+
+  // Restock Autopilot V1 - Supplier API routes
+  app.get("/api/suppliers", requireAuth, async (req, res) => {
+    try {
+      const user = req.user!;
+      const workspaceId = user.organizationId || user.id;
+      const { sku } = req.query;
+      
+      const filters = sku ? { sku: sku as string } : undefined;
+      const suppliers = await storage.getSuppliers(workspaceId, filters);
+      
+      res.json(suppliers);
+    } catch (error) {
+      console.error("Error fetching suppliers:", error);
+      res.status(500).json({ error: "Failed to fetch suppliers" });
+    }
+  });
+
+  app.post("/api/suppliers", requireAuth, async (req, res) => {
+    try {
+      const user = req.user!;
+      const workspaceId = user.organizationId || user.id;
+      
+      const supplierData = {
+        ...req.body,
+        workspaceId
+      };
+
+      const supplier = await storage.createSupplier(supplierData);
+      res.status(201).json(supplier);
+    } catch (error) {
+      console.error("Error creating supplier:", error);
+      res.status(400).json({ error: "Failed to create supplier" });
+    }
+  });
+
+  app.get("/api/suppliers/:id", requireAuth, async (req, res) => {
+    try {
+      const supplier = await storage.getSupplier(req.params.id);
+      if (!supplier) {
+        return res.status(404).json({ error: "Supplier not found" });
+      }
+      res.json(supplier);
+    } catch (error) {
+      console.error("Error fetching supplier:", error);
+      res.status(500).json({ error: "Failed to fetch supplier" });
+    }
+  });
+
+  app.put("/api/suppliers/:id", requireAuth, async (req, res) => {
+    try {
+      const supplier = await storage.updateSupplier(req.params.id, req.body);
+      if (!supplier) {
+        return res.status(404).json({ error: "Supplier not found" });
+      }
+      res.json(supplier);
+    } catch (error) {
+      console.error("Error updating supplier:", error);
+      res.status(500).json({ error: "Failed to update supplier" });
+    }
+  });
+
+  app.delete("/api/suppliers/:id", requireAuth, async (req, res) => {
+    try {
+      await storage.deleteSupplier(req.params.id);
+      res.json({ message: "Supplier deleted successfully" });
+    } catch (error) {
+      console.error("Error deleting supplier:", error);
+      res.status(500).json({ error: "Failed to delete supplier" });
+    }
+  });
+
+  // Restock Autopilot - Reorder Policy API routes
+  app.get("/api/reorder/policy", requireAuth, async (req, res) => {
+    try {
+      const user = req.user!;
+      const workspaceId = user.organizationId || user.id;
+      const { sku } = req.query;
+      
+      if (!sku) {
+        return res.status(400).json({ error: "SKU is required" });
+      }
+      
+      const policy = await storage.getReorderPolicy(workspaceId, sku as string);
+      res.json(policy);
+    } catch (error) {
+      console.error("Error fetching reorder policy:", error);
+      res.status(500).json({ error: "Failed to fetch reorder policy" });
+    }
+  });
+
+  app.post("/api/reorder/policy", requireAuth, async (req, res) => {
+    try {
+      const user = req.user!;
+      const workspaceId = user.organizationId || user.id;
+      
+      const policyData = {
+        ...req.body,
+        workspaceId
+      };
+
+      const policy = await storage.createReorderPolicy(policyData);
+      res.status(201).json(policy);
+    } catch (error) {
+      console.error("Error creating reorder policy:", error);
+      res.status(400).json({ error: "Failed to create reorder policy" });
+    }
+  });
+
+  // Restock Autopilot - Reorder Suggestion API route
+  app.post("/api/reorder/suggest", requireAuth, async (req, res) => {
+    try {
+      const user = req.user!;
+      const workspaceId = user.organizationId || user.id;
+      const { sku, stock, dailySales, supplierId } = req.body;
+
+      if (!sku || stock === undefined || dailySales === undefined) {
+        return res.status(400).json({ error: "SKU, stock, and dailySales are required" });
+      }
+
+      // Find supplier (use provided or find first one with this SKU)
+      let supplier;
+      if (supplierId) {
+        supplier = await storage.getSupplier(supplierId);
+      } else {
+        const suppliers = await storage.getSuppliers(workspaceId, { sku });
+        supplier = suppliers[0];
+      }
+
+      if (!supplier) {
+        return res.status(404).json({ error: "No supplier found for this SKU" });
+      }
+
+      // Find SKU data from supplier
+      const skuData = supplier.skus.find(s => s.sku === sku);
+      if (!skuData) {
+        return res.status(404).json({ error: "SKU not found in supplier catalog" });
+      }
+
+      // Get or create default reorder policy
+      let policy = await storage.getReorderPolicy(workspaceId, sku);
+      if (!policy) {
+        policy = await storage.createReorderPolicy({
+          workspaceId,
+          sku,
+          targetDaysCover: 14,
+          safetyDays: 3
+        });
+      }
+
+      // Import ReorderService for calculation
+      const { ReorderService } = await import("./reorderService");
+
+      // Calculate suggestion
+      const suggestion = ReorderService.suggestQuantity({
+        sku,
+        stock,
+        dailySales,
+        leadTimeDays: skuData.leadTimeDays,
+        targetDaysCover: policy.targetDaysCover,
+        safetyDays: policy.safetyDays,
+        packSize: skuData.packSize,
+        moq: skuData.moq,
+        maxDaysCover: policy.maxDaysCover || undefined
+      });
+
+      // Calculate cost estimate
+      const costEstimate = ReorderService.calculateCostEstimate(
+        suggestion.recommendedQty,
+        skuData.unitCost,
+        0 // No tax rate by default
+      );
+
+      res.json({
+        ...suggestion,
+        supplier: {
+          id: supplier.id,
+          name: supplier.name,
+          currency: supplier.currency,
+          email: supplier.email
+        },
+        skuData,
+        policy,
+        costEstimate: {
+          ...costEstimate,
+          currency: supplier.currency
+        }
+      });
+    } catch (error) {
+      console.error("Error generating reorder suggestion:", error);
+      res.status(500).json({ error: "Failed to generate reorder suggestion" });
+    }
+  });
+
+  // Restock Autopilot - Purchase Order API routes
+  app.post("/api/po", requireAuth, async (req, res) => {
+    try {
+      const user = req.user!;
+      const workspaceId = user.organizationId || user.id;
+      
+      const { supplierId, currency, items, notes } = req.body;
+
+      if (!supplierId || !currency || !items || !Array.isArray(items) || items.length === 0) {
+        return res.status(400).json({ error: "supplierId, currency, and items are required" });
+      }
+
+      // Get supplier details
+      const supplier = await storage.getSupplier(supplierId);
+      if (!supplier) {
+        return res.status(404).json({ error: "Supplier not found" });
+      }
+
+      // Calculate totals for all items
+      let subtotal = 0;
+      let tax = 0;
+      const processedItems = items.map(item => {
+        const itemSubtotal = item.qty * item.unitCost;
+        const itemTax = itemSubtotal * ((item.taxRate || 0) / 100);
+        const itemTotal = itemSubtotal + itemTax;
+        
+        subtotal += itemSubtotal;
+        tax += itemTax;
+        
+        return {
+          ...item,
+          subtotal: Math.round(itemSubtotal * 100) / 100,
+          taxAmount: Math.round(itemTax * 100) / 100,
+          total: Math.round(itemTotal * 100) / 100
+        };
+      });
+
+      const grandTotal = subtotal + tax;
+
+      // Create PO
+      const poData = {
+        workspaceId,
+        supplierId,
+        supplierName: supplier.name,
+        supplierEmail: supplier.email || undefined,
+        currency,
+        status: "DRAFT" as const,
+        items: processedItems,
+        totals: {
+          subtotal: Math.round(subtotal * 100) / 100,
+          tax: Math.round(tax * 100) / 100,
+          grandTotal: Math.round(grandTotal * 100) / 100
+        },
+        notes
+      };
+
+      const po = await storage.createPurchaseOrder(poData);
+
+      // Create RESTOCK task (idempotent)
+      const taskData = {
+        title: `Process PO for ${supplier.name}`,
+        description: `Review and process purchase order ${po.id} with ${items.length} items`,
+        type: "RESTOCK" as const,
+        priority: "P2" as const,
+        status: "TODO" as const,
+        assigneeId: user.id,
+        sourceEventId: undefined, // Could link to inventory low events if available
+        metadata: {
+          purchaseOrderId: po.id,
+          supplierId: supplier.id,
+          supplierName: supplier.name,
+          totalAmount: grandTotal,
+          currency,
+          itemCount: items.length
+        },
+        dueAt: new Date(Date.now() + 24 * 60 * 60 * 1000) // 24 hours from now
+      };
+
+      const task = await storage.createTask(taskData);
+
+      // Link task to PO
+      const updatedPO = await storage.updatePurchaseOrder(po.id, { linkedTaskId: task.id });
+
+      res.status(201).json({
+        po: updatedPO,
+        task
+      });
+    } catch (error) {
+      console.error("Error creating purchase order:", error);
+      res.status(500).json({ error: "Failed to create purchase order" });
+    }
+  });
+
+  app.get("/api/po", requireAuth, async (req, res) => {
+    try {
+      const user = req.user!;
+      const workspaceId = user.organizationId || user.id;
+      const { status } = req.query;
+      
+      const filters = status ? { status: status as string } : undefined;
+      const pos = await storage.getPurchaseOrders(workspaceId, filters);
+      
+      res.json(pos);
+    } catch (error) {
+      console.error("Error fetching purchase orders:", error);
+      res.status(500).json({ error: "Failed to fetch purchase orders" });
+    }
+  });
+
+  app.get("/api/po/:id", requireAuth, async (req, res) => {
+    try {
+      const po = await storage.getPurchaseOrder(req.params.id);
+      if (!po) {
+        return res.status(404).json({ error: "Purchase order not found" });
+      }
+      res.json(po);
+    } catch (error) {
+      console.error("Error fetching purchase order:", error);
+      res.status(500).json({ error: "Failed to fetch purchase order" });
+    }
+  });
+
+  app.patch("/api/po/:id/status", requireAuth, async (req, res) => {
+    try {
+      const { status } = req.body;
+      
+      if (!["DRAFT", "SENT", "RECEIVED", "CANCELLED"].includes(status)) {
+        return res.status(400).json({ error: "Invalid status" });
+      }
+
+      const po = await storage.updatePurchaseOrder(req.params.id, { status });
+      if (!po) {
+        return res.status(404).json({ error: "Purchase order not found" });
+      }
+
+      // TODO: If status is SENT and email config exists, send email notification
+
+      res.json(po);
+    } catch (error) {
+      console.error("Error updating purchase order status:", error);
+      res.status(500).json({ error: "Failed to update purchase order status" });
     }
   });
 

@@ -146,28 +146,60 @@ export const teamInvitationsRelations = relations(teamInvitations, ({ one }) => 
   }),
 }));
 
-// Purchase Orders Schema
+// Purchase Orders Schema - Restock Autopilot V1
 export const purchaseOrders = pgTable("purchase_orders", {
-  id: text("id").primaryKey().default(sql`gen_random_uuid()`),
-  sku: text("sku").notNull(),
-  supplier: text("supplier").notNull(),
-  quantity: integer("quantity").notNull(),
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  workspaceId: varchar("workspace_id").notNull(),
+  supplierId: varchar("supplier_id").notNull(),
+  supplierName: text("supplier_name").notNull(),
+  supplierEmail: text("supplier_email"),
+  currency: text("currency", { enum: ["INR", "GBP", "USD", "AED", "SGD"] }).notNull(),
+  status: text("status", { enum: ["DRAFT", "SENT", "RECEIVED", "CANCELLED"] }).notNull().default('DRAFT'),
+  items: jsonb("items").$type<{
+    sku: string;
+    name?: string;
+    qty: number;
+    unitCost: number;
+    taxRate?: number;
+    subtotal: number;
+    taxAmount: number;
+    total: number;
+  }[]>().notNull().default([]),
+  totals: jsonb("totals").$type<{
+    subtotal: number;
+    tax: number;
+    grandTotal: number;
+  }>().notNull().default({ subtotal: 0, tax: 0, grandTotal: 0 }),
   notes: text("notes"),
-  status: text("status", { enum: ["draft", "pending", "approved", "cancelled"] }).notNull().default("draft"),
-  createdBy: text("created_by").notNull(),
-  organizationId: text("organization_id").notNull(),
-  createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
-  updatedAt: timestamp("updated_at", { withTimezone: true }).defaultNow().notNull(),
+  linkedTaskId: varchar("linked_task_id").references(() => tasks.id),
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+  updatedAt: timestamp("updated_at").defaultNow().notNull()
 });
 
-export const insertPurchaseOrderSchema = createInsertSchema(purchaseOrders).omit({
-  id: true,
-  createdAt: true,
-  updatedAt: true,
-}).extend({
-  sku: z.string().min(1, "SKU is required"),
-  supplier: z.string().min(1, "Supplier is required"),
-  quantity: z.number().min(1, "Quantity must be at least 1"),
+export const insertPurchaseOrderSchema = z.object({
+  workspaceId: z.string(),
+  supplierId: z.string(),
+  supplierName: z.string(),
+  supplierEmail: z.string().optional(),
+  currency: z.enum(["INR", "GBP", "USD", "AED", "SGD"]),
+  status: z.enum(["DRAFT", "SENT", "RECEIVED", "CANCELLED"]).default('DRAFT'),
+  items: z.array(z.object({
+    sku: z.string(),
+    name: z.string().optional(),
+    qty: z.number().int().min(1),
+    unitCost: z.number().min(0),
+    taxRate: z.number().min(0).max(100).optional(),
+    subtotal: z.number(),
+    taxAmount: z.number(),
+    total: z.number()
+  })),
+  totals: z.object({
+    subtotal: z.number(),
+    tax: z.number(),
+    grandTotal: z.number()
+  }),
+  notes: z.string().optional(),
+  linkedTaskId: z.string().optional()
 });
 
 export type PurchaseOrder = typeof purchaseOrders.$inferSelect;
@@ -401,3 +433,81 @@ export type ReconRow = typeof reconRows.$inferSelect;
 export type InsertReconRow = typeof reconRows.$inferInsert;
 export type ReconIngestData = z.infer<typeof reconIngestSchema>;
 export type UpdateReconRowData = z.infer<typeof updateReconRowSchema>;
+
+// Restock Autopilot V1 - Supplier schema
+export const suppliers = pgTable("suppliers", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  workspaceId: varchar("workspace_id").notNull(),
+  name: text("name").notNull(),
+  email: text("email"),
+  phone: text("phone"),
+  currency: text("currency", { enum: ["INR", "GBP", "USD", "AED", "SGD"] }).notNull().default('INR'),
+  address: text("address"),
+  skus: jsonb("skus").$type<{
+    sku: string;
+    unitCost: number;
+    packSize?: number;
+    moq?: number;
+    leadTimeDays: number;
+  }[]>().notNull().default([]),
+  notes: text("notes"),
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+  updatedAt: timestamp("updated_at").defaultNow().notNull()
+});
+
+// Reorder Policy schema
+export const reorderPolicies = pgTable("reorder_policies", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  workspaceId: varchar("workspace_id").notNull(),
+  sku: text("sku").notNull(),
+  targetDaysCover: integer("target_days_cover").notNull().default(14),
+  safetyDays: integer("safety_days").notNull().default(3),
+  maxDaysCover: integer("max_days_cover"),
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+  updatedAt: timestamp("updated_at").defaultNow().notNull()
+});
+
+// Restock Autopilot schemas
+export const insertSupplierSchema = z.object({
+  workspaceId: z.string(),
+  name: z.string().min(1, "Supplier name is required"),
+  email: z.string().email().optional().or(z.literal("")),
+  phone: z.string().optional(),
+  currency: z.enum(["INR", "GBP", "USD", "AED", "SGD"]).default('INR'),
+  address: z.string().optional(),
+  skus: z.array(z.object({
+    sku: z.string().min(1),
+    unitCost: z.number().min(0),
+    packSize: z.number().int().min(1).optional(),
+    moq: z.number().int().min(1).optional(),
+    leadTimeDays: z.number().int().min(0)
+  })).default([]),
+  notes: z.string().optional()
+});
+
+export const insertReorderPolicySchema = z.object({
+  workspaceId: z.string(),
+  sku: z.string().min(1),
+  targetDaysCover: z.number().int().min(1).default(14),
+  safetyDays: z.number().int().min(0).default(3),
+  maxDaysCover: z.number().int().min(1).optional()
+});
+
+export const reorderSuggestSchema = z.object({
+  sku: z.string().min(1),
+  stock: z.number().min(0),
+  dailySales: z.number().min(0),
+  supplierId: z.string().optional()
+});
+
+export const updatePurchaseOrderStatusSchema = z.object({
+  status: z.enum(["DRAFT", "SENT", "RECEIVED", "CANCELLED"])
+});
+
+// Restock Autopilot types
+export type Supplier = typeof suppliers.$inferSelect;
+export type InsertSupplier = z.infer<typeof insertSupplierSchema>;
+export type ReorderPolicy = typeof reorderPolicies.$inferSelect;
+export type InsertReorderPolicy = z.infer<typeof insertReorderPolicySchema>;
+export type ReorderSuggestData = z.infer<typeof reorderSuggestSchema>;
+export type UpdatePurchaseOrderStatusData = z.infer<typeof updatePurchaseOrderStatusSchema>;
