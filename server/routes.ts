@@ -3,7 +3,7 @@ import { createServer, type Server } from "http";
 import { setupAuth } from "./auth";
 import { storage } from "./storage";
 import { syncManager } from "./syncAdapters";
-import { onboardingSchema, platformConnectionSchema, createNotificationSchema, markNotificationReadSchema, reconIngestSchema, updateReconRowSchema, insertSupplierSchema, insertReorderPolicySchema, reorderSuggestSchema, updatePurchaseOrderStatusSchema, type PlatformConnections } from "@shared/schema";
+import { onboardingSchema, platformConnectionSchema, createNotificationSchema, markNotificationReadSchema, reconIngestSchema, updateReconRowSchema, insertSupplierSchema, insertReorderPolicySchema, reorderSuggestSchema, updatePurchaseOrderStatusSchema, simplePurchaseOrderSchema, type PlatformConnections } from "@shared/schema";
 import { ReconciliationService } from "./reconService";
 import multer from "multer";
 
@@ -1259,6 +1259,28 @@ export function registerRoutes(app: Express): Server {
     } catch (error) {
       console.error("Error updating purchase order status:", error);
       res.status(500).json({ error: "Failed to update purchase order status" });
+    }
+  });
+
+  // Simple Purchase Orders for manual restock feature
+  app.post("/api/po", requireAuth, async (req, res) => {
+    try {
+      const validatedData = simplePurchaseOrderSchema.parse(req.body);
+      const po = await storage.createSimplePurchaseOrder(validatedData);
+      res.status(201).json(po);
+    } catch (error) {
+      console.error("Error creating simple purchase order:", error);
+      res.status(400).json({ error: "Failed to create purchase order" });
+    }
+  });
+
+  app.get("/api/po", requireAuth, async (req, res) => {
+    try {
+      const pos = await storage.getSimplePurchaseOrders();
+      res.json(pos);
+    } catch (error) {
+      console.error("Error fetching simple purchase orders:", error);
+      res.status(500).json({ error: "Failed to fetch purchase orders" });
     }
   });
 

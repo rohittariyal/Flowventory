@@ -434,6 +434,26 @@ export type InsertReconRow = typeof reconRows.$inferInsert;
 export type ReconIngestData = z.infer<typeof reconIngestSchema>;
 export type UpdateReconRowData = z.infer<typeof updateReconRowSchema>;
 
+// Simple Purchase Orders for manual restock feature
+export const simplePurchaseOrders = pgTable("simple_purchase_orders", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  date: timestamp("date").defaultNow().notNull(),
+  sku: text("sku").notNull(),
+  qty: integer("qty").notNull(),
+  supplierName: text("supplier_name").notNull(),
+  status: text("status", { enum: ["DRAFT", "SENT", "RECEIVED"] }).default("DRAFT").notNull(),
+  createdAt: timestamp("created_at").defaultNow(),
+});
+
+export const simplePurchaseOrderSchema = z.object({
+  sku: z.string().min(1, "SKU is required"),
+  qty: z.number().int().min(1, "Quantity must be at least 1"),
+  supplierName: z.string().min(1, "Supplier name is required"),
+});
+
+export type SimplePurchaseOrder = typeof simplePurchaseOrders.$inferSelect;
+export type InsertSimplePurchaseOrder = z.infer<typeof simplePurchaseOrderSchema>;
+
 // Restock Autopilot V1 - Supplier schema
 export const suppliers = pgTable("suppliers", {
   id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),

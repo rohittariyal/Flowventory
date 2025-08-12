@@ -1,4 +1,4 @@
-import { type User, type InsertUser, type OnboardingData, type InsertOnboardingData, type PlatformConnections, type Organization, type TeamInvitation, type InviteTeamMemberData, type UpdateTeamMemberData, type Notification, type CreateNotificationData, type Event, type InsertEvent, type Task, type InsertTask, type CreateEventData, type CreateTaskData, type UpdateTaskData, type PurchaseOrder, type InsertPurchaseOrder, type Comment, type InsertComment, type Activity, type InsertActivity, type Rule, type InsertRule, type CreateCommentData, type CreateRuleData, type ReconBatch, type InsertReconBatch, type ReconRow, type InsertReconRow, type ReconIngestData, type UpdateReconRowData, type Supplier, type InsertSupplier, type ReorderPolicy, type InsertReorderPolicy, type ReorderSuggestData, type UpdatePurchaseOrderStatusData } from "@shared/schema";
+import { type User, type InsertUser, type OnboardingData, type InsertOnboardingData, type PlatformConnections, type Organization, type TeamInvitation, type InviteTeamMemberData, type UpdateTeamMemberData, type Notification, type CreateNotificationData, type Event, type InsertEvent, type Task, type InsertTask, type CreateEventData, type CreateTaskData, type UpdateTaskData, type PurchaseOrder, type InsertPurchaseOrder, type Comment, type InsertComment, type Activity, type InsertActivity, type Rule, type InsertRule, type CreateCommentData, type CreateRuleData, type ReconBatch, type InsertReconBatch, type ReconRow, type InsertReconRow, type ReconIngestData, type UpdateReconRowData, type Supplier, type InsertSupplier, type ReorderPolicy, type InsertReorderPolicy, type ReorderSuggestData, type UpdatePurchaseOrderStatusData, type SimplePurchaseOrder, type InsertSimplePurchaseOrder } from "@shared/schema";
 import { randomUUID } from "crypto";
 import session from "express-session";
 import createMemoryStore from "memorystore";
@@ -109,6 +109,7 @@ export class MemStorage implements IStorage {
   private reconRows: Map<string, ReconRow>;
   private suppliers: Map<string, Supplier>;
   private reorderPolicies: Map<string, ReorderPolicy>;
+  private simplePurchaseOrders: Map<string, SimplePurchaseOrder>;
   public sessionStore: session.Store;
 
   constructor() {
@@ -127,6 +128,7 @@ export class MemStorage implements IStorage {
     this.reconRows = new Map();
     this.suppliers = new Map();
     this.reorderPolicies = new Map();
+    this.simplePurchaseOrders = new Map();
     this.sessionStore = new MemoryStore({
       checkPeriod: 86400000,
     });
@@ -1119,6 +1121,26 @@ export class MemStorage implements IStorage {
       mismatchedCount: totals.mismatchedCount,
     };
     this.reconBatches.set(batchId, updatedBatch);
+  }
+
+  // Simple Purchase Orders for manual restock feature
+  async createSimplePurchaseOrder(poData: InsertSimplePurchaseOrder): Promise<SimplePurchaseOrder> {
+    const id = randomUUID();
+    const now = new Date();
+    const po: SimplePurchaseOrder = {
+      id,
+      ...poData,
+      date: now,
+      status: "DRAFT",
+      createdAt: now,
+    };
+    this.simplePurchaseOrders.set(id, po);
+    return po;
+  }
+
+  async getSimplePurchaseOrders(): Promise<SimplePurchaseOrder[]> {
+    return Array.from(this.simplePurchaseOrders.values())
+      .sort((a, b) => b.createdAt!.getTime() - a.createdAt!.getTime());
   }
 
   // Restock Autopilot - Supplier methods

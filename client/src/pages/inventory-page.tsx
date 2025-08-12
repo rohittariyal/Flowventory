@@ -50,7 +50,7 @@ function InventoryPage() {
   const [poModalOpen, setPoModalOpen] = useState(false);
   const [poForm, setPoForm] = useState({
     supplier: "",
-    quantity: "",
+    quantity: "20",
     notes: ""
   });
 
@@ -76,19 +76,19 @@ function InventoryPage() {
     }
   });
 
-  // Create PO mutation
-  const createPoMutation = useMutation({
-    mutationFn: async (poData: any) => {
-      const response = await apiRequest("POST", "/api/purchase-orders", poData);
+  // Simple PO mutation for manual restock feature
+  const createSimplePoMutation = useMutation({
+    mutationFn: async (poData: { sku: string; qty: number; supplierName: string }) => {
+      const response = await apiRequest("POST", "/api/po", poData);
       return response.json();
     },
     onSuccess: () => {
       toast({
-        title: "Draft PO Created",
-        description: "Purchase order draft saved successfully",
+        title: "PO Created",
+        description: "Purchase order created successfully",
       });
       setPoModalOpen(false);
-      setPoForm({ supplier: "", quantity: "", notes: "" });
+      setPoForm({ supplier: "", quantity: "20", notes: "" });
     },
     onError: (error) => {
       toast({
@@ -115,27 +115,26 @@ function InventoryPage() {
     createTaskMutation.mutate(eventId);
   };
 
-  const handleCreatePo = (sku: string) => {
+  const handleSuggestReorder = (sku: string) => {
     setSelectedSku(sku);
+    setPoForm({ supplier: "", quantity: "20", notes: "" });
     setPoModalOpen(true);
   };
 
-  const handleSubmitPo = () => {
+  const handleCreatePurchaseOrder = () => {
     if (!poForm.supplier || !poForm.quantity) {
       toast({
         title: "Validation Error",
-        description: "Please fill in supplier and quantity",
+        description: "Please fill in supplier name and quantity",
         variant: "destructive"
       });
       return;
     }
 
-    createPoMutation.mutate({
+    createSimplePoMutation.mutate({
       sku: selectedSku,
-      supplier: poForm.supplier,
-      quantity: parseInt(poForm.quantity),
-      notes: poForm.notes,
-      status: "draft"
+      qty: parseInt(poForm.quantity),
+      supplierName: poForm.supplier,
     });
   };
 
@@ -195,6 +194,17 @@ function InventoryPage() {
                     </TableCell>
                     <TableCell>
                       <div className="flex flex-col sm:flex-row gap-1 sm:gap-2">
+                        {item.stock <= 5 && (
+                          <Button
+                            variant="outline"
+                            size="sm"
+                            onClick={() => handleSuggestReorder(item.sku)}
+                            className="text-xs w-full sm:w-auto"
+                          >
+                            <Package className="h-3 w-3 sm:mr-1" />
+                            <span className="hidden sm:inline ml-1">Suggest Reorder</span>
+                          </Button>
+                        )}
                         {item.stock <= item.threshold && (
                           <>
                             {!item.hasLinkedTask && item.latestEventId ? (
@@ -221,15 +231,7 @@ function InventoryPage() {
                             ) : null}
                           </>
                         )}
-                        <Button
-                          variant="ghost"
-                          size="sm"
-                          onClick={() => handleCreatePo(item.sku)}
-                          className="text-xs w-full sm:w-auto"
-                        >
-                          <FileText className="h-3 w-3 sm:mr-1" />
-                          <span className="hidden sm:inline ml-1">Draft PO</span>
-                        </Button>
+
                       </div>
                     </TableCell>
                   </TableRow>
@@ -261,49 +263,43 @@ function InventoryPage() {
         </CardContent>
       </Card>
 
-      {/* Draft PO Modal */}
+      {/* Simple Restock Modal */}
       <Dialog open={poModalOpen} onOpenChange={setPoModalOpen}>
         <DialogContent className="sm:max-w-[425px]">
           <DialogHeader>
-            <DialogTitle>Draft Purchase Order</DialogTitle>
+            <DialogTitle>Suggest Reorder</DialogTitle>
             <DialogDescription>
-              Create a draft PO for SKU: {selectedSku}
+              Create a purchase order for {selectedSku}
             </DialogDescription>
           </DialogHeader>
           <div className="grid gap-4 py-4">
             <div className="grid gap-2">
-              <Label htmlFor="supplier">Supplier</Label>
-              <Select value={poForm.supplier} onValueChange={(value) => setPoForm(prev => ({ ...prev, supplier: value }))}>
-                <SelectTrigger>
-                  <SelectValue placeholder="Select supplier" />
-                </SelectTrigger>
-                <SelectContent>
-                  {SUPPLIERS.map((supplier) => (
-                    <SelectItem key={supplier} value={supplier}>
-                      {supplier}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
+              <Label>SKU Name</Label>
+              <div className="p-2 bg-muted rounded text-sm font-medium">{selectedSku}</div>
             </div>
             <div className="grid gap-2">
-              <Label htmlFor="quantity">Quantity</Label>
+              <Label>Current Stock</Label>
+              <div className="p-2 bg-muted rounded text-sm">
+                {INVENTORY_DATA.find(item => item.sku === selectedSku)?.stock || 0} units
+              </div>
+            </div>
+            <div className="grid gap-2">
+              <Label htmlFor="quantity">Recommended Quantity</Label>
               <Input
                 id="quantity"
                 type="number"
                 value={poForm.quantity}
                 onChange={(e) => setPoForm(prev => ({ ...prev, quantity: e.target.value }))}
-                placeholder="Enter quantity"
+                placeholder="20"
               />
             </div>
             <div className="grid gap-2">
-              <Label htmlFor="notes">Notes (Optional)</Label>
-              <Textarea
-                id="notes"
-                value={poForm.notes}
-                onChange={(e) => setPoForm(prev => ({ ...prev, notes: e.target.value }))}
-                placeholder="Add any notes or requirements"
-                rows={3}
+              <Label htmlFor="supplier">Supplier Name</Label>
+              <Input
+                id="supplier"
+                value={poForm.supplier}
+                onChange={(e) => setPoForm(prev => ({ ...prev, supplier: e.target.value }))}
+                placeholder="Enter supplier name"
               />
             </div>
           </div>
@@ -311,8 +307,8 @@ function InventoryPage() {
             <Button variant="outline" onClick={() => setPoModalOpen(false)}>
               Cancel
             </Button>
-            <Button onClick={handleSubmitPo} disabled={createPoMutation.isPending}>
-              {createPoMutation.isPending ? "Creating..." : "Create Draft PO"}
+            <Button onClick={handleCreatePurchaseOrder} disabled={createSimplePoMutation.isPending}>
+              {createSimplePoMutation.isPending ? "Creating..." : "Create Purchase Order"}
             </Button>
           </div>
         </DialogContent>
