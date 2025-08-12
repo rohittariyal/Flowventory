@@ -33,8 +33,8 @@ export class ReconciliationService {
     try {
       // Parse CSV files with robust error handling
       console.log('📊 Parsing CSV files...');
-      const ordersData = await this.parseCsvBuffer(ordersBuffer, 'orders');
-      const payoutsData = payoutsBuffer ? await this.parseCsvBuffer(payoutsBuffer, 'payouts') : [];
+      const ordersData = this.parseCsvBufferSync(ordersBuffer, 'orders');
+      const payoutsData = payoutsBuffer ? this.parseCsvBufferSync(payoutsBuffer, 'payouts') : [];
       
       console.log(`✅ Parsed ${ordersData.length} orders and ${payoutsData.length} payouts`);
       
@@ -167,94 +167,133 @@ export class ReconciliationService {
     }
   }
   
-  private static async parseCsvBuffer(buffer: Buffer, fileType: string): Promise<any[]> {
+  private static parseCsvBufferSync(buffer: Buffer, fileType: string): any[] {
     console.log(`📄 Parsing ${fileType} CSV buffer (${buffer.length} bytes)`);
     
-    return new Promise((resolve, reject) => {
+    try {
+      // Simple manual CSV parsing to avoid fast-csv hanging issues
+      const csvText = buffer.toString('utf8');
+      const lines = csvText.split('\n').filter(line => line.trim());
+      
+      if (lines.length === 0) {
+        console.log(`⚠️ No data found in ${fileType} CSV`);
+        return [];
+      }
+      
+      // Parse headers
+      const headerLine = lines[0];
+      const headers = headerLine.split(',').map(h => h.trim().replace(/"/g, ''));
+      console.log(`📋 Headers found in ${fileType}:`, headers);
+      
+      // Normalize headers to lowercase and remove spaces
+      const normalizedHeaders = headers.map(h => h.toLowerCase().replace(/\s+/g, ''));
+      
       const results: any[] = [];
-      let rowCount = 0;
       
-      const timeout = setTimeout(() => {
-        reject(new Error(`CSV parsing timeout after 30 seconds for ${fileType}`));
-      }, 30000);
-      
-      parse(buffer, { 
-        headers: true, 
-        trim: true,
-        skipEmptyLines: true,
-        ignoreEmpty: true 
-      })
-        .on('data', (row: any) => {
-          try {
-            // Skip completely empty rows
-            const hasData = Object.values(row).some(value => value && String(value).trim());
-            if (!hasData) return;
-            
-            // Normalize headers to lowercase and remove spaces
-            const normalizedRow: any = {};
-            for (const [key, value] of Object.entries(row)) {
-              const cleanKey = key.toLowerCase().replace(/\s+/g, '');
-              normalizedRow[cleanKey] = value;
-            }
-            
-            results.push(normalizedRow);
-            rowCount++;
-            
-            if (rowCount % 1000 === 0) {
-              console.log(`📊 Parsed ${rowCount} ${fileType} rows so far...`);
-            }
-          } catch (rowError) {
-            console.warn(`⚠️ Error processing row ${rowCount + 1} in ${fileType}:`, rowError);
+      // Parse data rows
+      for (let i = 1; i < lines.length; i++) {
+        const line = lines[i].trim();
+        if (!line) continue;
+        
+        // Simple CSV parsing (handles basic cases)
+        const values = [];
+        let current = '';
+        let inQuotes = false;
+        
+        for (let j = 0; j < line.length; j++) {
+          const char = line[j];
+          if (char === '"') {
+            inQuotes = !inQuotes;
+          } else if (char === ',' && !inQuotes) {
+            values.push(current.trim().replace(/^"|"$/g, ''));
+            current = '';
+          } else {
+            current += char;
           }
-        })
-        .on('end', () => {
-          clearTimeout(timeout);
-          console.log(`✅ Finished parsing ${fileType}: ${results.length} valid rows`);
-          resolve(results);
-        })
-        .on('error', (error) => {
-          clearTimeout(timeout);
-          console.error(`❌ CSV parsing error for ${fileType}:`, error);
-          reject(new Error(`Failed to parse ${fileType} CSV: ${error.message}`));
-        });
-    });
+        }
+        values.push(current.trim().replace(/^"|"$/g, ''));
+        
+        // Create row object
+        const row: any = {};
+        for (let j = 0; j < normalizedHeaders.length && j < values.length; j++) {
+          row[normalizedHeaders[j]] = values[j];
+        }
+        
+        // Skip empty rows
+        const hasData = Object.values(row).some(value => value && String(value).trim());
+        if (hasData) {
+          results.push(row);
+        }
+      }
+      
+      console.log(`✅ Finished parsing ${fileType}: ${results.length} valid rows`);
+      return results;
+      
+    } catch (error) {
+      console.error(`❌ CSV parsing error for ${fileType}:`, error);
+      throw new Error(`Failed to parse ${fileType} CSV: ${error instanceof Error ? error.message : 'Unknown error'}`);
+    }
   }
   
   private static normalizeOrdersData(data: any[]): OrderRow[] {
-    return data.map(row => {
-      const orderId = row.orderid || row.order_id || row.id;
-      const currency = row.currency || 'USD';
-      const gross = this.parseNumber(row.gross);
-      const fees = this.parseNumber(row.fees);
-      const tax = this.parseNumber(row.tax);
-      const netExpected = this.parseNumber(row.netexpected || row.net_expected);
-      
-      if (!orderId) throw new Error('Missing orderId in orders data');
-      
-      return {
-        orderId: String(orderId),
-        currency,
-        gross,
-        fees,
-        tax,
-        netExpected,
-      };
+    console.log('🔧 Normalizing orders data with sample:', data[0]);
+    
+    return data.map((row, index) => {
+      try {
+        const orderId = row.orderid || row.order_id || row.id;
+        const currency = row.currency || 'USD';
+        const gross = this.parseNumber(row.gross);
+        const fees = this.parseNumber(row.fees);
+        const tax = this.parseNumber(row.tax);
+        const netExpected = this.parseNumber(row.netexpected || row.net_expected);
+        
+        if (!orderId) {
+          console.error(`❌ Missing orderId in orders row ${index + 1}:`, row);
+          throw new Error(`Missing orderId in orders row ${index + 1}`);
+        }
+        
+        console.log(`📝 Normalized order ${orderId}: gross=${gross}, fees=${fees}, tax=${tax}, net=${netExpected}`);
+        
+        return {
+          orderId: String(orderId),
+          currency,
+          gross,
+          fees,
+          tax,
+          netExpected,
+        };
+      } catch (error) {
+        console.error(`❌ Error normalizing orders row ${index + 1}:`, error, row);
+        throw error;
+      }
     });
   }
   
   private static normalizePayoutsData(data: any[]): PayoutRow[] {
-    return data.map(row => {
-      const orderId = row.orderid || row.order_id || row.id;
-      const currency = row.currency || 'USD';
-      const paid = this.parseNumber(row.paid) || 0;
-      
-      if (!orderId) throw new Error('Missing orderId in payouts data');
-      
-      return {
-        orderId: String(orderId),
-        currency,
-        paid,
-      };
+    console.log('💰 Normalizing payouts data with sample:', data[0]);
+    
+    return data.map((row, index) => {
+      try {
+        const orderId = row.orderid || row.order_id || row.id;
+        const currency = row.currency || 'USD';
+        const paid = this.parseNumber(row.paid);
+        
+        if (!orderId) {
+          console.error(`❌ Missing orderId in payouts row ${index + 1}:`, row);
+          throw new Error(`Missing orderId in payouts row ${index + 1}`);
+        }
+        
+        console.log(`💰 Normalized payout ${orderId}: paid=${paid} ${currency}`);
+        
+        return {
+          orderId: String(orderId),
+          currency,
+          paid,
+        };
+      } catch (error) {
+        console.error(`❌ Error normalizing payouts row ${index + 1}:`, error, row);
+        throw error;
+      }
     });
   }
   
