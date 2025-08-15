@@ -28,6 +28,22 @@ export const users = pgTable("users", {
   createdAt: timestamp("created_at").defaultNow(),
 });
 
+// Workspace settings table
+export const workspaceSettings = pgTable("workspace_settings", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  organizationId: varchar("organization_id").references(() => organizations.id).notNull(),
+  baseCurrency: text("base_currency", { enum: ["INR", "USD", "GBP", "AED", "SGD"] }).default("INR").notNull(),
+  timezone: text("timezone").default("Asia/Kolkata").notNull(),
+  regionsEnabled: text("regions_enabled").array().default([]).notNull(),
+  slaDefaults: jsonb("sla_defaults").default({
+    RESTOCK: 24,
+    RETRY_SYNC: 2,
+    RECONCILE: 72
+  }).notNull(),
+  createdAt: timestamp("created_at").defaultNow(),
+  updatedAt: timestamp("updated_at").defaultNow(),
+});
+
 export const teamInvitations = pgTable("team_invitations", {
   id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
   email: text("email").notNull(),
@@ -453,6 +469,31 @@ export const simplePurchaseOrderSchema = z.object({
 
 export type SimplePurchaseOrder = typeof simplePurchaseOrders.$inferSelect;
 export type InsertSimplePurchaseOrder = z.infer<typeof simplePurchaseOrderSchema>;
+
+// Workspace settings types
+export type WorkspaceSettings = typeof workspaceSettings.$inferSelect;
+export type InsertWorkspaceSettings = typeof workspaceSettings.$inferInsert;
+
+export const insertWorkspaceSettingsSchema = createInsertSchema(workspaceSettings);
+
+// Analytics data types
+export interface AnalyticsSummary {
+  sales7d: number;
+  sales30d: number[]; // 30 points
+  openTasksByType: {
+    RESTOCK: number;
+    RETRY_SYNC: number;
+    RECONCILE: number;
+    ADJUST_BUDGET: number;
+  };
+  openByPriority: {
+    P1: number;
+    P2: number;
+    P3: number;
+  };
+  stockouts7d: number; // INVENTORY_LOW events with payload.stock==0 in last 7d
+  ttrMedianHours: number; // DONE tasks vs their source event
+}
 
 // Restock Autopilot V1 - Supplier schema
 export const suppliers = pgTable("suppliers", {

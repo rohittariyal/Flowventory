@@ -1324,5 +1324,63 @@ export function registerRoutes(app: Express): Server {
 
   const httpServer = createServer(app);
 
+  // Analytics V1 API
+  app.get("/api/analytics/summary", requireAuth, async (req, res) => {
+    try {
+      const { AnalyticsService } = await import("./analyticsService");
+      const analyticsService = new AnalyticsService(storage);
+      const user = req.user as any;
+      const organizationId = user?.organizationId || "sample-org-123";
+      const summary = await analyticsService.getAnalyticsSummary(organizationId);
+      res.json(summary);
+    } catch (error) {
+      console.error("Error fetching analytics summary:", error);
+      res.status(500).json({ error: "Failed to fetch analytics summary" });
+    }
+  });
+
+  // Workspace Settings API
+  app.get("/api/workspace/me", requireAuth, async (req, res) => {
+    try {
+      const user = req.user as any;
+      const organizationId = user?.organizationId || "sample-org-123";
+      let settings = await storage.getWorkspaceSettings(organizationId);
+      
+      if (!settings) {
+        // Create default settings if none exist
+        settings = await storage.createWorkspaceSettings(organizationId, {
+          organizationId,
+          baseCurrency: "INR",
+          timezone: "Asia/Kolkata",
+          regionsEnabled: [],
+          slaDefaults: {
+            RESTOCK: 24,
+            RETRY_SYNC: 2,
+            RECONCILE: 72
+          }
+        });
+      }
+      
+      res.json(settings);
+    } catch (error) {
+      console.error("Error fetching workspace settings:", error);
+      res.status(500).json({ error: "Failed to fetch workspace settings" });
+    }
+  });
+
+  app.patch("/api/workspace", requireAuth, async (req, res) => {
+    try {
+      const user = req.user as any;
+      const organizationId = user?.organizationId || "sample-org-123";
+      const updateData = req.body;
+      
+      const updatedSettings = await storage.updateWorkspaceSettings(organizationId, updateData);
+      res.json(updatedSettings);
+    } catch (error) {
+      console.error("Error updating workspace settings:", error);
+      res.status(500).json({ error: "Failed to update workspace settings" });
+    }
+  });
+
   return httpServer;
 }

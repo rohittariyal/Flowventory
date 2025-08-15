@@ -11,6 +11,7 @@ import { ReturnAbusePanel } from "@/components/dashboard/return-abuse-panel";
 import { POGeneratorPanel } from "@/components/dashboard/po-generator-panel";
 import { CSVImportModal } from "@/components/csv-import-modal";
 import { SettingsPanel } from "@/components/settings-panel";
+import { AnalyticsPanel } from "@/components/analytics-panel";
 import { type OnboardingData } from "@shared/schema";
 
 export default function HomePage() {
@@ -62,6 +63,9 @@ export default function HomePage() {
       if (user.role === "admin") {
         panels.push("po-generator");
       }
+      
+      // Always show Analytics panel for all users
+      panels.push("analytics");
       
       setSelectedPanels(panels);
     }
@@ -157,6 +161,13 @@ export default function HomePage() {
           {selectedPanels.includes("po-generator") && user.role === "admin" && (
             <div className="lg:col-span-1">
               <POGeneratorPanel user={user} />
+            </div>
+          )}
+          
+          {/* Analytics V1 - All users - Responsive */}
+          {selectedPanels.includes("analytics") && (
+            <div className="lg:col-span-2 xl:col-span-3">
+              <AnalyticsPanel />
             </div>
           )}
         </div>

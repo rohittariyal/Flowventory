@@ -1,4 +1,4 @@
-import { type User, type InsertUser, type OnboardingData, type InsertOnboardingData, type PlatformConnections, type Organization, type TeamInvitation, type InviteTeamMemberData, type UpdateTeamMemberData, type Notification, type CreateNotificationData, type Event, type InsertEvent, type Task, type InsertTask, type CreateEventData, type CreateTaskData, type UpdateTaskData, type PurchaseOrder, type InsertPurchaseOrder, type Comment, type InsertComment, type Activity, type InsertActivity, type Rule, type InsertRule, type CreateCommentData, type CreateRuleData, type ReconBatch, type InsertReconBatch, type ReconRow, type InsertReconRow, type ReconIngestData, type UpdateReconRowData, type Supplier, type InsertSupplier, type ReorderPolicy, type InsertReorderPolicy, type ReorderSuggestData, type UpdatePurchaseOrderStatusData, type SimplePurchaseOrder, type InsertSimplePurchaseOrder } from "@shared/schema";
+import { type User, type InsertUser, type OnboardingData, type InsertOnboardingData, type PlatformConnections, type Organization, type TeamInvitation, type InviteTeamMemberData, type UpdateTeamMemberData, type Notification, type CreateNotificationData, type Event, type InsertEvent, type Task, type InsertTask, type CreateEventData, type CreateTaskData, type UpdateTaskData, type PurchaseOrder, type InsertPurchaseOrder, type Comment, type InsertComment, type Activity, type InsertActivity, type Rule, type InsertRule, type CreateCommentData, type CreateRuleData, type ReconBatch, type InsertReconBatch, type ReconRow, type InsertReconRow, type ReconIngestData, type UpdateReconRowData, type Supplier, type InsertSupplier, type ReorderPolicy, type InsertReorderPolicy, type ReorderSuggestData, type UpdatePurchaseOrderStatusData, type SimplePurchaseOrder, type InsertSimplePurchaseOrder, type WorkspaceSettings, type InsertWorkspaceSettings } from "@shared/schema";
 import { randomUUID } from "crypto";
 import session from "express-session";
 import createMemoryStore from "memorystore";
@@ -95,6 +95,11 @@ export interface IStorage {
   getSimplePurchaseOrders(): Promise<SimplePurchaseOrder[]>;
   updateSimplePurchaseOrderStatus(id: string, status: string): Promise<SimplePurchaseOrder | undefined>;
   
+  // Workspace Settings methods
+  getWorkspaceSettings(organizationId: string): Promise<WorkspaceSettings | undefined>;
+  updateWorkspaceSettings(organizationId: string, settings: Partial<WorkspaceSettings>): Promise<WorkspaceSettings>;
+  createWorkspaceSettings(organizationId: string, settings: InsertWorkspaceSettings): Promise<WorkspaceSettings>;
+  
   sessionStore: session.Store;
 }
 
@@ -115,6 +120,7 @@ export class MemStorage implements IStorage {
   private suppliers: Map<string, Supplier>;
   private reorderPolicies: Map<string, ReorderPolicy>;
   private simplePurchaseOrders: Map<string, SimplePurchaseOrder>;
+  private workspaceSettings: Map<string, WorkspaceSettings>;
   public sessionStore: session.Store;
 
   constructor() {
@@ -134,6 +140,7 @@ export class MemStorage implements IStorage {
     this.suppliers = new Map();
     this.reorderPolicies = new Map();
     this.simplePurchaseOrders = new Map();
+    this.workspaceSettings = new Map();
     this.sessionStore = new MemoryStore({
       checkPeriod: 86400000,
     });
@@ -1248,6 +1255,61 @@ export class MemStorage implements IStorage {
 
     this.reorderPolicies.set(policy.id, updatedPolicy);
     return updatedPolicy;
+  }
+
+  // Workspace Settings methods
+  async getWorkspaceSettings(organizationId: string): Promise<WorkspaceSettings | undefined> {
+    return Array.from(this.workspaceSettings.values()).find(
+      settings => settings.organizationId === organizationId
+    );
+  }
+
+  async createWorkspaceSettings(organizationId: string, settings: InsertWorkspaceSettings): Promise<WorkspaceSettings> {
+    const newSettings: WorkspaceSettings = {
+      id: randomUUID(),
+      organizationId,
+      baseCurrency: settings.baseCurrency || "INR",
+      timezone: settings.timezone || "Asia/Kolkata",
+      regionsEnabled: settings.regionsEnabled || [],
+      slaDefaults: settings.slaDefaults || {
+        RESTOCK: 24,
+        RETRY_SYNC: 2,
+        RECONCILE: 72
+      },
+      createdAt: new Date(),
+      updatedAt: new Date(),
+    };
+
+    this.workspaceSettings.set(newSettings.id, newSettings);
+    return newSettings;
+  }
+
+  async updateWorkspaceSettings(organizationId: string, settings: Partial<WorkspaceSettings>): Promise<WorkspaceSettings> {
+    let existingSettings = await this.getWorkspaceSettings(organizationId);
+    
+    if (!existingSettings) {
+      // Create default settings if none exist
+      existingSettings = await this.createWorkspaceSettings(organizationId, {
+        organizationId,
+        baseCurrency: "INR",
+        timezone: "Asia/Kolkata",
+        regionsEnabled: [],
+        slaDefaults: {
+          RESTOCK: 24,
+          RETRY_SYNC: 2,
+          RECONCILE: 72
+        }
+      });
+    }
+
+    const updatedSettings: WorkspaceSettings = {
+      ...existingSettings,
+      ...settings,
+      updatedAt: new Date(),
+    };
+
+    this.workspaceSettings.set(existingSettings.id, updatedSettings);
+    return updatedSettings;
   }
 }
 
