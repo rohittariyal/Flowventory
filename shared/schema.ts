@@ -495,6 +495,60 @@ export interface AnalyticsSummary {
   ttrMedianHours: number; // DONE tasks vs their source event
 }
 
+// Restock Autopilot schemas
+export const supplierSchema = z.object({
+  name: z.string().min(1, "Supplier name is required"),
+  email: z.string().email().optional().or(z.literal("")),
+  phone: z.string().optional(),
+  currency: z.enum(["INR", "GBP", "USD", "AED", "SGD"]).default("INR"),
+  address: z.string().optional(),
+  skus: z.array(z.object({
+    sku: z.string().min(1, "SKU is required"),
+    unitCost: z.number().min(0, "Unit cost must be positive"),
+    packSize: z.number().int().min(1).optional(),
+    moq: z.number().int().min(1).optional(),
+    leadTimeDays: z.number().int().min(0, "Lead time must be non-negative"),
+  })).default([]),
+  notes: z.string().optional(),
+});
+
+export const reorderPolicySchema = z.object({
+  sku: z.string().min(1, "SKU is required"),
+  targetDaysCover: z.number().int().min(1, "Target days cover must be positive").default(14),
+  safetyDays: z.number().int().min(0, "Safety days must be non-negative").default(3),
+  maxDaysCover: z.number().int().min(1).optional(),
+});
+
+export const reorderSuggestRequestSchema = z.object({
+  sku: z.string().min(1, "SKU is required"),
+  stock: z.number().int().min(0, "Stock must be non-negative"),
+  dailySales: z.number().min(0, "Daily sales must be non-negative"),
+});
+
+export interface ReorderSuggestion {
+  recommendedQty: number;
+  supplier: {
+    id: string;
+    name: string;
+    email?: string;
+    currency: string;
+  } | null;
+  unitCost: number | null;
+  leadTimeDays: number | null;
+  policy: {
+    targetDaysCover: number;
+    safetyDays: number;
+    maxDaysCover?: number;
+  } | null;
+  calculation?: {
+    currentDaysLeft: number;
+    targetDaysNeeded: number;
+    shortfall: number;
+    roundedToPackSize?: number;
+    adjustedForMOQ?: number;
+  };
+}
+
 // Restock Autopilot V1 - Supplier schema
 export const suppliers = pgTable("suppliers", {
   id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
@@ -554,12 +608,7 @@ export const insertReorderPolicySchema = z.object({
   maxDaysCover: z.number().int().min(1).optional()
 });
 
-export const reorderSuggestSchema = z.object({
-  sku: z.string().min(1),
-  stock: z.number().min(0),
-  dailySales: z.number().min(0),
-  supplierId: z.string().optional()
-});
+
 
 export const updatePurchaseOrderStatusSchema = z.object({
   status: z.enum(["DRAFT", "SENT", "RECEIVED", "CANCELLED"])
@@ -570,5 +619,5 @@ export type Supplier = typeof suppliers.$inferSelect;
 export type InsertSupplier = z.infer<typeof insertSupplierSchema>;
 export type ReorderPolicy = typeof reorderPolicies.$inferSelect;
 export type InsertReorderPolicy = z.infer<typeof insertReorderPolicySchema>;
-export type ReorderSuggestData = z.infer<typeof reorderSuggestSchema>;
+export type ReorderSuggestData = z.infer<typeof reorderSuggestRequestSchema>;
 export type UpdatePurchaseOrderStatusData = z.infer<typeof updatePurchaseOrderStatusSchema>;

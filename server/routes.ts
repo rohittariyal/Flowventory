@@ -3,8 +3,9 @@ import { createServer, type Server } from "http";
 import { setupAuth } from "./auth";
 import { storage } from "./storage";
 import { syncManager } from "./syncAdapters";
-import { onboardingSchema, platformConnectionSchema, createNotificationSchema, markNotificationReadSchema, reconIngestSchema, updateReconRowSchema, insertSupplierSchema, insertReorderPolicySchema, reorderSuggestSchema, updatePurchaseOrderStatusSchema, simplePurchaseOrderSchema, type PlatformConnections } from "@shared/schema";
+import { onboardingSchema, platformConnectionSchema, createNotificationSchema, markNotificationReadSchema, reconIngestSchema, updateReconRowSchema, insertSupplierSchema, insertReorderPolicySchema, reorderSuggestRequestSchema, updatePurchaseOrderStatusSchema, simplePurchaseOrderSchema, supplierSchema, reorderPolicySchema, type PlatformConnections } from "@shared/schema";
 import { ReconciliationService } from "./reconService";
+import { ReorderService } from "./reorderService";
 import multer from "multer";
 
 // Authentication middleware
@@ -1394,6 +1395,135 @@ export function registerRoutes(app: Express): Server {
         error: "Failed to update workspace settings",
         details: error instanceof Error ? error.message : 'Unknown error'
       });
+    }
+  });
+
+  // Initialize reorder service
+  const reorderService = new ReorderService(storage);
+
+  // Supplier CRUD routes
+  app.get("/api/suppliers", requireAuth, async (req, res) => {
+    try {
+      const user = req.user as any;
+      const workspaceId = user?.organizationId || "sample-org-123";
+      const { sku } = req.query;
+      
+      const suppliers = await storage.getSuppliers(workspaceId, sku ? { sku: sku as string } : {});
+      res.json(suppliers);
+    } catch (error) {
+      console.error("Error fetching suppliers:", error);
+      res.status(500).json({ error: "Failed to fetch suppliers" });
+    }
+  });
+
+  app.post("/api/suppliers", requireAuth, async (req, res) => {
+    try {
+      const user = req.user as any;
+      const workspaceId = user?.organizationId || "sample-org-123";
+      
+      const validatedData = supplierSchema.parse(req.body);
+      const supplierData = {
+        ...validatedData,
+        workspaceId,
+      };
+      
+      const supplier = await storage.createSupplier(supplierData);
+      res.status(201).json(supplier);
+    } catch (error) {
+      console.error("Error creating supplier:", error);
+      res.status(400).json({ error: "Failed to create supplier" });
+    }
+  });
+
+  app.put("/api/suppliers/:id", requireAuth, async (req, res) => {
+    try {
+      const { id } = req.params;
+      const validatedData = supplierSchema.parse(req.body);
+      
+      const supplier = await storage.updateSupplier(id, validatedData);
+      if (!supplier) {
+        return res.status(404).json({ error: "Supplier not found" });
+      }
+      
+      res.json(supplier);
+    } catch (error) {
+      console.error("Error updating supplier:", error);
+      res.status(400).json({ error: "Failed to update supplier" });
+    }
+  });
+
+  app.delete("/api/suppliers/:id", requireAuth, async (req, res) => {
+    try {
+      const { id } = req.params;
+      await storage.deleteSupplier(id);
+      res.status(204).send();
+    } catch (error) {
+      console.error("Error deleting supplier:", error);
+      res.status(500).json({ error: "Failed to delete supplier" });
+    }
+  });
+
+  // Reorder Policy routes
+  app.post("/api/reorder/policy", requireAuth, async (req, res) => {
+    try {
+      const user = req.user as any;
+      const workspaceId = user?.organizationId || "sample-org-123";
+      
+      const validatedData = reorderPolicySchema.parse(req.body);
+      
+      // Check if policy already exists for this SKU
+      const existingPolicy = await storage.getReorderPolicy(workspaceId, validatedData.sku);
+      
+      if (existingPolicy) {
+        // Update existing policy
+        const updatedPolicy = await storage.updateReorderPolicy(workspaceId, validatedData.sku, validatedData);
+        res.json(updatedPolicy);
+      } else {
+        // Create new policy
+        const policyData = {
+          ...validatedData,
+          workspaceId,
+        };
+        const policy = await storage.createReorderPolicy(policyData);
+        res.status(201).json(policy);
+      }
+    } catch (error) {
+      console.error("Error upserting reorder policy:", error);
+      res.status(400).json({ error: "Failed to save reorder policy" });
+    }
+  });
+
+  app.get("/api/reorder/policy/:sku", requireAuth, async (req, res) => {
+    try {
+      const user = req.user as any;
+      const workspaceId = user?.organizationId || "sample-org-123";
+      const { sku } = req.params;
+      
+      const policy = await storage.getReorderPolicy(workspaceId, sku);
+      if (!policy) {
+        return res.status(404).json({ error: "Reorder policy not found" });
+      }
+      
+      res.json(policy);
+    } catch (error) {
+      console.error("Error fetching reorder policy:", error);
+      res.status(500).json({ error: "Failed to fetch reorder policy" });
+    }
+  });
+
+  // Reorder Suggestion route
+  app.post("/api/reorder/suggest", requireAuth, async (req, res) => {
+    try {
+      const user = req.user as any;
+      const workspaceId = user?.organizationId || "sample-org-123";
+      
+      const validatedData = reorderSuggestRequestSchema.parse(req.body);
+      const suggestion = await reorderService.generateSuggestion(workspaceId, validatedData);
+      
+      res.json(suggestion);
+    } catch (error) {
+      console.error("Error generating reorder suggestion:", error);
+      res.status(400).json({ error: "Failed to generate reorder suggestion" });
     }
   });
 
