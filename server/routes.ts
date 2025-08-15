@@ -1374,11 +1374,26 @@ export function registerRoutes(app: Express): Server {
       const organizationId = user?.organizationId || "sample-org-123";
       const updateData = req.body;
       
+      console.log("🔧 Workspace settings update request:");
+      console.log("  organizationId:", organizationId);
+      console.log("  updateData:", JSON.stringify(updateData, null, 2));
+      
+      // Validate update data structure
+      if (!updateData || typeof updateData !== 'object') {
+        console.error("❌ Invalid update data structure");
+        return res.status(400).json({ error: "Invalid update data" });
+      }
+      
       const updatedSettings = await storage.updateWorkspaceSettings(organizationId, updateData);
+      console.log("✅ Workspace settings updated successfully");
       res.json(updatedSettings);
     } catch (error) {
-      console.error("Error updating workspace settings:", error);
-      res.status(500).json({ error: "Failed to update workspace settings" });
+      console.error("❌ Error updating workspace settings:", error);
+      console.error("Error details:", error instanceof Error ? error.message : error);
+      res.status(500).json({ 
+        error: "Failed to update workspace settings",
+        details: error instanceof Error ? error.message : 'Unknown error'
+      });
     }
   });
 

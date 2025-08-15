@@ -94,10 +94,7 @@ export default function WorkspaceSettingsPage() {
 
   const updateSettingsMutation = useMutation({
     mutationFn: (data: Partial<WorkspaceSettings>) =>
-      apiRequest("/api/workspace", {
-        method: "PATCH",
-        body: JSON.stringify(data),
-      }),
+      apiRequest("PATCH", "/api/workspace", data),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["/api/workspace/me"] });
       toast({
@@ -106,19 +103,22 @@ export default function WorkspaceSettingsPage() {
       });
     },
     onError: (error) => {
+      console.error("Workspace settings update error:", error);
       toast({
         title: "Update Failed",
-        description: "Failed to update workspace settings. Please try again.",
+        description: `Failed to update workspace settings: ${error instanceof Error ? error.message : 'Unknown error'}`,
         variant: "destructive",
       });
     },
   });
 
   const onSubmit = (data: WorkspaceSettingsForm) => {
-    updateSettingsMutation.mutate({
+    const submitData = {
       ...data,
       regionsEnabled: selectedRegions,
-    });
+    };
+    console.log("Submitting workspace settings:", submitData);
+    updateSettingsMutation.mutate(submitData);
   };
 
   const toggleRegion = (regionValue: string) => {
