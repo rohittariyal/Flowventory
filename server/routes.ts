@@ -927,6 +927,82 @@ export function registerRoutes(app: Express): Server {
     }
   });
 
+  // Update batch notes (UX polish)
+  app.patch("/api/recon/batches/:batchId", requireAuth, async (req, res) => {
+    try {
+      const { notes } = req.body;
+      const updatedBatch = await storage.updateReconBatch(req.params.batchId, { notes });
+      
+      if (!updatedBatch) {
+        return res.status(404).json({ error: "Batch not found" });
+      }
+      
+      res.json(updatedBatch);
+    } catch (error) {
+      console.error("Error updating batch notes:", error);
+      res.status(500).json({ error: "Failed to update batch notes" });
+    }
+  });
+
+  // Export mismatches CSV
+  app.get("/api/recon/batches/:batchId/export", requireAuth, async (req, res) => {
+    try {
+      const batch = await storage.getReconBatch(req.params.batchId);
+      if (!batch) {
+        return res.status(404).json({ error: "Batch not found" });
+      }
+      
+      // Get only mismatches
+      const rows = await storage.getReconRows(batch.id, { hasDiff: true });
+      
+      if (rows.length === 0) {
+        return res.status(400).json({ error: "No mismatches found to export" });
+      }
+      
+      // Generate CSV content
+      const csvHeaders = [
+        'Order ID',
+        'Currency',
+        'Gross',
+        'Fees',
+        'Tax',
+        'Expected Net',
+        'Paid',
+        'Difference',
+        `Difference (${batch.baseCurrency})`,
+        'Status',
+        'Notes'
+      ];
+      
+      const csvRows = rows.map(row => [
+        row.orderId,
+        row.currency,
+        (row.gross / 100).toFixed(2),
+        (row.fees / 100).toFixed(2),
+        (row.tax / 100).toFixed(2),
+        (row.expectedNet / 100).toFixed(2),
+        (row.paid / 100).toFixed(2),
+        (row.diff / 100).toFixed(2),
+        (row.diffBase / 100).toFixed(2),
+        row.status,
+        row.notes || ''
+      ]);
+      
+      const csvContent = [csvHeaders, ...csvRows]
+        .map(row => row.map(field => `"${String(field).replace(/"/g, '""')}"`).join(','))
+        .join('\n');
+      
+      const filename = `${batch.source}_${batch.region}_mismatches_${new Date().toISOString().split('T')[0]}.csv`;
+      
+      res.setHeader('Content-Type', 'text/csv');
+      res.setHeader('Content-Disposition', `attachment; filename="${filename}"`);
+      res.send(csvContent);
+    } catch (error) {
+      console.error("Error exporting mismatches:", error);
+      res.status(500).json({ error: "Failed to export mismatches" });
+    }
+  });
+
   // Restock Autopilot V1 - Supplier API routes
   app.get("/api/suppliers", requireAuth, async (req, res) => {
     try {

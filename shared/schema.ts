@@ -405,7 +405,9 @@ export const reconBatches = pgTable("recon_batches", {
   diffBaseTotal: integer("diff_base_total").notNull().default(0),
   ordersTotal: integer("orders_total").notNull().default(0),
   mismatchedCount: integer("mismatched_count").notNull().default(0),
+  notes: text("notes"), // Batch notes/tags for UX polish
   createdAt: timestamp("created_at").defaultNow(),
+  updatedAt: timestamp("updated_at").defaultNow(),
 });
 
 export const reconRows = pgTable("recon_rows", {
@@ -443,12 +445,17 @@ export const updateReconRowSchema = z.object({
   notes: z.string().optional(),
 });
 
+export const updateReconBatchSchema = z.object({
+  notes: z.string().optional(),
+});
+
 export type ReconBatch = typeof reconBatches.$inferSelect;
 export type InsertReconBatch = typeof reconBatches.$inferInsert;
 export type ReconRow = typeof reconRows.$inferSelect;
 export type InsertReconRow = typeof reconRows.$inferInsert;
 export type ReconIngestData = z.infer<typeof reconIngestSchema>;
 export type UpdateReconRowData = z.infer<typeof updateReconRowSchema>;
+export type UpdateReconBatchData = z.infer<typeof updateReconBatchSchema>;
 
 // Simple Purchase Orders for manual restock feature
 export const simplePurchaseOrders = pgTable("simple_purchase_orders", {

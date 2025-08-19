@@ -88,6 +88,7 @@ export interface IStorage {
   getReconRows(batchId: string, filters?: { status?: string, hasDiff?: boolean, limit?: number, offset?: number }): Promise<ReconRow[]>;
   getReconRow(id: string): Promise<ReconRow | undefined>;
   updateReconRow(id: string, updates: UpdateReconRowData): Promise<ReconRow | undefined>;
+  updateReconBatch(id: string, updates: UpdateReconBatchData): Promise<ReconBatch | undefined>;
   updateReconBatchTotals(batchId: string, totals: { expectedBaseTotal: number, paidBaseTotal: number, diffBaseTotal: number, ordersTotal: number, mismatchedCount: number }): Promise<void>;
   
   // Simple Purchase Order methods
@@ -1118,6 +1119,19 @@ export class MemStorage implements IStorage {
     };
     this.reconRows.set(id, updatedRow);
     return updatedRow;
+  }
+
+  async updateReconBatch(id: string, updates: UpdateReconBatchData): Promise<ReconBatch | undefined> {
+    const batch = this.reconBatches.get(id);
+    if (!batch) return undefined;
+    
+    const updatedBatch: ReconBatch = {
+      ...batch,
+      ...updates,
+      updatedAt: new Date(),
+    };
+    this.reconBatches.set(id, updatedBatch);
+    return updatedBatch;
   }
 
   async updateReconBatchTotals(batchId: string, totals: { expectedBaseTotal: number, paidBaseTotal: number, diffBaseTotal: number, ordersTotal: number, mismatchedCount: number }): Promise<void> {

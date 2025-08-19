@@ -26,6 +26,7 @@ interface ReconBatch {
   ordersTotal: number;
   mismatchedCount: number;
   baseCurrency: string;
+  notes?: string;
   createdAt: string;
 }
 

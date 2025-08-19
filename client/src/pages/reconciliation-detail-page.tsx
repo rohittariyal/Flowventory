@@ -10,7 +10,7 @@ import { Switch } from "@/components/ui/switch";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
-import { ArrowLeft, DollarSign, AlertCircle, CheckCircle, MessageSquare, ExternalLink } from "lucide-react";
+import { ArrowLeft, DollarSign, AlertCircle, CheckCircle, MessageSquare, ExternalLink, Download, Save, Edit3 } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { apiRequest, queryClient } from "@/lib/queryClient";
 import { formatDistanceToNow } from "date-fns";
@@ -25,6 +25,7 @@ interface ReconBatch {
   ordersTotal: number;
   mismatchedCount: number;
   baseCurrency: string;
+  notes?: string;
   createdAt: string;
 }
 
@@ -51,6 +52,8 @@ export default function ReconciliationDetailPage() {
   const [showOnlyMismatches, setShowOnlyMismatches] = useState(false);
   const [notesRowId, setNotesRowId] = useState<string | null>(null);
   const [notesText, setNotesText] = useState("");
+  const [isEditingBatchNotes, setIsEditingBatchNotes] = useState(false);
+  const [batchNotesText, setBatchNotesText] = useState("");
   const { toast } = useToast();
 
   const batchId = params?.batchId;
@@ -105,6 +108,66 @@ export default function ReconciliationDetailPage() {
     onError: (error: Error) => {
       toast({
         title: "Error",
+        description: error.message,
+        variant: "destructive",
+      });
+    },
+  });
+
+  const updateBatchMutation = useMutation({
+    mutationFn: async (updates: { notes: string }) => {
+      const response = await apiRequest("PATCH", `/api/recon/batches/${batchId}`, updates);
+      return response.json();
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["/api/recon/batches", batchId] });
+      setIsEditingBatchNotes(false);
+      toast({
+        title: "Batch Notes Updated",
+        description: "Batch notes have been saved successfully",
+      });
+    },
+    onError: (error: Error) => {
+      toast({
+        title: "Error",
+        description: error.message,
+        variant: "destructive",
+      });
+    },
+  });
+
+  const exportMutation = useMutation({
+    mutationFn: async () => {
+      const response = await fetch(`/api/recon/batches/${batchId}/export`, {
+        method: "GET",
+        credentials: "include",
+      });
+      
+      if (!response.ok) {
+        const error = await response.json();
+        throw new Error(error.error || "Export failed");
+      }
+      
+      const blob = await response.blob();
+      const url = window.URL.createObjectURL(blob);
+      const a = document.createElement("a");
+      a.style.display = "none";
+      a.href = url;
+      a.download = response.headers.get("Content-Disposition")?.match(/filename="(.+)"/)?.[1] || "mismatches.csv";
+      document.body.appendChild(a);
+      a.click();
+      window.URL.revokeObjectURL(url);
+      document.body.removeChild(a);
+    },
+    onSuccess: () => {
+      toast({
+        title: "Export Complete",
+        description: "Mismatches CSV has been downloaded",
+      });
+    },
+    onError: (error: Error) => {
+      toast({
+        title: "Export Failed",
         description: error.message,
         variant: "destructive",
       });
@@ -220,6 +283,79 @@ export default function ReconciliationDetailPage() {
         </Card>
       </div>
 
+      {/* Batch Notes & Export */}
+      <Card>
+        <CardHeader className="flex flex-row items-center justify-between">
+          <div>
+            <CardTitle>Batch Notes</CardTitle>
+            <CardDescription>Add notes or tags for this reconciliation batch</CardDescription>
+          </div>
+          <div className="flex gap-2">
+            <Button 
+              variant="outline" 
+              size="sm"
+              onClick={() => exportMutation.mutate()}
+              disabled={exportMutation.isPending || batch.mismatchedCount === 0}
+            >
+              <Download className="mr-2 h-4 w-4" />
+              {exportMutation.isPending ? "Exporting..." : "Export Mismatches"}
+            </Button>
+            {!isEditingBatchNotes ? (
+              <Button 
+                variant="outline" 
+                size="sm"
+                onClick={() => {
+                  setIsEditingBatchNotes(true);
+                  setBatchNotesText(batch.notes || "");
+                }}
+              >
+                <Edit3 className="mr-2 h-4 w-4" />
+                Edit Notes
+              </Button>
+            ) : (
+              <div className="flex gap-2">
+                <Button 
+                  variant="outline" 
+                  size="sm"
+                  onClick={() => {
+                    setIsEditingBatchNotes(false);
+                    setBatchNotesText("");
+                  }}
+                >
+                  Cancel
+                </Button>
+                <Button 
+                  size="sm"
+                  onClick={() => updateBatchMutation.mutate({ notes: batchNotesText })}
+                  disabled={updateBatchMutation.isPending}
+                >
+                  <Save className="mr-2 h-4 w-4" />
+                  {updateBatchMutation.isPending ? "Saving..." : "Save Notes"}
+                </Button>
+              </div>
+            )}
+          </div>
+        </CardHeader>
+        <CardContent>
+          {isEditingBatchNotes ? (
+            <Textarea
+              placeholder="Add notes, tags, or comments about this reconciliation batch..."
+              value={batchNotesText}
+              onChange={(e) => setBatchNotesText(e.target.value)}
+              className="min-h-[100px]"
+            />
+          ) : (
+            <div className="min-h-[60px] p-3 bg-muted/50 rounded border text-sm">
+              {batch.notes ? (
+                <span className="text-foreground">{batch.notes}</span>
+              ) : (
+                <span className="text-muted-foreground italic">No notes added yet. Click "Edit Notes" to add batch comments.</span>
+              )}
+            </div>
+          )}
+        </CardContent>
+      </Card>
+
       {/* Filters */}
       <Card>
         <CardHeader>
@@ -263,25 +399,49 @@ export default function ReconciliationDetailPage() {
           </CardDescription>
         </CardHeader>
         <CardContent>
-          <div className="overflow-x-auto">
-            <Table>
-              <TableHeader>
-                <TableRow>
-                  <TableHead>Order ID</TableHead>
-                  <TableHead>Currency</TableHead>
-                  <TableHead className="text-right">Gross</TableHead>
-                  <TableHead className="text-right">Fees</TableHead>
-                  <TableHead className="text-right">Tax</TableHead>
-                  <TableHead className="text-right">Expected</TableHead>
-                  <TableHead className="text-right">Paid</TableHead>
-                  <TableHead className="text-right">Difference</TableHead>
-                  <TableHead className="text-right">Diff ({batch.baseCurrency})</TableHead>
-                  <TableHead>Status</TableHead>
-                  <TableHead>Actions</TableHead>
-                </TableRow>
-              </TableHeader>
-              <TableBody>
-                {rows.map((row) => (
+          {rows.length === 0 ? (
+            <div className="text-center py-12">
+              <CheckCircle className="mx-auto h-12 w-12 text-green-600 mb-4" />
+              <h3 className="text-lg font-semibold mb-2">
+                {showOnlyMismatches ? "No Mismatches Found" : "No Orders Found"}
+              </h3>
+              <p className="text-muted-foreground mb-4">
+                {showOnlyMismatches 
+                  ? "Great! All payments in this batch match perfectly. No discrepancies to review."
+                  : statusFilter !== "all"
+                  ? `No orders found with status "${statusFilter}". Try adjusting your filters.`
+                  : "No order data available for this batch."
+                }
+              </p>
+              {showOnlyMismatches && (
+                <Button 
+                  variant="outline"
+                  onClick={() => setShowOnlyMismatches(false)}
+                >
+                  Show All Orders
+                </Button>
+              )}
+            </div>
+          ) : (
+            <div className="overflow-x-auto">
+              <Table>
+                <TableHeader>
+                  <TableRow>
+                    <TableHead>Order ID</TableHead>
+                    <TableHead>Currency</TableHead>
+                    <TableHead className="text-right">Gross</TableHead>
+                    <TableHead className="text-right">Fees</TableHead>
+                    <TableHead className="text-right">Tax</TableHead>
+                    <TableHead className="text-right">Expected</TableHead>
+                    <TableHead className="text-right">Paid</TableHead>
+                    <TableHead className="text-right">Difference</TableHead>
+                    <TableHead className="text-right">Diff ({batch.baseCurrency})</TableHead>
+                    <TableHead>Status</TableHead>
+                    <TableHead>Actions</TableHead>
+                  </TableRow>
+                </TableHeader>
+                <TableBody>
+                  {rows.map((row) => (
                   <TableRow key={row.id}>
                     <TableCell className="font-mono text-sm">{row.orderId}</TableCell>
                     <TableCell>
@@ -409,9 +569,10 @@ export default function ReconciliationDetailPage() {
                     </TableCell>
                   </TableRow>
                 ))}
-              </TableBody>
-            </Table>
-          </div>
+                </TableBody>
+              </Table>
+            </div>
+          )}
         </CardContent>
       </Card>
     </div>
