@@ -9,6 +9,7 @@ import { CustomerRadarPanel } from "@/components/dashboard/customer-radar-panel"
 import { AICopilotPanel } from "@/components/dashboard/ai-copilot-panel";
 import { ReturnAbusePanel } from "@/components/dashboard/return-abuse-panel";
 import { POGeneratorPanel } from "@/components/dashboard/po-generator-panel";
+import { SupplierManagementPanel } from "@/components/dashboard/supplier-management-panel";
 import { CSVImportModal } from "@/components/csv-import-modal";
 import { SettingsPanel } from "@/components/settings-panel";
 import { AnalyticsPanel } from "@/components/analytics-panel";
@@ -62,6 +63,11 @@ export default function HomePage() {
       // Show PO Generator Panel for admins only
       if (user.role === "admin") {
         panels.push("po-generator");
+      }
+
+      // Show Supplier Management Panel for admins and managers
+      if (user.role === "admin" || user.role === "manager") {
+        panels.push("supplier-management");
       }
       
       // Always show Analytics panel for all users
@@ -161,6 +167,13 @@ export default function HomePage() {
           {selectedPanels.includes("po-generator") && user.role === "admin" && (
             <div className="lg:col-span-1">
               <POGeneratorPanel user={user} />
+            </div>
+          )}
+
+          {/* Supplier Management - Admin/Manager only - Responsive */}
+          {selectedPanels.includes("supplier-management") && (user.role === "admin" || user.role === "manager") && (
+            <div className="lg:col-span-1">
+              <SupplierManagementPanel />
             </div>
           )}
           

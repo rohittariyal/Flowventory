@@ -124,6 +124,7 @@ export const onboardingData = pgTable("onboarding_data", {
   createdAt: timestamp("created_at").defaultNow(),
 });
 
+
 // Returns & RMA management
 export const returns = pgTable("returns", {
   id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
@@ -749,15 +750,19 @@ export interface ReorderSuggestion {
   };
 }
 
-// Restock Autopilot V1 - Supplier schema
+// Supplier Management - Enhanced schema
 export const suppliers = pgTable("suppliers", {
   id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
   workspaceId: varchar("workspace_id").notNull(),
   name: text("name").notNull(),
   email: text("email"),
   phone: text("phone"),
-  currency: text("currency", { enum: ["INR", "GBP", "USD", "AED", "SGD"] }).notNull().default('INR'),
+  region: text("region", { enum: ["US", "UK", "UAE", "Singapore", "India", "Other"] }).notNull().default("US"),
+  currency: text("currency", { enum: ["INR", "GBP", "USD", "AED", "SGD"] }).notNull().default('USD'),
+  leadTimeDays: integer("lead_time_days").notNull().default(7),
+  paymentTerms: text("payment_terms").notNull().default("Net 30"),
   address: text("address"),
+  status: text("status", { enum: ["active", "archived"] }).notNull().default("active"),
   skus: jsonb("skus").$type<{
     sku: string;
     unitCost: number;
@@ -782,14 +787,18 @@ export const reorderPolicies = pgTable("reorder_policies", {
   updatedAt: timestamp("updated_at").defaultNow().notNull()
 });
 
-// Restock Autopilot schemas
+// Supplier Management schemas
 export const insertSupplierSchema = z.object({
   workspaceId: z.string(),
   name: z.string().min(1, "Supplier name is required"),
   email: z.string().email().optional().or(z.literal("")),
   phone: z.string().optional(),
-  currency: z.enum(["INR", "GBP", "USD", "AED", "SGD"]).default('INR'),
+  region: z.enum(["US", "UK", "UAE", "Singapore", "India", "Other"]).default("US"),
+  currency: z.enum(["INR", "GBP", "USD", "AED", "SGD"]).default('USD'),
+  leadTimeDays: z.number().int().min(1, "Lead time must be at least 1 day").default(7),
+  paymentTerms: z.string().min(1, "Payment terms are required").default("Net 30"),
   address: z.string().optional(),
+  status: z.enum(["active", "archived"]).default("active"),
   skus: z.array(z.object({
     sku: z.string().min(1),
     unitCost: z.number().min(0),

@@ -88,7 +88,7 @@ export interface IStorage {
   getReconRows(batchId: string, filters?: { status?: string, hasDiff?: boolean, limit?: number, offset?: number }): Promise<ReconRow[]>;
   getReconRow(id: string): Promise<ReconRow | undefined>;
   updateReconRow(id: string, updates: UpdateReconRowData): Promise<ReconRow | undefined>;
-  updateReconBatch(id: string, updates: UpdateReconBatchData): Promise<ReconBatch | undefined>;
+  updateReconBatch(id: string, updates: Partial<ReconBatch>): Promise<ReconBatch | undefined>;
   updateReconBatchTotals(batchId: string, totals: { expectedBaseTotal: number, paidBaseTotal: number, diffBaseTotal: number, ordersTotal: number, mismatchedCount: number }): Promise<void>;
   
   // Simple Purchase Order methods
@@ -172,6 +172,9 @@ export class MemStorage implements IStorage {
     
     // Initialize test regions with UAE fixture
     this.initializeTestRegions();
+    
+    // Initialize sample suppliers for testing
+    this.initializeSampleSuppliers();
   }
 
   private initializeSampleNotifications() {
@@ -320,6 +323,7 @@ export class MemStorage implements IStorage {
       organizationId,
       onboardingComplete: "false",
       platformConnections: {},
+      baseCurrency: "USD",
       invitedBy: null,
       joinedAt: new Date(),
       createdAt: new Date(),
@@ -410,6 +414,7 @@ export class MemStorage implements IStorage {
         organizationId,
         onboardingComplete: "false",
         platformConnections: {},
+        baseCurrency: "USD",
         invitedBy,
         joinedAt: new Date(),
         createdAt: new Date(),
@@ -839,12 +844,7 @@ export class MemStorage implements IStorage {
   }
 
   async getTaskByEventId(eventId: string): Promise<Task | undefined> {
-    for (const task of this.tasks.values()) {
-      if (task.sourceEventId === eventId) {
-        return task;
-      }
-    }
-    return undefined;
+    return Array.from(this.tasks.values()).find(task => task.sourceEventId === eventId);
   }
 
   // Helper methods for task generation
@@ -917,7 +917,7 @@ export class MemStorage implements IStorage {
     const po: PurchaseOrder = {
       id: randomUUID(),
       ...poData,
-      status: "draft",
+      status: "DRAFT",
       createdAt: now,
       updatedAt: now,
     };
@@ -928,7 +928,7 @@ export class MemStorage implements IStorage {
 
   async getPurchaseOrders(organizationId: string, filters?: { status?: string }): Promise<PurchaseOrder[]> {
     const allPOs = Array.from(this.purchaseOrders.values())
-      .filter(po => po.organizationId === organizationId);
+      .filter(po => po.workspaceId === organizationId);
 
     if (filters?.status) {
       return allPOs.filter(po => po.status === filters.status);
@@ -1035,6 +1035,7 @@ export class MemStorage implements IStorage {
   async createActivity(activityData: InsertActivity): Promise<Activity> {
     const activity: Activity = {
       ...activityData,
+      meta: activityData.meta || {},
       createdAt: activityData.createdAt || new Date(),
     };
     
@@ -1055,6 +1056,9 @@ export class MemStorage implements IStorage {
     const rule: Rule = {
       id,
       ...ruleData,
+      priority: ruleData.priority || null,
+      assigneeId: ruleData.assigneeId || null,
+      dueOffsetHours: ruleData.dueOffsetHours || null,
       createdAt: now,
     };
     
@@ -1076,6 +1080,9 @@ export class MemStorage implements IStorage {
     const batch: ReconBatch = {
       ...batchData,
       id: batchData.id || randomUUID(),
+      notes: batchData.notes || null,
+      updatedAt: null,
+      mismatchedCount: batchData.mismatchedCount || 0,
       createdAt: new Date(),
     };
     this.reconBatches.set(batch.id, batch);
@@ -1087,6 +1094,9 @@ export class MemStorage implements IStorage {
       ...rowData,
       id: rowData.id || randomUUID(),
       status: rowData.status || "PENDING",
+      notes: rowData.notes || null,
+      taskId: rowData.taskId || null,
+      eventId: rowData.eventId || null,
       createdAt: new Date(),
       updatedAt: new Date(),
     };
@@ -1158,7 +1168,7 @@ export class MemStorage implements IStorage {
     return updatedRow;
   }
 
-  async updateReconBatch(id: string, updates: UpdateReconBatchData): Promise<ReconBatch | undefined> {
+  async updateReconBatch(id: string, updates: Partial<ReconBatch>): Promise<ReconBatch | undefined> {
     const batch = this.reconBatches.get(id);
     if (!batch) return undefined;
     
@@ -1225,6 +1235,8 @@ export class MemStorage implements IStorage {
     const supplier: Supplier = {
       id,
       ...supplierData,
+      email: supplierData.email || null,
+      notes: supplierData.notes || null,
       createdAt: now,
       updatedAt: now,
     };
@@ -1273,6 +1285,7 @@ export class MemStorage implements IStorage {
     const policy: ReorderPolicy = {
       id,
       ...policyData,
+      maxDaysCover: policyData.maxDaysCover || null,
       createdAt: now,
       updatedAt: now,
     };
@@ -1319,14 +1332,12 @@ export class MemStorage implements IStorage {
     const newSettings: WorkspaceSettings = {
       id: randomUUID(),
       organizationId,
-      baseCurrency: settings.baseCurrency || "INR",
-      timezone: settings.timezone || "Asia/Kolkata",
-      regionsEnabled: settings.regionsEnabled || [],
-      slaDefaults: settings.slaDefaults || {
-        RESTOCK: 24,
-        RETRY_SYNC: 2,
-        RECONCILE: 72
-      },
+      orgName: settings.orgName || "Default Organization",
+      logoUrl: settings.logoUrl || null,
+      defaultCurrency: settings.defaultCurrency || "USD",
+      defaultTimezone: settings.defaultTimezone || "UTC",
+      dateFormat: settings.dateFormat || "MM/DD/YYYY",
+      numberFormat: settings.numberFormat || "US",
       createdAt: new Date(),
       updatedAt: new Date(),
     };
@@ -1342,14 +1353,11 @@ export class MemStorage implements IStorage {
       // Create default settings if none exist
       existingSettings = await this.createWorkspaceSettings(organizationId, {
         organizationId,
-        baseCurrency: "INR",
-        timezone: "Asia/Kolkata",
-        regionsEnabled: [],
-        slaDefaults: {
-          RESTOCK: 24,
-          RETRY_SYNC: 2,
-          RECONCILE: 72
-        }
+        orgName: "Default Organization",
+        defaultCurrency: "USD",
+        defaultTimezone: "UTC",
+        dateFormat: "MM/DD/YYYY",
+        numberFormat: "US"
       });
     }
 
@@ -1378,7 +1386,7 @@ export class MemStorage implements IStorage {
       code: regionData.code,
       slaHours: regionData.slaHours || 24,
       restockBufferPercentage: regionData.restockBufferPercentage || 20,
-      isActive: regionData.isActive !== false,
+      isActive: regionData.isActive !== false ? "true" : "false",
       createdAt: new Date(),
       updatedAt: new Date(),
     };
@@ -1423,7 +1431,8 @@ export class MemStorage implements IStorage {
       alertsEnabled: settings.alertsEnabled || "true",
       smtpHost: settings.smtpHost || null,
       smtpPort: settings.smtpPort || null,
-      smtpUser: settings.smtpUser || null,
+      smtpUsername: settings.smtpUsername || null,
+      smtpFromEmail: settings.smtpFromEmail || null,
       smtpPassword: settings.smtpPassword || null,
       createdAt: new Date(),
       updatedAt: new Date(),
@@ -1449,6 +1458,46 @@ export class MemStorage implements IStorage {
 
     this.notificationSettings.set(existing.id, updatedSettings);
     return updatedSettings;
+  }
+
+  // Initialize sample suppliers for testing
+  private async initializeSampleSuppliers(): Promise<void> {
+    const defaultWorkspaceId = "default-workspace";
+    
+    const sampleSuppliers = [
+      {
+        workspaceId: defaultWorkspaceId,
+        name: "ABC Exports",
+        region: "India" as const,
+        contact: "raj@abcexports.in",
+        leadTimeDays: 12,
+        paymentTerms: "Net 30",
+        status: "active" as const,
+        currency: "INR" as const,
+        skus: [
+          { sku: "SKU-001", cost: 25.00, moq: 100 },
+          { sku: "SKU-002", cost: 45.50, moq: 50 }
+        ]
+      },
+      {
+        workspaceId: defaultWorkspaceId,
+        name: "FastShip UK Ltd",
+        region: "UK" as const,
+        contact: "orders@fastshipuk.com",
+        leadTimeDays: 5,
+        paymentTerms: "Net 15",
+        status: "active" as const,
+        currency: "GBP" as const,
+        skus: [
+          { sku: "SKU-003", cost: 18.75, moq: 200 },
+          { sku: "SKU-001", cost: 28.00, moq: 150 }
+        ]
+      }
+    ];
+
+    for (const supplierData of sampleSuppliers) {
+      await this.createSupplier(supplierData);
+    }
   }
 }
 
