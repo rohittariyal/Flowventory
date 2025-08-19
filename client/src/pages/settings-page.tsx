@@ -36,7 +36,7 @@ import {
   AlertTitle,
 } from "@/components/ui/alert";
 import { useToast } from "@/hooks/use-toast";
-import { Trash2, Plus, Settings, Globe, MapPin, Bell, Mail, Eye, Send, AlertCircle, X } from "lucide-react";
+import { Trash2, Plus, Settings, Globe, MapPin, Bell, Mail, Eye, Send, AlertCircle, X, RotateCcw } from "lucide-react";
 
 const SETTINGS_KEY = "flowventory:settings";
 
@@ -69,14 +69,23 @@ const notificationsSchema = z.object({
   password: z.string(),
 });
 
+const returnsSchema = z.object({
+  returnWindowDays: z.number().min(1).max(365, "Return window must be between 1 and 365 days"),
+  allowExchanges: z.boolean(),
+  autoApproveThreshold: z.number().min(0, "Auto-approve threshold must be non-negative"),
+  currency: z.enum(["USD", "GBP", "AED", "SGD"]),
+});
+
 type WorkspaceSettings = z.infer<typeof workspaceSchema>;
 type Region = z.infer<typeof regionSchema>;
 type NotificationSettings = z.infer<typeof notificationsSchema>;
+type ReturnsSettings = z.infer<typeof returnsSchema>;
 
 interface Settings {
   workspace: WorkspaceSettings;
   regions: Region[];
   notifications: NotificationSettings;
+  returns: ReturnsSettings;
 }
 
 const defaultSettings: Settings = {
@@ -104,6 +113,12 @@ const defaultSettings: Settings = {
     smtpPort: 587,
     username: "",
     password: "",
+  },
+  returns: {
+    returnWindowDays: 30,
+    allowExchanges: true,
+    autoApproveThreshold: 50, // $50.00
+    currency: "USD",
   },
 };
 
@@ -157,6 +172,11 @@ export default function SettingsPage() {
     },
   });
 
+  const returnsForm = useForm<ReturnsSettings>({
+    resolver: zodResolver(returnsSchema),
+    defaultValues: settings.returns,
+  });
+
   // Update form defaults when settings change
   useEffect(() => {
     workspaceForm.reset(settings.workspace);
@@ -164,7 +184,8 @@ export default function SettingsPage() {
       ...settings.notifications,
       digestRecipients: digestRecipients,
     });
-  }, [settings, digestRecipients, workspaceForm, notificationsForm]);
+    returnsForm.reset(settings.returns);
+  }, [settings, digestRecipients, workspaceForm, notificationsForm, returnsForm]);
 
   // Update digest recipients when settings change
   useEffect(() => {
@@ -260,6 +281,19 @@ export default function SettingsPage() {
           description: "Notification settings updated successfully.",
         });
       }
+    } catch (error) {
+      toast({
+        title: "Invalid fields",
+        description: "Please check your input and try again.",
+        variant: "destructive",
+      });
+    }
+  };
+
+  const onReturnsSubmit = (data: ReturnsSettings) => {
+    try {
+      const newSettings = { ...settings, returns: data };
+      saveToLocalStorage(newSettings);
     } catch (error) {
       toast({
         title: "Invalid fields",
@@ -424,6 +458,7 @@ export default function SettingsPage() {
     { id: "localization", label: "Localization", icon: Globe },
     { id: "regions", label: "Regions & SLAs", icon: MapPin },
     { id: "notifications", label: "Notifications", icon: Bell },
+    { id: "returns", label: "Returns & RMA", icon: RotateCcw },
   ];
 
   return (
@@ -1030,6 +1065,115 @@ export default function SettingsPage() {
                 </DialogContent>
               </Dialog>
             </div>
+          )}
+
+          {activeTab === "returns" && (
+            <Card>
+              <CardHeader>
+                <CardTitle className="flex items-center space-x-2">
+                  <RotateCcw className="h-5 w-5" />
+                  <span>Returns & RMA Settings</span>
+                </CardTitle>
+                <CardDescription>
+                  Configure return policies and RMA workflow settings
+                </CardDescription>
+              </CardHeader>
+              <CardContent>
+                <form onSubmit={returnsForm.handleSubmit(onReturnsSubmit)} className="space-y-6">
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                    <div>
+                      <Label htmlFor="returnWindowDays">Return Window (Days)</Label>
+                      <Input
+                        id="returnWindowDays"
+                        type="number"
+                        min="1"
+                        max="365"
+                        {...returnsForm.register("returnWindowDays", { valueAsNumber: true })}
+                        placeholder="30"
+                      />
+                      {returnsForm.formState.errors.returnWindowDays && (
+                        <p className="text-sm text-red-500 mt-1">
+                          {returnsForm.formState.errors.returnWindowDays.message}
+                        </p>
+                      )}
+                      <p className="text-sm text-gray-500 mt-1">
+                        Number of days customers have to return items
+                      </p>
+                    </div>
+
+                    <div>
+                      <Label htmlFor="autoApproveThreshold">Auto-Approve Threshold</Label>
+                      <Input
+                        id="autoApproveThreshold"
+                        type="number"
+                        min="0"
+                        step="0.01"
+                        {...returnsForm.register("autoApproveThreshold", { valueAsNumber: true })}
+                        placeholder="50.00"
+                      />
+                      {returnsForm.formState.errors.autoApproveThreshold && (
+                        <p className="text-sm text-red-500 mt-1">
+                          {returnsForm.formState.errors.autoApproveThreshold.message}
+                        </p>
+                      )}
+                      <p className="text-sm text-gray-500 mt-1">
+                        Returns under this value are auto-approved
+                      </p>
+                    </div>
+
+                    <div>
+                      <Label htmlFor="returnsCurrency">Default Currency</Label>
+                      <Select
+                        value={returnsForm.watch("currency")}
+                        onValueChange={(value) => returnsForm.setValue("currency", value as "USD" | "GBP" | "AED" | "SGD")}
+                      >
+                        <SelectTrigger>
+                          <SelectValue placeholder="Select currency" />
+                        </SelectTrigger>
+                        <SelectContent>
+                          <SelectItem value="USD">USD - US Dollar</SelectItem>
+                          <SelectItem value="GBP">GBP - British Pound</SelectItem>
+                          <SelectItem value="AED">AED - UAE Dirham</SelectItem>
+                          <SelectItem value="SGD">SGD - Singapore Dollar</SelectItem>
+                        </SelectContent>
+                      </Select>
+                      {returnsForm.formState.errors.currency && (
+                        <p className="text-sm text-red-500 mt-1">
+                          {returnsForm.formState.errors.currency.message}
+                        </p>
+                      )}
+                    </div>
+
+                    <div className="flex items-center space-x-2">
+                      <Switch
+                        id="allowExchanges"
+                        checked={returnsForm.watch("allowExchanges")}
+                        onCheckedChange={(checked) => returnsForm.setValue("allowExchanges", checked)}
+                      />
+                      <div>
+                        <Label htmlFor="allowExchanges">Allow Exchanges</Label>
+                        <p className="text-sm text-gray-500">
+                          Enable product exchanges in addition to refunds
+                        </p>
+                      </div>
+                    </div>
+                  </div>
+
+                  <div className="flex justify-between items-center pt-6 border-t">
+                    <Button
+                      type="button"
+                      variant="outline"
+                      onClick={() => returnsForm.reset(settings.returns)}
+                    >
+                      Reset Changes
+                    </Button>
+                    <Button type="submit">
+                      Save Returns Settings
+                    </Button>
+                  </div>
+                </form>
+              </CardContent>
+            </Card>
           )}
         </div>
       </div>

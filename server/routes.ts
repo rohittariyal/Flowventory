@@ -1863,5 +1863,195 @@ export function registerRoutes(app: Express): Server {
     }
   });
 
+  // Returns & RMA API endpoints
+  
+  // Get all returns for the organization
+  app.get("/api/returns", requireAuth, async (req, res) => {
+    try {
+      const user = req.user as any;
+      const organizationId = user.organizationId;
+      
+      // Mock data for now - replace with actual database query
+      const mockReturns = [
+        {
+          id: "ret_001",
+          rmaId: "RMA-2024-001",
+          customerName: "Sarah Johnson",
+          customerEmail: "sarah.johnson@email.com",
+          orderReference: "ORD-2024-0847",
+          items: [
+            { sku: "ELEC-TAB-001", productName: "Samsung Galaxy Tab A8", quantity: 1, unitPrice: 25000 }
+          ],
+          reason: "damaged",
+          reasonDescription: "Screen cracked during shipping",
+          status: "in_transit",
+          totalValue: 25000,
+          currency: "USD",
+          resolution: "none",
+          inspectionNotes: null,
+          inspectionPhotos: [],
+          createdAt: "2024-01-15T10:30:00Z",
+          updatedAt: "2024-01-16T14:20:00Z"
+        },
+        {
+          id: "ret_002",
+          rmaId: "RMA-2024-002",
+          customerName: "Mike Chen",
+          customerEmail: "mike.chen@email.com",
+          orderReference: "ORD-2024-0823",
+          items: [
+            { sku: "FASH-TEE-001", productName: "Organic Cotton T-Shirt", quantity: 2, unitPrice: 2500 }
+          ],
+          reason: "wrong_item",
+          reasonDescription: "Received size Large instead of Medium",
+          status: "resolved",
+          totalValue: 5000,
+          currency: "USD",
+          resolution: "replace",
+          inspectionNotes: "Items in perfect condition, wrong size shipped",
+          inspectionPhotos: [],
+          createdAt: "2024-01-10T16:45:00Z",
+          updatedAt: "2024-01-18T11:30:00Z"
+        },
+        {
+          id: "ret_003",
+          rmaId: "RMA-2024-003",
+          customerName: "Emma Wilson",
+          customerEmail: "emma.wilson@email.com",
+          orderReference: "ORD-2024-0956",
+          items: [
+            { sku: "HOME-CAN-002", productName: "Scented Candle Set", quantity: 1, unitPrice: 4500 }
+          ],
+          reason: "customer_remorse",
+          reasonDescription: "Changed mind about fragrance",
+          status: "requested",
+          totalValue: 4500,
+          currency: "USD",
+          resolution: "none",
+          inspectionNotes: null,
+          inspectionPhotos: [],
+          createdAt: "2024-01-18T09:15:00Z",
+          updatedAt: "2024-01-18T09:15:00Z"
+        }
+      ];
+      
+      res.json(mockReturns);
+    } catch (error) {
+      console.error("Error fetching returns:", error);
+      res.status(500).json({ error: "Failed to fetch returns" });
+    }
+  });
+
+  // Create a new return
+  app.post("/api/returns", requireAuth, async (req, res) => {
+    try {
+      const user = req.user as any;
+      const organizationId = user.organizationId;
+      
+      const {
+        customerName,
+        customerEmail,
+        orderReference,
+        items,
+        reason,
+        reasonDescription,
+        totalValue,
+        currency = "USD"
+      } = req.body;
+
+      // Generate RMA ID
+      const rmaId = `RMA-${new Date().getFullYear()}-${String(Math.floor(Math.random() * 9999) + 1).padStart(3, '0')}`;
+      
+      const newReturn = {
+        id: `ret_${Date.now()}`,
+        rmaId,
+        organizationId,
+        customerName,
+        customerEmail,
+        orderReference,
+        items,
+        reason,
+        reasonDescription,
+        status: "requested",
+        totalValue,
+        currency,
+        resolution: "none",
+        inspectionNotes: null,
+        inspectionPhotos: [],
+        createdBy: user.id,
+        createdAt: new Date().toISOString(),
+        updatedAt: new Date().toISOString()
+      };
+
+      // In production, save to database
+      // const savedReturn = await storage.createReturn(newReturn);
+      
+      res.status(201).json(newReturn);
+    } catch (error) {
+      console.error("Error creating return:", error);
+      res.status(500).json({ error: "Failed to create return" });
+    }
+  });
+
+  // Update return status and details
+  app.put("/api/returns/:id", requireAuth, async (req, res) => {
+    try {
+      const user = req.user as any;
+      const returnId = req.params.id;
+      const updates = req.body;
+
+      // In production, update in database with validation
+      const updatedReturn = {
+        id: returnId,
+        ...updates,
+        updatedAt: new Date().toISOString()
+      };
+
+      res.json(updatedReturn);
+    } catch (error) {
+      console.error("Error updating return:", error);
+      res.status(500).json({ error: "Failed to update return" });
+    }
+  });
+
+  // Get returns settings for organization
+  app.get("/api/settings/returns", requireAuth, async (req, res) => {
+    try {
+      const user = req.user as any;
+      const organizationId = user.organizationId;
+      
+      // Mock settings - replace with database query
+      const mockSettings = {
+        returnWindowDays: 30,
+        allowExchanges: true,
+        autoApproveThreshold: 5000, // $50.00 in cents
+        currency: "USD"
+      };
+      
+      res.json(mockSettings);
+    } catch (error) {
+      console.error("Error fetching returns settings:", error);
+      res.status(500).json({ error: "Failed to fetch returns settings" });
+    }
+  });
+
+  // Update returns settings
+  app.post("/api/settings/returns", requireAuth, async (req, res) => {
+    try {
+      const user = req.user as any;
+      const organizationId = user.organizationId;
+      
+      const settings = req.body;
+      
+      // In production, save to database
+      // const savedSettings = await storage.updateReturnsSettings(organizationId, settings);
+      
+      res.json({ success: true, settings });
+    } catch (error) {
+      console.error("Error updating returns settings:", error);
+      res.status(500).json({ error: "Failed to update returns settings" });
+    }
+  });
+
   return httpServer;
 }

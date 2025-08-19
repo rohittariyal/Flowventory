@@ -124,6 +124,42 @@ export const onboardingData = pgTable("onboarding_data", {
   createdAt: timestamp("created_at").defaultNow(),
 });
 
+// Returns & RMA management
+export const returns = pgTable("returns", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  rmaId: text("rma_id").notNull().unique(), // Human-readable RMA ID
+  organizationId: varchar("organization_id").references(() => organizations.id).notNull(),
+  customerId: varchar("customer_id"), // Can be null for guest orders
+  customerName: text("customer_name").notNull(),
+  customerEmail: text("customer_email").notNull(),
+  orderReference: text("order_reference").notNull(), // Linked order ID
+  items: jsonb("items").notNull(), // Array of {sku, productName, quantity, unitPrice}
+  reason: text("reason", { enum: ["damaged", "wrong_item", "customer_remorse", "quality_issue", "other"] }).notNull(),
+  reasonDescription: text("reason_description"),
+  status: text("status", { enum: ["requested", "approved", "in_transit", "received", "inspected", "resolved"] }).default("requested").notNull(),
+  totalValue: integer("total_value").notNull(), // In cents
+  currency: text("currency", { enum: ["INR", "USD", "GBP", "AED", "SGD"] }).default("USD").notNull(),
+  resolution: text("resolution", { enum: ["refund", "replace", "credit", "none"] }).default("none"),
+  inspectionNotes: text("inspection_notes"),
+  inspectionPhotos: text("inspection_photos").array(), // URLs to uploaded photos
+  createdBy: varchar("created_by").references(() => users.id),
+  assignedTo: varchar("assigned_to").references(() => users.id), // Warehouse manager
+  createdAt: timestamp("created_at").defaultNow(),
+  updatedAt: timestamp("updated_at").defaultNow(),
+});
+
+// Returns settings per organization
+export const returnsSettings = pgTable("returns_settings", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  organizationId: varchar("organization_id").references(() => organizations.id).notNull().unique(),
+  returnWindowDays: integer("return_window_days").default(30).notNull(),
+  allowExchanges: text("allow_exchanges").default("true").notNull(),
+  autoApproveThreshold: integer("auto_approve_threshold").default(0), // In cents, 0 = disabled
+  currency: text("currency", { enum: ["INR", "USD", "GBP", "AED", "SGD"] }).default("USD").notNull(),
+  createdAt: timestamp("created_at").defaultNow(),
+  updatedAt: timestamp("updated_at").defaultNow(),
+});
+
 export const insertUserSchema = createInsertSchema(users).pick({
   username: true,
   password: true,
@@ -286,6 +322,74 @@ export const createNotificationSchema = z.object({
   metadata: z.record(z.any()).default({}),
   expiresAt: z.string().optional(), // ISO string
 });
+
+// Returns & RMA schemas
+export const insertReturnSchema = createInsertSchema(returns).omit({
+  id: true,
+  rmaId: true,
+  createdAt: true,
+  updatedAt: true,
+}).extend({
+  customerName: z.string().min(1, "Customer name is required"),
+  customerEmail: z.string().email("Invalid email address"),
+  orderReference: z.string().min(1, "Order reference is required"),
+  items: z.array(z.object({
+    sku: z.string().min(1, "SKU is required"),
+    productName: z.string().min(1, "Product name is required"),
+    quantity: z.number().int().min(1, "Quantity must be at least 1"),
+    unitPrice: z.number().min(0, "Unit price must be non-negative"),
+  })).min(1, "At least one item is required"),
+  reason: z.enum(["damaged", "wrong_item", "customer_remorse", "quality_issue", "other"]),
+  reasonDescription: z.string().optional(),
+  totalValue: z.number().int().min(0, "Total value must be non-negative"),
+});
+
+export const updateReturnSchema = z.object({
+  status: z.enum(["requested", "approved", "in_transit", "received", "inspected", "resolved"]).optional(),
+  inspectionNotes: z.string().optional(),
+  inspectionPhotos: z.array(z.string()).optional(),
+  resolution: z.enum(["refund", "replace", "credit", "none"]).optional(),
+  assignedTo: z.string().optional(),
+});
+
+export const insertReturnsSettingsSchema = createInsertSchema(returnsSettings).omit({
+  id: true,
+  createdAt: true,
+  updatedAt: true,
+}).extend({
+  returnWindowDays: z.number().int().min(1).max(365),
+  allowExchanges: z.boolean(),
+  autoApproveThreshold: z.number().int().min(0).optional(),
+});
+
+export type Return = typeof returns.$inferSelect;
+export type InsertReturn = z.infer<typeof insertReturnSchema>;
+export type UpdateReturn = z.infer<typeof updateReturnSchema>;
+export type ReturnsSettings = typeof returnsSettings.$inferSelect;
+export type InsertReturnsSettings = z.infer<typeof insertReturnsSettingsSchema>;
+
+// Add returns relations
+export const returnsRelations = relations(returns, ({ one }) => ({
+  organization: one(organizations, {
+    fields: [returns.organizationId],
+    references: [organizations.id],
+  }),
+  createdByUser: one(users, {
+    fields: [returns.createdBy],
+    references: [users.id],
+  }),
+  assignedToUser: one(users, {
+    fields: [returns.assignedTo],
+    references: [users.id],
+  }),
+}));
+
+export const returnsSettingsRelations = relations(returnsSettings, ({ one }) => ({
+  organization: one(organizations, {
+    fields: [returnsSettings.organizationId],
+    references: [organizations.id],
+  }),
+}));
 
 export const markNotificationReadSchema = z.object({
   notificationId: z.string().min(1, "Notification ID is required"),
