@@ -10,6 +10,7 @@ import { AICopilotPanel } from "@/components/dashboard/ai-copilot-panel";
 import { ReturnAbusePanel } from "@/components/dashboard/return-abuse-panel";
 import { POGeneratorPanel } from "@/components/dashboard/po-generator-panel";
 import { SupplierManagementPanel } from "@/components/dashboard/supplier-management-panel";
+import { SupplierSLAPanel } from "@/components/dashboard/supplier-sla-panel";
 import { CSVImportModal } from "@/components/csv-import-modal";
 import { SettingsPanel } from "@/components/settings-panel";
 import { AnalyticsPanel } from "@/components/analytics-panel";
@@ -68,6 +69,8 @@ export default function HomePage() {
       // Show Supplier Management Panel for admins and managers
       if (user.role === "admin" || user.role === "manager") {
         panels.push("supplier-management");
+        // Also show SLA Tracker Panel for supply chain monitoring
+        panels.push("supplier-sla");
       }
       
       // Always show Analytics panel for all users
@@ -174,6 +177,13 @@ export default function HomePage() {
           {selectedPanels.includes("supplier-management") && (user.role === "admin" || user.role === "manager") && (
             <div className="lg:col-span-1">
               <SupplierManagementPanel />
+            </div>
+          )}
+
+          {/* Supplier SLA Tracker - Admin/Manager only - Responsive */}
+          {selectedPanels.includes("supplier-sla") && (user.role === "admin" || user.role === "manager") && (
+            <div className="lg:col-span-2 xl:col-span-3">
+              <SupplierSLAPanel />
             </div>
           )}
           

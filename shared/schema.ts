@@ -1,5 +1,5 @@
 import { sql } from "drizzle-orm";
-import { pgTable, text, varchar, timestamp, jsonb, integer } from "drizzle-orm/pg-core";
+import { pgTable, text, varchar, timestamp, jsonb, integer, boolean, real } from "drizzle-orm/pg-core";
 import { createInsertSchema } from "drizzle-zod";
 import { z } from "zod";
 import { relations } from "drizzle-orm";
@@ -711,6 +711,9 @@ export const supplierSchema = z.object({
     leadTimeDays: z.number().int().min(0, "Lead time must be non-negative"),
   })).default([]),
   notes: z.string().optional(),
+  // SLA targets
+  onTimeTargetPct: z.number().min(0).max(100).default(95),
+  defectTargetPct: z.number().min(0).max(100).default(2),
 });
 
 export const reorderPolicySchema = z.object({
@@ -771,6 +774,32 @@ export const suppliers = pgTable("suppliers", {
     leadTimeDays: number;
   }[]>().notNull().default([]),
   notes: text("notes"),
+  // SLA Tracking fields
+  onTimeRatePct: real("on_time_rate_pct").default(100.0),
+  defectRatePct: real("defect_rate_pct").default(0.0),
+  avgLeadTimeDays: real("avg_lead_time_days").default(7.0),
+  onTimeTargetPct: real("on_time_target_pct").default(95.0),
+  defectTargetPct: real("defect_target_pct").default(2.0),
+  totalDeliveries: integer("total_deliveries").default(0),
+  breachCount: integer("breach_count").default(0),
+  lastBreachDate: timestamp("last_breach_date"),
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+  updatedAt: timestamp("updated_at").defaultNow().notNull()
+});
+
+// Supplier Delivery Tracking - for SLA monitoring
+export const supplierDeliveries = pgTable("supplier_deliveries", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  supplierId: varchar("supplier_id").notNull().references(() => suppliers.id),
+  purchaseOrderId: varchar("purchase_order_id").references(() => purchaseOrders.id),
+  expectedDate: timestamp("expected_date").notNull(),
+  actualDate: timestamp("actual_date"),
+  status: text("status", { enum: ["PENDING", "ON_TIME", "LATE", "DEFECTIVE"] }).notNull().default("PENDING"),
+  leadTimeDays: integer("lead_time_days").notNull(),
+  actualLeadTimeDays: integer("actual_lead_time_days"),
+  isDefective: boolean("is_defective").default(false),
+  defectNotes: text("defect_notes"),
+  breachType: text("breach_type", { enum: ["NONE", "LATE_DELIVERY", "QUALITY_ISSUE", "BOTH"] }).default("NONE"),
   createdAt: timestamp("created_at").defaultNow().notNull(),
   updatedAt: timestamp("updated_at").defaultNow().notNull()
 });
@@ -824,8 +853,22 @@ export const updatePurchaseOrderStatusSchema = z.object({
 });
 
 // Restock Autopilot types
+export const supplierDeliverySchema = z.object({
+  supplierId: z.string().min(1, "Supplier ID is required"),
+  purchaseOrderId: z.string().optional(),
+  expectedDate: z.string().min(1, "Expected date is required"),
+  actualDate: z.string().optional(),
+  status: z.enum(["PENDING", "ON_TIME", "LATE", "DEFECTIVE"]).default("PENDING"),
+  leadTimeDays: z.number().int().min(0),
+  actualLeadTimeDays: z.number().int().min(0).optional(),
+  isDefective: z.boolean().default(false),
+  defectNotes: z.string().optional(),
+});
+
 export type Supplier = typeof suppliers.$inferSelect;
 export type InsertSupplier = z.infer<typeof insertSupplierSchema>;
+export type SupplierDelivery = typeof supplierDeliveries.$inferSelect;
+export type InsertSupplierDelivery = z.infer<typeof supplierDeliverySchema>;
 export type ReorderPolicy = typeof reorderPolicies.$inferSelect;
 export type InsertReorderPolicy = z.infer<typeof insertReorderPolicySchema>;
 export type ReorderSuggestData = z.infer<typeof reorderSuggestRequestSchema>;

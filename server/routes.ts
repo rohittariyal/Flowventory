@@ -1074,6 +1074,64 @@ export function registerRoutes(app: Express): Server {
     }
   });
 
+  // SLA Tracking API endpoints
+  app.get("/api/suppliers/metrics", requireAuth, async (req, res) => {
+    try {
+      const user = req.user!;
+      const workspaceId = user.organizationId || user.id;
+      
+      const metrics = await storage.getSupplierSLAMetrics(workspaceId);
+      res.json(metrics);
+    } catch (error) {
+      console.error("Error fetching SLA metrics:", error);
+      res.status(500).json({ error: "Failed to fetch SLA metrics" });
+    }
+  });
+
+  app.post("/api/suppliers/:id/deliveries", requireAuth, async (req, res) => {
+    try {
+      const { id: supplierId } = req.params;
+      const deliveryData = {
+        ...req.body,
+        supplierId,
+      };
+      
+      const delivery = await storage.createSupplierDelivery(deliveryData);
+      res.status(201).json(delivery);
+    } catch (error) {
+      console.error("Error creating supplier delivery:", error);
+      res.status(500).json({ error: "Failed to create delivery record" });
+    }
+  });
+
+  app.put("/api/suppliers/deliveries/:id", requireAuth, async (req, res) => {
+    try {
+      const { id } = req.params;
+      const updates = req.body;
+      
+      const delivery = await storage.updateSupplierDelivery(id, updates);
+      if (!delivery) {
+        return res.status(404).json({ error: "Delivery not found" });
+      }
+      
+      res.json(delivery);
+    } catch (error) {
+      console.error("Error updating supplier delivery:", error);
+      res.status(500).json({ error: "Failed to update delivery" });
+    }
+  });
+
+  app.get("/api/suppliers/:id/deliveries", requireAuth, async (req, res) => {
+    try {
+      const { id: supplierId } = req.params;
+      const deliveries = await storage.getSupplierDeliveries(supplierId);
+      res.json(deliveries);
+    } catch (error) {
+      console.error("Error fetching supplier deliveries:", error);
+      res.status(500).json({ error: "Failed to fetch deliveries" });
+    }
+  });
+
   // Restock Autopilot - Reorder Policy API routes
   app.get("/api/reorder/policy", requireAuth, async (req, res) => {
     try {

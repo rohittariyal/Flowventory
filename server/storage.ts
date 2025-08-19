@@ -1,4 +1,4 @@
-import { type User, type InsertUser, type OnboardingData, type InsertOnboardingData, type PlatformConnections, type Organization, type TeamInvitation, type InviteTeamMemberData, type UpdateTeamMemberData, type Notification, type CreateNotificationData, type Event, type InsertEvent, type Task, type InsertTask, type CreateEventData, type CreateTaskData, type UpdateTaskData, type PurchaseOrder, type InsertPurchaseOrder, type Comment, type InsertComment, type Activity, type InsertActivity, type Rule, type InsertRule, type CreateCommentData, type CreateRuleData, type ReconBatch, type InsertReconBatch, type ReconRow, type InsertReconRow, type ReconIngestData, type UpdateReconRowData, type Supplier, type InsertSupplier, type ReorderPolicy, type InsertReorderPolicy, type ReorderSuggestData, type UpdatePurchaseOrderStatusData, type SimplePurchaseOrder, type InsertSimplePurchaseOrder, type WorkspaceSettings, type InsertWorkspaceSettings, type Region, type InsertRegion, type NotificationSettings, type InsertNotificationSettings } from "@shared/schema";
+import { type User, type InsertUser, type OnboardingData, type InsertOnboardingData, type PlatformConnections, type Organization, type TeamInvitation, type InviteTeamMemberData, type UpdateTeamMemberData, type Notification, type CreateNotificationData, type Event, type InsertEvent, type Task, type InsertTask, type CreateEventData, type CreateTaskData, type UpdateTaskData, type PurchaseOrder, type InsertPurchaseOrder, type Comment, type InsertComment, type Activity, type InsertActivity, type Rule, type InsertRule, type CreateCommentData, type CreateRuleData, type ReconBatch, type InsertReconBatch, type ReconRow, type InsertReconRow, type ReconIngestData, type UpdateReconRowData, type Supplier, type InsertSupplier, type SupplierDelivery, type InsertSupplierDelivery, type ReorderPolicy, type InsertReorderPolicy, type ReorderSuggestData, type UpdatePurchaseOrderStatusData, type SimplePurchaseOrder, type InsertSimplePurchaseOrder, type WorkspaceSettings, type InsertWorkspaceSettings, type Region, type InsertRegion, type NotificationSettings, type InsertNotificationSettings } from "@shared/schema";
 import { randomUUID } from "crypto";
 import session from "express-session";
 import createMemoryStore from "memorystore";
@@ -112,6 +112,15 @@ export interface IStorage {
   updateNotificationSettings(organizationId: string, updates: any): Promise<NotificationSettings>;
   createNotificationSettings(organizationId: string, settings: any): Promise<NotificationSettings>;
   
+  // SLA Tracking methods
+  createSupplierDelivery(deliveryData: InsertSupplierDelivery): Promise<SupplierDelivery>;
+  updateSupplierDelivery(id: string, updates: Partial<SupplierDelivery>): Promise<SupplierDelivery | undefined>;
+  getSupplierDeliveries(supplierId: string): Promise<SupplierDelivery[]>;
+  calculateSupplierSLAMetrics(supplierId: string): Promise<{ onTimeRatePct: number, defectRatePct: number, avgLeadTimeDays: number, breachCount: number, totalDeliveries: number }>;
+  updateSupplierSLAMetrics(supplierId: string): Promise<void>;
+  getSuppliersWithSLABreaches(workspaceId: string): Promise<Supplier[]>;
+  getSupplierSLAMetrics(workspaceId: string): Promise<{ suppliers: any[], global: any }>;
+  
   sessionStore: session.Store;
 }
 
@@ -130,6 +139,7 @@ export class MemStorage implements IStorage {
   private reconBatches: Map<string, ReconBatch>;
   private reconRows: Map<string, ReconRow>;
   private suppliers: Map<string, Supplier>;
+  private supplierDeliveries: Map<string, SupplierDelivery>;
   private reorderPolicies: Map<string, ReorderPolicy>;
   private simplePurchaseOrders: Map<string, SimplePurchaseOrder>;
   private workspaceSettings: Map<string, WorkspaceSettings>;
@@ -152,6 +162,7 @@ export class MemStorage implements IStorage {
     this.reconBatches = new Map();
     this.reconRows = new Map();
     this.suppliers = new Map();
+    this.supplierDeliveries = new Map();
     this.reorderPolicies = new Map();
     this.simplePurchaseOrders = new Map();
     this.workspaceSettings = new Map();
@@ -201,7 +212,7 @@ export class MemStorage implements IStorage {
       code: "UAE",
       slaHours: 48,
       restockBufferPercentage: 25,
-      isActive: true,
+      isActive: "true",
       createdAt: new Date(),
       updatedAt: new Date(),
     };
@@ -591,7 +602,7 @@ export class MemStorage implements IStorage {
     }
     
     // Sort by occurred time (newest first)
-    events.sort((a, b) => b.occurredAt.getTime() - a.occurredAt.getTime());
+    events.sort((a, b) => (b.occurredAt?.getTime() || 0) - (a.occurredAt?.getTime() || 0));
     
     if (filters?.summary) {
       const summary = {
@@ -763,7 +774,7 @@ export class MemStorage implements IStorage {
         return bPriority - aPriority;
       }
       
-      return b.createdAt.getTime() - a.createdAt.getTime();
+      return (b.createdAt?.getTime() || 0) - (a.createdAt?.getTime() || 0);
     });
     
     return tasks;
@@ -917,6 +928,7 @@ export class MemStorage implements IStorage {
     const po: PurchaseOrder = {
       id: randomUUID(),
       ...poData,
+      supplierEmail: poData.supplierEmail || null,
       status: "DRAFT",
       createdAt: now,
       updatedAt: now,
@@ -1081,6 +1093,8 @@ export class MemStorage implements IStorage {
       ...batchData,
       id: batchData.id || randomUUID(),
       notes: batchData.notes || null,
+      periodFrom: batchData.periodFrom || null,
+      periodTo: batchData.periodTo || null,
       updatedAt: null,
       mismatchedCount: batchData.mismatchedCount || 0,
       createdAt: new Date(),
@@ -1235,6 +1249,7 @@ export class MemStorage implements IStorage {
     const supplier: Supplier = {
       id,
       ...supplierData,
+      address: supplierData.address || null,
       email: supplierData.email || null,
       notes: supplierData.notes || null,
       createdAt: now,
@@ -1383,9 +1398,10 @@ export class MemStorage implements IStorage {
       id: randomUUID(),
       organizationId,
       name: regionData.name,
-      code: regionData.code,
-      slaHours: regionData.slaHours || 24,
-      restockBufferPercentage: regionData.restockBufferPercentage || 20,
+      currency: regionData.currency || null,
+      timezone: regionData.timezone || null,
+      slaDays: regionData.slaDays || 1,
+      restockBufferPct: regionData.restockBufferPct || 20,
       isActive: regionData.isActive !== false ? "true" : "false",
       createdAt: new Date(),
       updatedAt: new Date(),
@@ -1475,8 +1491,8 @@ export class MemStorage implements IStorage {
         status: "active" as const,
         currency: "INR" as const,
         skus: [
-          { sku: "SKU-001", cost: 25.00, moq: 100 },
-          { sku: "SKU-002", cost: 45.50, moq: 50 }
+          { sku: "SKU-001", unitCost: 25.00, leadTimeDays: 12, moq: 100 },
+          { sku: "SKU-002", unitCost: 45.50, leadTimeDays: 12, moq: 50 }
         ]
       },
       {
@@ -1489,14 +1505,266 @@ export class MemStorage implements IStorage {
         status: "active" as const,
         currency: "GBP" as const,
         skus: [
-          { sku: "SKU-003", cost: 18.75, moq: 200 },
-          { sku: "SKU-001", cost: 28.00, moq: 150 }
+          { sku: "SKU-003", unitCost: 18.75, leadTimeDays: 5, moq: 200 },
+          { sku: "SKU-001", unitCost: 28.00, leadTimeDays: 5, moq: 150 }
         ]
       }
     ];
 
     for (const supplierData of sampleSuppliers) {
       await this.createSupplier(supplierData);
+    }
+    
+    // Initialize sample delivery tracking data
+    await this.initializeSampleDeliveries();
+  }
+
+  // SLA Tracking implementation
+  async createSupplierDelivery(deliveryData: InsertSupplierDelivery): Promise<SupplierDelivery> {
+    const id = randomUUID();
+    const now = new Date();
+    
+    const delivery: SupplierDelivery = {
+      id,
+      ...deliveryData,
+      expectedDate: new Date(deliveryData.expectedDate),
+      actualDate: deliveryData.actualDate ? new Date(deliveryData.actualDate) : null,
+      actualLeadTimeDays: deliveryData.actualLeadTimeDays || null,
+      isDefective: deliveryData.isDefective || false,
+      defectNotes: deliveryData.defectNotes || null,
+      breachType: "NONE",
+      createdAt: now,
+      updatedAt: now,
+    };
+    
+    // Auto-calculate breach type and status
+    if (delivery.actualDate) {
+      const isLate = delivery.actualDate > delivery.expectedDate;
+      const hasDefects = delivery.isDefective;
+      
+      if (isLate && hasDefects) {
+        delivery.breachType = "BOTH";
+        delivery.status = "DEFECTIVE";
+      } else if (isLate) {
+        delivery.breachType = "LATE_DELIVERY";
+        delivery.status = "LATE";
+      } else if (hasDefects) {
+        delivery.breachType = "QUALITY_ISSUE";
+        delivery.status = "DEFECTIVE";
+      } else {
+        delivery.status = "ON_TIME";
+      }
+    }
+    
+    this.supplierDeliveries.set(id, delivery);
+    
+    // Update supplier SLA metrics after creating delivery
+    await this.updateSupplierSLAMetrics(delivery.supplierId);
+    
+    return delivery;
+  }
+
+  async updateSupplierDelivery(id: string, updates: Partial<SupplierDelivery>): Promise<SupplierDelivery | undefined> {
+    const delivery = this.supplierDeliveries.get(id);
+    if (!delivery) return undefined;
+    
+    const updatedDelivery: SupplierDelivery = {
+      ...delivery,
+      ...updates,
+      updatedAt: new Date(),
+    };
+    
+    // Recalculate breach type if actualDate or defect status changed
+    if (updates.actualDate || updates.isDefective !== undefined) {
+      if (updatedDelivery.actualDate) {
+        const isLate = updatedDelivery.actualDate > updatedDelivery.expectedDate;
+        const hasDefects = updatedDelivery.isDefective;
+        
+        if (isLate && hasDefects) {
+          updatedDelivery.breachType = "BOTH";
+          updatedDelivery.status = "DEFECTIVE";
+        } else if (isLate) {
+          updatedDelivery.breachType = "LATE_DELIVERY";
+          updatedDelivery.status = "LATE";
+        } else if (hasDefects) {
+          updatedDelivery.breachType = "QUALITY_ISSUE";
+          updatedDelivery.status = "DEFECTIVE";
+        } else {
+          updatedDelivery.breachType = "NONE";
+          updatedDelivery.status = "ON_TIME";
+        }
+      }
+    }
+    
+    this.supplierDeliveries.set(id, updatedDelivery);
+    
+    // Update supplier SLA metrics
+    await this.updateSupplierSLAMetrics(delivery.supplierId);
+    
+    return updatedDelivery;
+  }
+
+  async getSupplierDeliveries(supplierId: string): Promise<SupplierDelivery[]> {
+    return Array.from(this.supplierDeliveries.values())
+      .filter(delivery => delivery.supplierId === supplierId)
+      .sort((a, b) => b.createdAt.getTime() - a.createdAt.getTime());
+  }
+
+  async calculateSupplierSLAMetrics(supplierId: string): Promise<{ onTimeRatePct: number, defectRatePct: number, avgLeadTimeDays: number, breachCount: number, totalDeliveries: number }> {
+    const deliveries = await this.getSupplierDeliveries(supplierId);
+    const completedDeliveries = deliveries.filter(d => d.actualDate !== null);
+    
+    if (completedDeliveries.length === 0) {
+      return {
+        onTimeRatePct: 100,
+        defectRatePct: 0,
+        avgLeadTimeDays: 0,
+        breachCount: 0,
+        totalDeliveries: 0
+      };
+    }
+    
+    const onTimeDeliveries = completedDeliveries.filter(d => d.status === "ON_TIME");
+    const defectiveDeliveries = completedDeliveries.filter(d => d.isDefective);
+    const breachedDeliveries = completedDeliveries.filter(d => d.breachType !== "NONE");
+    
+    const totalLeadTime = completedDeliveries.reduce((sum, d) => sum + (d.actualLeadTimeDays || 0), 0);
+    
+    return {
+      onTimeRatePct: (onTimeDeliveries.length / completedDeliveries.length) * 100,
+      defectRatePct: (defectiveDeliveries.length / completedDeliveries.length) * 100,
+      avgLeadTimeDays: totalLeadTime / completedDeliveries.length,
+      breachCount: breachedDeliveries.length,
+      totalDeliveries: completedDeliveries.length
+    };
+  }
+
+  async updateSupplierSLAMetrics(supplierId: string): Promise<void> {
+    const supplier = this.suppliers.get(supplierId);
+    if (!supplier) return;
+    
+    const metrics = await this.calculateSupplierSLAMetrics(supplierId);
+    const hasNewBreach = metrics.breachCount > (supplier.breachCount || 0);
+    
+    const updatedSupplier: Supplier = {
+      ...supplier,
+      onTimeRatePct: metrics.onTimeRatePct,
+      defectRatePct: metrics.defectRatePct,
+      avgLeadTimeDays: metrics.avgLeadTimeDays,
+      breachCount: metrics.breachCount,
+      totalDeliveries: metrics.totalDeliveries,
+      lastBreachDate: hasNewBreach ? new Date() : supplier.lastBreachDate,
+      updatedAt: new Date(),
+    };
+    
+    this.suppliers.set(supplierId, updatedSupplier);
+    
+    // Generate SLA breach alert if there's a new breach
+    if (hasNewBreach) {
+      await this.createEvent({
+        type: "SLA_BREACH",
+        sku: null,
+        channel: null,
+        payload: {
+          supplierId,
+          supplierName: supplier.name,
+          breachType: "SLA_VIOLATION",
+          onTimeRate: metrics.onTimeRatePct,
+          defectRate: metrics.defectRatePct,
+          targetOnTime: supplier.onTimeTargetPct || 95,
+          targetDefect: supplier.defectTargetPct || 2
+        },
+        severity: "HIGH"
+      });
+    }
+  }
+
+  async getSuppliersWithSLABreaches(workspaceId: string): Promise<Supplier[]> {
+    const suppliers = await this.getSuppliers(workspaceId);
+    return suppliers.filter(supplier => {
+      const onTimeBreach = (supplier.onTimeRatePct || 100) < (supplier.onTimeTargetPct || 95);
+      const defectBreach = (supplier.defectRatePct || 0) > (supplier.defectTargetPct || 2);
+      return onTimeBreach || defectBreach;
+    });
+  }
+
+  async getSupplierSLAMetrics(workspaceId: string): Promise<{ suppliers: any[], global: any }> {
+    const suppliers = await this.getSuppliers(workspaceId);
+    
+    const supplierMetrics = suppliers.map(supplier => ({
+      supplierId: supplier.id,
+      supplierName: supplier.name,
+      onTimeRatePct: supplier.onTimeRatePct || 100,
+      defectRatePct: supplier.defectRatePct || 0,
+      avgLeadTimeDays: supplier.avgLeadTimeDays || supplier.leadTimeDays,
+      breachCount: supplier.breachCount || 0,
+      totalPOs: supplier.totalDeliveries || 0,
+      onTimeTargetPct: supplier.onTimeTargetPct || 95,
+      defectTargetPct: supplier.defectTargetPct || 2,
+    }));
+    
+    // Calculate global stats
+    const totalDeliveries = supplierMetrics.reduce((sum, s) => sum + s.totalPOs, 0);
+    const avgLeadTime = totalDeliveries > 0 
+      ? supplierMetrics.reduce((sum, s) => sum + (s.avgLeadTimeDays * s.totalPOs), 0) / totalDeliveries
+      : 0;
+    const globalOnTimeRate = totalDeliveries > 0 
+      ? supplierMetrics.reduce((sum, s) => sum + (s.onTimeRatePct * s.totalPOs), 0) / totalDeliveries
+      : 100;
+    const totalBreaches = supplierMetrics.reduce((sum, s) => sum + s.breachCount, 0);
+    const suppliersAtRisk = supplierMetrics.filter(s => 
+      s.onTimeRatePct < s.onTimeTargetPct || s.defectRatePct > s.defectTargetPct
+    ).length;
+    
+    return {
+      suppliers: supplierMetrics,
+      global: {
+        avgLeadTime,
+        globalOnTimeRate,
+        totalBreaches,
+        suppliersAtRisk,
+      }
+    };
+  }
+
+  async initializeSampleDeliveries(): Promise<void> {
+    const suppliers = Array.from(this.suppliers.values());
+    if (suppliers.length === 0) return;
+    
+    // Create some sample delivery tracking data
+    const sampleDeliveries = [
+      {
+        supplierId: suppliers[0].id,
+        expectedDate: new Date(Date.now() - 30 * 24 * 60 * 60 * 1000).toISOString(), // 30 days ago
+        actualDate: new Date(Date.now() - 28 * 24 * 60 * 60 * 1000).toISOString(), // 28 days ago (on time)
+        status: "ON_TIME" as const,
+        leadTimeDays: 12,
+        actualLeadTimeDays: 10,
+        isDefective: false,
+      },
+      {
+        supplierId: suppliers[0].id,
+        expectedDate: new Date(Date.now() - 15 * 24 * 60 * 60 * 1000).toISOString(), // 15 days ago
+        actualDate: new Date(Date.now() - 12 * 24 * 60 * 60 * 1000).toISOString(), // 12 days ago (late)
+        status: "LATE" as const,
+        leadTimeDays: 12,
+        actualLeadTimeDays: 15,
+        isDefective: false,
+      },
+      {
+        supplierId: suppliers[1].id,
+        expectedDate: new Date(Date.now() - 10 * 24 * 60 * 60 * 1000).toISOString(), // 10 days ago
+        actualDate: new Date(Date.now() - 9 * 24 * 60 * 60 * 1000).toISOString(), // 9 days ago (on time but defective)
+        status: "DEFECTIVE" as const,
+        leadTimeDays: 5,
+        actualLeadTimeDays: 4,
+        isDefective: true,
+        defectNotes: "Quality issues found in 10% of items",
+      },
+    ];
+    
+    for (const deliveryData of sampleDeliveries) {
+      await this.createSupplierDelivery(deliveryData);
     }
   }
 }

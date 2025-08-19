@@ -1,0 +1,55 @@
+You are implementing “Supplier SLA Tracker + Breach Alerts” for Flowventory.
+ 
+Goals:
+1) Supplier SLA metrics
+   - Extend supplier model with:
+     { leadTimeDays: number, onTimeTargetPct: number (default 90), defectTargetPct: number (default 2) }
+   - Compute per supplier (rolling 90 days):
+     onTimeRatePct, avgLeadTimeDays, defectRatePct
+   - Show these metrics in Suppliers table columns + Supplier detail view with mini charts/badges.
+ 
+2) PO SLA tracking
+   - For each PO with a supplier, calculate:
+     promisedETA = PO.createdAt + supplier.leadTimeDays
+     statusChip: “Due in Xd” (green/amber) or “Overdue by Xd” (red)
+   - In PO list + PO detail, display this SLA chip.
+ 
+3) Breach alerts
+   - If a PO passes promisedETA without receipt (status != Received/Closed), mark as SLA breach.
+   - Log breach event to Activity log.
+   - Push a notification (UI bell). If SMTP configured, allow optional email to ops@supplierTeam (toggle in settings).
+ 
+4) Supplier Analytics tab (inside Suppliers)
+   - Cards:
+     - “Avg Lead Time (90d)” (global + by supplier)
+     - “On-time % (90d)” with red/amber/green thresholds
+     - “Defect Rate (90d)”
+   - Table: Supplier, POs (90d), On-time %, Avg Lead Time, Defect %, Breaches (count), Actions (View)
+ 
+5) Settings → Supplier Management (extend)
+   - onTimeTargetPct (default 90)
+   - defectTargetPct (default 2)
+   - enableEmailOnBreach (boolean)
+   - save in settings.json (or local storage if mocking)
+ 
+6) Mock data + fixtures
+   - Seed a few POs with createdAt and receivedAt to simulate on-time/late/defective outcomes.
+   - Compute metrics from these fixtures so UI is populated.
+ 
+7) UI polish
+   - Status badges: green (on target), amber (near threshold), red (breach).
+   - Tooltips explaining how metrics are computed.
+   - Keep consistent neon SaaS styling.
+ 
+8) API stubs
+   - GET /api/suppliers/metrics
+   - GET /api/pos?supplierId=...
+   - POST /api/alerts/breach (no-op or console.log in mock)
+   - Persist settings to the same mechanism as existing Workspace Settings.
+ 
+Deliver:
+- Suppliers table updated with SLA columns.
+- Supplier detail page with metrics & mini charts.
+- PO list/detail shows SLA chip (Due in / Overdue).
+- Breach notifications working (UI; email optional if SMTP set).
+- Settings extended with targets & breach email toggle.
