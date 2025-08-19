@@ -121,6 +121,12 @@ export function DashboardHeader({ user, onImportClick, onSettingsClick }: Dashbo
                   <span className="hidden sm:inline">Workspace</span>
                 </Link>
               </Button>
+              <Button asChild variant="ghost" size="sm" className="shrink-0">
+                <Link href="/settings">
+                  <Settings className="h-3 w-3 sm:h-4 sm:w-4 sm:mr-1" />
+                  <span className="hidden sm:inline">Settings</span>
+                </Link>
+              </Button>
             </>
           )}
           

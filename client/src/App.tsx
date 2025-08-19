@@ -15,6 +15,7 @@ import ActionCenterPage from "@/pages/action-center-page";
 import InventoryPage from "@/pages/inventory-page";
 import PurchaseOrdersPage from "@/pages/purchase-orders-page";
 import WorkspaceSettingsPage from "@/pages/workspace-settings-page";
+import SettingsPage from "@/pages/settings-page";
 import SuppliersPage from "@/pages/suppliers-page";
 import { ProtectedRoute } from "./lib/protected-route";
 
@@ -30,6 +31,7 @@ function Router() {
       <ProtectedRoute path="/recon" component={ReconciliationPage} />
       <ProtectedRoute path="/recon/:batchId" component={ReconciliationDetailPage} />
       <ProtectedRoute path="/workspace-settings" component={WorkspaceSettingsPage} />
+      <ProtectedRoute path="/settings" component={SettingsPage} />
       <ProtectedRoute path="/suppliers" component={SuppliersPage} />
       <Route path="/auth" component={AuthPage} />
       <Route component={NotFound} />

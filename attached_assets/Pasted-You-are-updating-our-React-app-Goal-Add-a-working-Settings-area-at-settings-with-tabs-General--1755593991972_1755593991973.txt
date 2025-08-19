@@ -1,0 +1,56 @@
+You are updating our React app.
+ 
+Goal: Add a working Settings area at /settings with tabs (General, Localization, Regions & SLAs, Notifications). Use localStorage for persistence so the page shows data without any backend.
+ 
+Do all of the following:
+ 
+1) ROUTER
+- If we use React Router, ensure BrowserRouter wraps the app in the entry file (e.g., src/main.jsx or src/index.jsx).
+- Add a <Route path="/settings" element={<SettingsPage />} /> to our main router file (e.g., App.jsx or routes file).
+- Ensure a visible nav item (e.g., in the sidebar/topbar) links to "/settings".
+ 
+2) PAGE
+Create src/pages/SettingsPage.jsx with a 2-column layout:
+- Left: vertical tabs (General, Localization, Regions & SLAs, Notifications).
+- Right: the active tab’s form.
+- Provide Save and Reset buttons on every tab.
+ 
+3) STATE & PERSISTENCE (no backend)
+- Define a SETTINGS_KEY = "flowventory:settings".
+- On mount, load from localStorage; if empty, seed defaults:
+  {
+    workspace: { orgName: "Flowventory", logoUrl: "", defaultCurrency: "USD", defaultTimezone: "UTC", dateFormat: "YYYY-MM-DD", numberFormat: "1,234.56" },
+    regions: [{ id: "uae", name: "UAE", slaDays: 7, restockBufferPct: 10 }],
+    notifications: { dailyDigestEnabled: false, smtpHost: "", smtpPort: 587, username: "", password: "" }
+  }
+- On Save, validate and write back to localStorage, show a success toast.
+- On Reset, revert unsaved changes to last-saved state.
+ 
+4) UI DETAILS
+- GENERAL: orgName (required), logoUrl (text), show a small logo preview if url present.
+- LOCALIZATION: defaultCurrency (select: USD, GBP, AED, SGD), defaultTimezone (select: UTC, Europe/London, Asia/Dubai, Asia/Singapore, America/New_York), dateFormat (text), numberFormat (text).
+- REGIONS & SLAs: list existing regions in a table; allow Add/Edit/Delete with fields: name (required), optional currency/timezone override, slaDays (>=0), restockBufferPct (0–100).
+- NOTIFICATIONS: dailyDigestEnabled (toggle), smtpHost, smtpPort (integer), username, password (input type="password"). After Save, password must be masked in the UI (do not display raw).
+ 
+5) VALIDATION (frontend only)
+- orgName required.
+- smtpPort must be a positive integer.
+- slaDays >= 0; restockBufferPct between 0 and 100.
+- Show inline errors; prevent Save if invalid.
+ 
+6) TOASTS
+- Show “Settings saved” on successful write to localStorage.
+- Show “Invalid fields” if validation fails.
+ 
+7) EXPORTS
+- Ensure `export default function SettingsPage(){...}` exists and the route imports it correctly.
+ 
+8) TEST HOOK
+- Preload at least one region by default ("UAE") so the Regions tab is visibly populated right away.
+ 
+Deliver:
+- `src/pages/SettingsPage.jsx` fully implemented.
+- Router changes showing the new route + a nav link to /settings.
+- Minimal styling using our existing CSS/Tailwind setup.
+ 
+Finally, run the app and confirm that navigating to /settings shows the page and changes persist after refresh.
