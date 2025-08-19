@@ -1,4 +1,4 @@
-import { type User, type InsertUser, type OnboardingData, type InsertOnboardingData, type PlatformConnections, type Organization, type TeamInvitation, type InviteTeamMemberData, type UpdateTeamMemberData, type Notification, type CreateNotificationData, type Event, type InsertEvent, type Task, type InsertTask, type CreateEventData, type CreateTaskData, type UpdateTaskData, type PurchaseOrder, type InsertPurchaseOrder, type Comment, type InsertComment, type Activity, type InsertActivity, type Rule, type InsertRule, type CreateCommentData, type CreateRuleData, type ReconBatch, type InsertReconBatch, type ReconRow, type InsertReconRow, type ReconIngestData, type UpdateReconRowData, type Supplier, type InsertSupplier, type ReorderPolicy, type InsertReorderPolicy, type ReorderSuggestData, type UpdatePurchaseOrderStatusData, type SimplePurchaseOrder, type InsertSimplePurchaseOrder, type WorkspaceSettings, type InsertWorkspaceSettings } from "@shared/schema";
+import { type User, type InsertUser, type OnboardingData, type InsertOnboardingData, type PlatformConnections, type Organization, type TeamInvitation, type InviteTeamMemberData, type UpdateTeamMemberData, type Notification, type CreateNotificationData, type Event, type InsertEvent, type Task, type InsertTask, type CreateEventData, type CreateTaskData, type UpdateTaskData, type PurchaseOrder, type InsertPurchaseOrder, type Comment, type InsertComment, type Activity, type InsertActivity, type Rule, type InsertRule, type CreateCommentData, type CreateRuleData, type ReconBatch, type InsertReconBatch, type ReconRow, type InsertReconRow, type ReconIngestData, type UpdateReconRowData, type Supplier, type InsertSupplier, type ReorderPolicy, type InsertReorderPolicy, type ReorderSuggestData, type UpdatePurchaseOrderStatusData, type SimplePurchaseOrder, type InsertSimplePurchaseOrder, type WorkspaceSettings, type InsertWorkspaceSettings, type Region, type InsertRegion, type NotificationSettings, type InsertNotificationSettings } from "@shared/schema";
 import { randomUUID } from "crypto";
 import session from "express-session";
 import createMemoryStore from "memorystore";
@@ -101,6 +101,17 @@ export interface IStorage {
   updateWorkspaceSettings(organizationId: string, settings: Partial<WorkspaceSettings>): Promise<WorkspaceSettings>;
   createWorkspaceSettings(organizationId: string, settings: InsertWorkspaceSettings): Promise<WorkspaceSettings>;
   
+  // Regions methods
+  getRegions(organizationId: string): Promise<Region[]>;
+  createRegion(organizationId: string, regionData: any): Promise<Region>;
+  updateRegion(regionId: string, updates: any): Promise<Region>;
+  deleteRegion(regionId: string): Promise<void>;
+  
+  // Notification Settings methods
+  getNotificationSettings(organizationId: string): Promise<NotificationSettings | undefined>;
+  updateNotificationSettings(organizationId: string, updates: any): Promise<NotificationSettings>;
+  createNotificationSettings(organizationId: string, settings: any): Promise<NotificationSettings>;
+  
   sessionStore: session.Store;
 }
 
@@ -122,6 +133,8 @@ export class MemStorage implements IStorage {
   private reorderPolicies: Map<string, ReorderPolicy>;
   private simplePurchaseOrders: Map<string, SimplePurchaseOrder>;
   private workspaceSettings: Map<string, WorkspaceSettings>;
+  private regions: Map<string, Region>;
+  private notificationSettings: Map<string, NotificationSettings>;
   public sessionStore: session.Store;
 
   constructor() {
@@ -142,6 +155,8 @@ export class MemStorage implements IStorage {
     this.reorderPolicies = new Map();
     this.simplePurchaseOrders = new Map();
     this.workspaceSettings = new Map();
+    this.regions = new Map();
+    this.notificationSettings = new Map();
     this.sessionStore = new MemoryStore({
       checkPeriod: 86400000,
     });
@@ -154,6 +169,9 @@ export class MemStorage implements IStorage {
     
     // Initialize sample rules
     this.initializeSampleRules();
+    
+    // Initialize test regions with UAE fixture
+    this.initializeTestRegions();
   }
 
   private initializeSampleNotifications() {
@@ -167,6 +185,25 @@ export class MemStorage implements IStorage {
         createdAt: new Date(),
       });
     }
+  }
+
+  private initializeTestRegions() {
+    const testOrgId = "test-org-id";
+    
+    // Create test UAE region fixture
+    const uaeRegion: Region = {
+      id: "uae-region-001",
+      organizationId: testOrgId,
+      name: "United Arab Emirates",
+      code: "UAE",
+      slaHours: 48,
+      restockBufferPercentage: 25,
+      isActive: true,
+      createdAt: new Date(),
+      updatedAt: new Date(),
+    };
+    
+    this.regions.set(uaeRegion.id, uaeRegion);
   }
 
   // Add test alerts for a specific user on login/registration
@@ -1323,6 +1360,94 @@ export class MemStorage implements IStorage {
     };
 
     this.workspaceSettings.set(existingSettings.id, updatedSettings);
+    return updatedSettings;
+  }
+
+  // Regions methods
+  async getRegions(organizationId: string): Promise<Region[]> {
+    return Array.from(this.regions.values()).filter(
+      region => region.organizationId === organizationId
+    );
+  }
+
+  async createRegion(organizationId: string, regionData: any): Promise<Region> {
+    const newRegion: Region = {
+      id: randomUUID(),
+      organizationId,
+      name: regionData.name,
+      code: regionData.code,
+      slaHours: regionData.slaHours || 24,
+      restockBufferPercentage: regionData.restockBufferPercentage || 20,
+      isActive: regionData.isActive !== false,
+      createdAt: new Date(),
+      updatedAt: new Date(),
+    };
+
+    this.regions.set(newRegion.id, newRegion);
+    return newRegion;
+  }
+
+  async updateRegion(regionId: string, updates: any): Promise<Region> {
+    const region = this.regions.get(regionId);
+    if (!region) {
+      throw new Error(`Region ${regionId} not found`);
+    }
+
+    const updatedRegion: Region = {
+      ...region,
+      ...updates,
+      updatedAt: new Date(),
+    };
+
+    this.regions.set(regionId, updatedRegion);
+    return updatedRegion;
+  }
+
+  async deleteRegion(regionId: string): Promise<void> {
+    this.regions.delete(regionId);
+  }
+
+  // Notification Settings methods
+  async getNotificationSettings(organizationId: string): Promise<NotificationSettings | undefined> {
+    return Array.from(this.notificationSettings.values()).find(
+      settings => settings.organizationId === organizationId
+    );
+  }
+
+  async createNotificationSettings(organizationId: string, settings: any): Promise<NotificationSettings> {
+    const newSettings: NotificationSettings = {
+      id: randomUUID(),
+      organizationId,
+      dailyDigestEnabled: settings.dailyDigestEnabled || "true",
+      digestTime: settings.digestTime || "09:00",
+      alertsEnabled: settings.alertsEnabled || "true",
+      smtpHost: settings.smtpHost || null,
+      smtpPort: settings.smtpPort || null,
+      smtpUser: settings.smtpUser || null,
+      smtpPassword: settings.smtpPassword || null,
+      createdAt: new Date(),
+      updatedAt: new Date(),
+    };
+
+    this.notificationSettings.set(newSettings.id, newSettings);
+    return newSettings;
+  }
+
+  async updateNotificationSettings(organizationId: string, updates: any): Promise<NotificationSettings> {
+    let existing = await this.getNotificationSettings(organizationId);
+    
+    if (!existing) {
+      existing = await this.createNotificationSettings(organizationId, updates);
+      return existing;
+    }
+
+    const updatedSettings: NotificationSettings = {
+      ...existing,
+      ...updates,
+      updatedAt: new Date(),
+    };
+
+    this.notificationSettings.set(existing.id, updatedSettings);
     return updatedSettings;
   }
 }

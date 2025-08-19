@@ -1,333 +1,681 @@
-import { useState, useEffect } from "react";
+import { useState } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { z } from "zod";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
-import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from "@/components/ui/form";
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { Switch } from "@/components/ui/switch";
+import { Separator } from "@/components/ui/separator";
 import { Badge } from "@/components/ui/badge";
+import { Trash2, Plus, Save, RotateCcw } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
-import { Skeleton } from "@/components/ui/skeleton";
-import { Settings, Globe, Clock, AlertTriangle } from "lucide-react";
-import type { WorkspaceSettings } from "@shared/schema";
 import { apiRequest } from "@/lib/queryClient";
 
-const workspaceSettingsSchema = z.object({
-  baseCurrency: z.enum(["INR", "USD", "GBP", "AED", "SGD"]),
-  timezone: z.string().min(1, "Timezone is required"),
-  regionsEnabled: z.array(z.string()).default([]),
-  slaDefaults: z.object({
-    RESTOCK: z.number().min(1, "Must be at least 1 hour"),
-    RETRY_SYNC: z.number().min(1, "Must be at least 1 hour"),
-    RECONCILE: z.number().min(1, "Must be at least 1 hour"),
-  }),
+// Form schemas
+const generalSettingsSchema = z.object({
+  orgName: z.string().min(1, "Organization name is required"),
+  logoUrl: z.string().url().optional().or(z.literal("")),
+  defaultCurrency: z.enum(["USD", "EUR", "GBP", "INR", "AED"]),
+  defaultTimezone: z.string(),
+  dateFormat: z.enum(["MM/DD/YYYY", "DD/MM/YYYY", "YYYY-MM-DD"]),
+  numberFormat: z.enum(["US", "EU", "IN"])
 });
 
-type WorkspaceSettingsForm = z.infer<typeof workspaceSettingsSchema>;
+const regionSchema = z.object({
+  name: z.string().min(1, "Region name is required"),
+  code: z.string().min(2, "Region code must be at least 2 characters"),
+  slaHours: z.number().min(1).max(168),
+  restockBufferPercentage: z.number().min(0).max(100),
+  isActive: z.boolean()
+});
 
-const CURRENCY_OPTIONS = [
-  { value: "INR", label: "₹ Indian Rupee" },
-  { value: "USD", label: "$ US Dollar" },
-  { value: "GBP", label: "£ British Pound" },
-  { value: "AED", label: "د.إ UAE Dirham" },
-  { value: "SGD", label: "S$ Singapore Dollar" },
-];
-
-const TIMEZONE_OPTIONS = [
-  { value: "Asia/Kolkata", label: "Asia/Kolkata (IST)" },
-  { value: "America/New_York", label: "America/New_York (EST)" },
-  { value: "Europe/London", label: "Europe/London (GMT)" },
-  { value: "Asia/Dubai", label: "Asia/Dubai (GST)" },
-  { value: "Asia/Singapore", label: "Asia/Singapore (SGT)" },
-  { value: "America/Los_Angeles", label: "America/Los_Angeles (PST)" },
-  { value: "Australia/Sydney", label: "Australia/Sydney (AEDT)" },
-];
-
-const REGION_OPTIONS = [
-  { value: "IN", label: "India" },
-  { value: "UK", label: "United Kingdom" },
-  { value: "US", label: "United States" },
-  { value: "UAE", label: "United Arab Emirates" },
-  { value: "SG", label: "Singapore" },
-  { value: "EU", label: "European Union" },
-  { value: "GLOBAL", label: "Global" },
-];
+const notificationSchema = z.object({
+  dailyDigestEnabled: z.string(),
+  digestTime: z.string(),
+  alertsEnabled: z.string(),
+  smtpHost: z.string().optional(),
+  smtpPort: z.number().optional(),
+  smtpUser: z.string().optional(),
+  smtpPassword: z.string().optional()
+});
 
 export default function WorkspaceSettingsPage() {
   const { toast } = useToast();
   const queryClient = useQueryClient();
-  const [selectedRegions, setSelectedRegions] = useState<string[]>([]);
+  const [activeTab, setActiveTab] = useState("general");
 
-  const { data: settings, isLoading } = useQuery<WorkspaceSettings>({
-    queryKey: ["/api/workspace/me"],
+  // Fetch all settings data
+  const { data: settingsData, isLoading } = useQuery({
+    queryKey: ["/api/settings"],
+    staleTime: 5 * 60 * 1000, // 5 minutes
   });
 
-  const form = useForm<WorkspaceSettingsForm>({
-    resolver: zodResolver(workspaceSettingsSchema),
+  // Type-safe access to settings data
+  const workspace = (settingsData as any)?.workspace || {};
+  const notifications = (settingsData as any)?.notifications || {};
+  const regions = (settingsData as any)?.regions || [];
+
+  // General Settings Form
+  const generalForm = useForm({
+    resolver: zodResolver(generalSettingsSchema),
     defaultValues: {
-      baseCurrency: "INR",
-      timezone: "Asia/Kolkata",
-      regionsEnabled: [],
-      slaDefaults: {
-        RESTOCK: 24,
-        RETRY_SYNC: 2,
-        RECONCILE: 72,
-      },
-    },
+      orgName: workspace?.orgName || "",
+      logoUrl: workspace?.logoUrl || "",
+      defaultCurrency: workspace?.defaultCurrency || "USD",
+      defaultTimezone: workspace?.defaultTimezone || "UTC",
+      dateFormat: workspace?.dateFormat || "MM/DD/YYYY",
+      numberFormat: workspace?.numberFormat || "US"
+    }
   });
 
-  // Update form when data loads
-  useEffect(() => {
-    if (settings) {
-      form.reset({
-        baseCurrency: settings.baseCurrency,
-        timezone: settings.timezone,
-        regionsEnabled: settings.regionsEnabled,
-        slaDefaults: settings.slaDefaults as any,
-      });
-      setSelectedRegions(settings.regionsEnabled);
+  // Region Form
+  const regionForm = useForm({
+    resolver: zodResolver(regionSchema),
+    defaultValues: {
+      name: "",
+      code: "",
+      slaHours: 24,
+      restockBufferPercentage: 20,
+      isActive: true
     }
-  }, [settings, form]);
+  });
 
+  // Notification Form
+  const notificationForm = useForm({
+    resolver: zodResolver(notificationSchema),
+    defaultValues: {
+      dailyDigestEnabled: notifications?.dailyDigestEnabled || "true",
+      digestTime: notifications?.digestTime || "09:00",
+      alertsEnabled: notifications?.alertsEnabled || "true",
+      smtpHost: notifications?.smtpHost || "",
+      smtpPort: notifications?.smtpPort || 587,
+      smtpUser: notifications?.smtpUser || "",
+      smtpPassword: notifications?.smtpPassword || ""
+    }
+  });
+
+  // Update settings mutation
   const updateSettingsMutation = useMutation({
-    mutationFn: (data: Partial<WorkspaceSettings>) =>
-      apiRequest("PATCH", "/api/workspace", data),
+    mutationFn: (data: any) => 
+      fetch("/api/settings", {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        credentials: "include",
+        body: JSON.stringify(data),
+      }).then(res => res.json()),
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["/api/workspace/me"] });
+      queryClient.invalidateQueries({ queryKey: ["/api/settings"] });
       toast({
         title: "Settings Updated",
-        description: "Workspace settings have been saved successfully.",
+        description: "Your workspace settings have been saved successfully.",
       });
     },
-    onError: (error) => {
-      console.error("Workspace settings update error:", error);
+    onError: (error: any) => {
       toast({
         title: "Update Failed",
-        description: `Failed to update workspace settings: ${error instanceof Error ? error.message : 'Unknown error'}`,
+        description: error.message || "Failed to update settings",
         variant: "destructive",
       });
     },
   });
 
-  const onSubmit = (data: WorkspaceSettingsForm) => {
-    const submitData = {
-      ...data,
-      regionsEnabled: selectedRegions,
-    };
-    console.log("Submitting workspace settings:", submitData);
-    updateSettingsMutation.mutate(submitData);
+  // Create region mutation
+  const createRegionMutation = useMutation({
+    mutationFn: (data: any) => 
+      fetch("/api/regions", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        credentials: "include",
+        body: JSON.stringify(data),
+      }).then(res => res.json()),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["/api/settings"] });
+      regionForm.reset();
+      toast({
+        title: "Region Created",
+        description: "New region has been added successfully.",
+      });
+    },
+    onError: (error: any) => {
+      toast({
+        title: "Creation Failed",
+        description: error.message || "Failed to create region",
+        variant: "destructive",
+      });
+    },
+  });
+
+  // Delete region mutation
+  const deleteRegionMutation = useMutation({
+    mutationFn: (regionId: string) => 
+      fetch(`/api/regions/${regionId}`, {
+        method: "DELETE",
+        credentials: "include",
+      }),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["/api/settings"] });
+      toast({
+        title: "Region Deleted",
+        description: "Region has been removed successfully.",
+      });
+    },
+    onError: (error: any) => {
+      toast({
+        title: "Deletion Failed",
+        description: error.message || "Failed to delete region",
+        variant: "destructive",
+      });
+    },
+  });
+
+  // Update notifications mutation
+  const updateNotificationsMutation = useMutation({
+    mutationFn: (data: any) => 
+      fetch("/api/settings/notifications", {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        credentials: "include",
+        body: JSON.stringify(data),
+      }).then(res => res.json()),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["/api/settings"] });
+      toast({
+        title: "Notifications Updated",
+        description: "Your notification settings have been saved successfully.",
+      });
+    },
+    onError: (error: any) => {
+      toast({
+        title: "Update Failed",
+        description: error.message || "Failed to update notification settings",
+        variant: "destructive",
+      });
+    },
+  });
+
+  // Form handlers
+  const onGeneralSubmit = (data: any) => {
+    updateSettingsMutation.mutate(data);
   };
 
-  const toggleRegion = (regionValue: string) => {
-    setSelectedRegions(prev => 
-      prev.includes(regionValue)
-        ? prev.filter(r => r !== regionValue)
-        : [...prev, regionValue]
-    );
+  const onRegionSubmit = (data: any) => {
+    createRegionMutation.mutate(data);
+  };
+
+  const onNotificationSubmit = (data: any) => {
+    updateNotificationsMutation.mutate(data);
+  };
+
+  const resetForm = (formType: string) => {
+    if (formType === "general") {
+      generalForm.reset();
+    } else if (formType === "region") {
+      regionForm.reset();
+    } else if (formType === "notification") {
+      notificationForm.reset();
+    }
   };
 
   if (isLoading) {
     return (
-      <div className="container mx-auto p-6 space-y-6 max-w-4xl">
-        <div className="space-y-2">
-          <Skeleton className="h-8 w-48" />
-          <Skeleton className="h-4 w-96" />
+      <div className="container mx-auto p-6">
+        <div className="animate-pulse space-y-4">
+          <div className="h-8 bg-gray-200 dark:bg-gray-700 rounded w-1/4"></div>
+          <div className="h-4 bg-gray-200 dark:bg-gray-700 rounded w-1/2"></div>
+          <div className="h-64 bg-gray-200 dark:bg-gray-700 rounded"></div>
         </div>
-        <Card>
-          <CardHeader>
-            <Skeleton className="h-6 w-32" />
-          </CardHeader>
-          <CardContent className="space-y-6">
-            <Skeleton className="h-20 w-full" />
-            <Skeleton className="h-20 w-full" />
-            <Skeleton className="h-20 w-full" />
-          </CardContent>
-        </Card>
       </div>
     );
   }
 
   return (
-    <div className="container mx-auto p-6 space-y-6 max-w-4xl">
-      <div className="space-y-2">
-        <h1 className="text-2xl font-bold flex items-center gap-2">
-          <Settings className="h-6 w-6" />
-          Workspace Settings
-        </h1>
-        <p className="text-muted-foreground">
-          Configure global settings for your workspace
+    <div className="container mx-auto p-6 max-w-6xl">
+      <div className="mb-8">
+        <h1 className="text-3xl font-bold text-gray-900 dark:text-gray-100">Workspace Settings</h1>
+        <p className="text-gray-600 dark:text-gray-400 mt-2">
+          Manage your organization settings, regions, and notification preferences
         </p>
       </div>
 
-      <Form {...form}>
-        <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-6">
-          <Card>
-            <CardHeader>
-              <CardTitle className="flex items-center gap-2">
-                <Globe className="h-5 w-5" />
-                Regional Settings
-              </CardTitle>
-            </CardHeader>
-            <CardContent className="space-y-4">
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                <FormField
-                  control={form.control}
-                  name="baseCurrency"
-                  render={({ field }) => (
-                    <FormItem>
-                      <FormLabel>Base Currency</FormLabel>
-                      <Select onValueChange={field.onChange} value={field.value}>
-                        <FormControl>
+      <div className="grid grid-cols-12 gap-6">
+        {/* Left Navigation */}
+        <div className="col-span-3">
+          <Tabs value={activeTab} onValueChange={setActiveTab} orientation="vertical" className="w-full">
+            <TabsList className="grid w-full grid-rows-4 h-auto">
+              <TabsTrigger value="general" className="justify-start">General</TabsTrigger>
+              <TabsTrigger value="localization" className="justify-start">Localization</TabsTrigger>
+              <TabsTrigger value="regions" className="justify-start">Regions & SLAs</TabsTrigger>
+              <TabsTrigger value="notifications" className="justify-start">Notifications</TabsTrigger>
+            </TabsList>
+          </Tabs>
+        </div>
+
+        {/* Right Content */}
+        <div className="col-span-9">
+          <Tabs value={activeTab} onValueChange={setActiveTab}>
+            {/* General Tab */}
+            <TabsContent value="general">
+              <Card>
+                <CardHeader>
+                  <CardTitle>General Settings</CardTitle>
+                  <CardDescription>
+                    Manage your organization's basic information and branding
+                  </CardDescription>
+                </CardHeader>
+                <CardContent>
+                  <form onSubmit={generalForm.handleSubmit(onGeneralSubmit)} className="space-y-6">
+                    <div className="space-y-4">
+                      <div>
+                        <Label htmlFor="orgName">Organization Name</Label>
+                        <Input
+                          id="orgName"
+                          {...generalForm.register("orgName")}
+                          placeholder="Enter organization name"
+                        />
+                        {generalForm.formState.errors.orgName && (
+                          <p className="text-sm text-red-500 mt-1">
+                            {String(generalForm.formState.errors.orgName.message)}
+                          </p>
+                        )}
+                      </div>
+
+                      <div>
+                        <Label htmlFor="logoUrl">Logo URL (Optional)</Label>
+                        <Input
+                          id="logoUrl"
+                          {...generalForm.register("logoUrl")}
+                          placeholder="https://example.com/logo.png"
+                        />
+                        {generalForm.formState.errors.logoUrl && (
+                          <p className="text-sm text-red-500 mt-1">
+                            {String(generalForm.formState.errors.logoUrl.message)}
+                          </p>
+                        )}
+                      </div>
+
+                      <div>
+                        <Label htmlFor="defaultCurrency">Default Currency</Label>
+                        <Select 
+                          value={generalForm.watch("defaultCurrency")}
+                          onValueChange={(value) => generalForm.setValue("defaultCurrency", value as "USD" | "EUR" | "GBP" | "INR" | "AED")}
+                        >
                           <SelectTrigger>
                             <SelectValue placeholder="Select currency" />
                           </SelectTrigger>
-                        </FormControl>
-                        <SelectContent>
-                          {CURRENCY_OPTIONS.map((option) => (
-                            <SelectItem key={option.value} value={option.value}>
-                              {option.label}
-                            </SelectItem>
-                          ))}
-                        </SelectContent>
-                      </Select>
-                      <FormMessage />
-                    </FormItem>
-                  )}
-                />
+                          <SelectContent>
+                            <SelectItem value="USD">USD - US Dollar</SelectItem>
+                            <SelectItem value="EUR">EUR - Euro</SelectItem>
+                            <SelectItem value="GBP">GBP - British Pound</SelectItem>
+                            <SelectItem value="INR">INR - Indian Rupee</SelectItem>
+                            <SelectItem value="AED">AED - UAE Dirham</SelectItem>
+                          </SelectContent>
+                        </Select>
+                      </div>
+                    </div>
 
-                <FormField
-                  control={form.control}
-                  name="timezone"
-                  render={({ field }) => (
-                    <FormItem>
-                      <FormLabel>Timezone</FormLabel>
-                      <Select onValueChange={field.onChange} value={field.value}>
-                        <FormControl>
+                    <Separator />
+
+                    <div className="flex justify-between">
+                      <Button type="button" variant="outline" onClick={() => resetForm("general")}>
+                        <RotateCcw className="h-4 w-4 mr-2" />
+                        Reset
+                      </Button>
+                      <Button type="submit" disabled={updateSettingsMutation.isPending}>
+                        <Save className="h-4 w-4 mr-2" />
+                        Save Changes
+                      </Button>
+                    </div>
+                  </form>
+                </CardContent>
+              </Card>
+            </TabsContent>
+
+            {/* Localization Tab */}
+            <TabsContent value="localization">
+              <Card>
+                <CardHeader>
+                  <CardTitle>Localization Settings</CardTitle>
+                  <CardDescription>
+                    Configure timezone, date formats, and regional preferences
+                  </CardDescription>
+                </CardHeader>
+                <CardContent>
+                  <form onSubmit={generalForm.handleSubmit(onGeneralSubmit)} className="space-y-6">
+                    <div className="space-y-4">
+                      <div>
+                        <Label htmlFor="defaultTimezone">Default Timezone</Label>
+                        <Select 
+                          value={generalForm.watch("defaultTimezone")}
+                          onValueChange={(value) => generalForm.setValue("defaultTimezone", value)}
+                        >
                           <SelectTrigger>
                             <SelectValue placeholder="Select timezone" />
                           </SelectTrigger>
-                        </FormControl>
-                        <SelectContent>
-                          {TIMEZONE_OPTIONS.map((option) => (
-                            <SelectItem key={option.value} value={option.value}>
-                              {option.label}
-                            </SelectItem>
-                          ))}
-                        </SelectContent>
-                      </Select>
-                      <FormMessage />
-                    </FormItem>
-                  )}
-                />
-              </div>
+                          <SelectContent>
+                            <SelectItem value="UTC">UTC - Coordinated Universal Time</SelectItem>
+                            <SelectItem value="America/New_York">Eastern Time</SelectItem>
+                            <SelectItem value="America/Los_Angeles">Pacific Time</SelectItem>
+                            <SelectItem value="Europe/London">London Time</SelectItem>
+                            <SelectItem value="Asia/Kolkata">India Standard Time</SelectItem>
+                            <SelectItem value="Asia/Dubai">UAE Time</SelectItem>
+                          </SelectContent>
+                        </Select>
+                      </div>
 
-              <div className="space-y-2">
-                <label className="text-sm font-medium">Enabled Regions</label>
-                <div className="flex flex-wrap gap-2">
-                  {REGION_OPTIONS.map((region) => (
-                    <Badge
-                      key={region.value}
-                      variant={selectedRegions.includes(region.value) ? "default" : "secondary"}
-                      className="cursor-pointer"
-                      onClick={() => toggleRegion(region.value)}
-                    >
-                      {region.label}
-                    </Badge>
-                  ))}
-                </div>
-                <p className="text-xs text-muted-foreground">
-                  Click to enable/disable regions for your operations
-                </p>
-              </div>
-            </CardContent>
-          </Card>
+                      <div>
+                        <Label htmlFor="dateFormat">Date Format</Label>
+                        <Select 
+                          value={generalForm.watch("dateFormat")}
+                          onValueChange={(value) => generalForm.setValue("dateFormat", value as "MM/DD/YYYY" | "DD/MM/YYYY" | "YYYY-MM-DD")}
+                        >
+                          <SelectTrigger>
+                            <SelectValue placeholder="Select date format" />
+                          </SelectTrigger>
+                          <SelectContent>
+                            <SelectItem value="MM/DD/YYYY">MM/DD/YYYY (US)</SelectItem>
+                            <SelectItem value="DD/MM/YYYY">DD/MM/YYYY (EU)</SelectItem>
+                            <SelectItem value="YYYY-MM-DD">YYYY-MM-DD (ISO)</SelectItem>
+                          </SelectContent>
+                        </Select>
+                      </div>
 
-          <Card>
-            <CardHeader>
-              <CardTitle className="flex items-center gap-2">
-                <Clock className="h-5 w-5" />
-                SLA Defaults
-              </CardTitle>
-            </CardHeader>
-            <CardContent className="space-y-4">
-              <p className="text-sm text-muted-foreground">
-                Default time limits (in hours) for different task types
-              </p>
-              <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-                <FormField
-                  control={form.control}
-                  name="slaDefaults.RESTOCK"
-                  render={({ field }) => (
-                    <FormItem>
-                      <FormLabel>Restock Tasks</FormLabel>
-                      <FormControl>
-                        <Input
-                          type="number"
-                          min="1"
-                          {...field}
-                          onChange={(e) => field.onChange(parseInt(e.target.value) || 0)}
+                      <div>
+                        <Label htmlFor="numberFormat">Number Format</Label>
+                        <Select 
+                          value={generalForm.watch("numberFormat")}
+                          onValueChange={(value) => generalForm.setValue("numberFormat", value as "US" | "EU" | "IN")}
+                        >
+                          <SelectTrigger>
+                            <SelectValue placeholder="Select number format" />
+                          </SelectTrigger>
+                          <SelectContent>
+                            <SelectItem value="US">US (1,234.56)</SelectItem>
+                            <SelectItem value="EU">EU (1.234,56)</SelectItem>
+                            <SelectItem value="IN">IN (1,23,456.78)</SelectItem>
+                          </SelectContent>
+                        </Select>
+                      </div>
+                    </div>
+
+                    <Separator />
+
+                    <div className="flex justify-between">
+                      <Button type="button" variant="outline" onClick={() => resetForm("general")}>
+                        <RotateCcw className="h-4 w-4 mr-2" />
+                        Reset
+                      </Button>
+                      <Button type="submit" disabled={updateSettingsMutation.isPending}>
+                        <Save className="h-4 w-4 mr-2" />
+                        Save Changes
+                      </Button>
+                    </div>
+                  </form>
+                </CardContent>
+              </Card>
+            </TabsContent>
+
+            {/* Regions & SLAs Tab */}
+            <TabsContent value="regions">
+              <div className="space-y-6">
+                {/* Existing Regions */}
+                <Card>
+                  <CardHeader>
+                    <CardTitle>Regions & SLA Management</CardTitle>
+                    <CardDescription>
+                      Configure operational regions with specific SLA targets and restock buffers
+                    </CardDescription>
+                  </CardHeader>
+                  <CardContent>
+                    <div className="space-y-4">
+                      {regions?.length > 0 ? (
+                        regions.map((region: any) => (
+                          <div key={region.id} className="flex items-center justify-between p-4 border rounded-lg">
+                            <div className="flex items-center space-x-4">
+                              <Badge variant={region.isActive ? "default" : "secondary"}>
+                                {region.code}
+                              </Badge>
+                              <div>
+                                <h4 className="font-medium">{region.name}</h4>
+                                <p className="text-sm text-gray-600 dark:text-gray-400">
+                                  SLA: {region.slaHours}h • Buffer: {region.restockBufferPercentage}%
+                                </p>
+                              </div>
+                            </div>
+                            <Button
+                              variant="outline"
+                              size="sm"
+                              onClick={() => deleteRegionMutation.mutate(region.id)}
+                              disabled={deleteRegionMutation.isPending}
+                            >
+                              <Trash2 className="h-4 w-4" />
+                            </Button>
+                          </div>
+                        ))
+                      ) : (
+                        <p className="text-gray-500 dark:text-gray-400 text-center py-8">
+                          No regions configured yet. Add your first region below.
+                        </p>
+                      )}
+                    </div>
+                  </CardContent>
+                </Card>
+
+                {/* Add New Region */}
+                <Card>
+                  <CardHeader>
+                    <CardTitle>Add New Region</CardTitle>
+                  </CardHeader>
+                  <CardContent>
+                    <form onSubmit={regionForm.handleSubmit(onRegionSubmit)} className="space-y-4">
+                      <div className="grid grid-cols-2 gap-4">
+                        <div>
+                          <Label htmlFor="regionName">Region Name</Label>
+                          <Input
+                            id="regionName"
+                            {...regionForm.register("name")}
+                            placeholder="e.g., United Arab Emirates"
+                          />
+                          {regionForm.formState.errors.name && (
+                            <p className="text-sm text-red-500 mt-1">
+                              {regionForm.formState.errors.name.message}
+                            </p>
+                          )}
+                        </div>
+                        <div>
+                          <Label htmlFor="regionCode">Region Code</Label>
+                          <Input
+                            id="regionCode"
+                            {...regionForm.register("code")}
+                            placeholder="e.g., UAE"
+                          />
+                          {regionForm.formState.errors.code && (
+                            <p className="text-sm text-red-500 mt-1">
+                              {regionForm.formState.errors.code.message}
+                            </p>
+                          )}
+                        </div>
+                      </div>
+
+                      <div className="grid grid-cols-2 gap-4">
+                        <div>
+                          <Label htmlFor="slaHours">SLA Hours</Label>
+                          <Input
+                            id="slaHours"
+                            type="number"
+                            {...regionForm.register("slaHours", { valueAsNumber: true })}
+                            placeholder="24"
+                          />
+                          {regionForm.formState.errors.slaHours && (
+                            <p className="text-sm text-red-500 mt-1">
+                              {regionForm.formState.errors.slaHours.message}
+                            </p>
+                          )}
+                        </div>
+                        <div>
+                          <Label htmlFor="restockBuffer">Restock Buffer %</Label>
+                          <Input
+                            id="restockBuffer"
+                            type="number"
+                            {...regionForm.register("restockBufferPercentage", { valueAsNumber: true })}
+                            placeholder="20"
+                          />
+                          {regionForm.formState.errors.restockBufferPercentage && (
+                            <p className="text-sm text-red-500 mt-1">
+                              {regionForm.formState.errors.restockBufferPercentage.message}
+                            </p>
+                          )}
+                        </div>
+                      </div>
+
+                      <div className="flex items-center space-x-2">
+                        <Switch
+                          id="isActive"
+                          checked={regionForm.watch("isActive")}
+                          onCheckedChange={(checked) => regionForm.setValue("isActive", checked)}
                         />
-                      </FormControl>
-                      <FormMessage />
-                    </FormItem>
-                  )}
-                />
+                        <Label htmlFor="isActive">Active Region</Label>
+                      </div>
 
-                <FormField
-                  control={form.control}
-                  name="slaDefaults.RETRY_SYNC"
-                  render={({ field }) => (
-                    <FormItem>
-                      <FormLabel>Retry Sync Tasks</FormLabel>
-                      <FormControl>
-                        <Input
-                          type="number"
-                          min="1"
-                          {...field}
-                          onChange={(e) => field.onChange(parseInt(e.target.value) || 0)}
-                        />
-                      </FormControl>
-                      <FormMessage />
-                    </FormItem>
-                  )}
-                />
-
-                <FormField
-                  control={form.control}
-                  name="slaDefaults.RECONCILE"
-                  render={({ field }) => (
-                    <FormItem>
-                      <FormLabel>Reconcile Tasks</FormLabel>
-                      <FormControl>
-                        <Input
-                          type="number"
-                          min="1"
-                          {...field}
-                          onChange={(e) => field.onChange(parseInt(e.target.value) || 0)}
-                        />
-                      </FormControl>
-                      <FormMessage />
-                    </FormItem>
-                  )}
-                />
+                      <div className="flex justify-between">
+                        <Button type="button" variant="outline" onClick={() => resetForm("region")}>
+                          <RotateCcw className="h-4 w-4 mr-2" />
+                          Reset
+                        </Button>
+                        <Button type="submit" disabled={createRegionMutation.isPending}>
+                          <Plus className="h-4 w-4 mr-2" />
+                          Add Region
+                        </Button>
+                      </div>
+                    </form>
+                  </CardContent>
+                </Card>
               </div>
-            </CardContent>
-          </Card>
+            </TabsContent>
 
-          <div className="flex justify-end">
-            <Button
-              type="submit"
-              disabled={updateSettingsMutation.isPending}
-              className="min-w-32"
-            >
-              {updateSettingsMutation.isPending ? "Saving..." : "Save Settings"}
-            </Button>
-          </div>
-        </form>
-      </Form>
+            {/* Notifications Tab */}
+            <TabsContent value="notifications">
+              <Card>
+                <CardHeader>
+                  <CardTitle>Notification Settings</CardTitle>
+                  <CardDescription>
+                    Configure how and when you receive notifications from the system
+                  </CardDescription>
+                </CardHeader>
+                <CardContent>
+                  <form onSubmit={notificationForm.handleSubmit(onNotificationSubmit)} className="space-y-6">
+                    <div className="space-y-4">
+                      <div className="flex items-center justify-between">
+                        <div>
+                          <Label htmlFor="dailyDigest">Daily Digest</Label>
+                          <p className="text-sm text-gray-600 dark:text-gray-400">
+                            Receive a daily summary of important activities
+                          </p>
+                        </div>
+                        <Switch
+                          id="dailyDigest"
+                          checked={notificationForm.watch("dailyDigestEnabled") === "true"}
+                          onCheckedChange={(checked) => 
+                            notificationForm.setValue("dailyDigestEnabled", checked ? "true" : "false")
+                          }
+                        />
+                      </div>
+
+                      <div>
+                        <Label htmlFor="digestTime">Digest Time</Label>
+                        <Input
+                          id="digestTime"
+                          type="time"
+                          {...notificationForm.register("digestTime")}
+                        />
+                      </div>
+
+                      <div className="flex items-center justify-between">
+                        <div>
+                          <Label htmlFor="alerts">System Alerts</Label>
+                          <p className="text-sm text-gray-600 dark:text-gray-400">
+                            Receive real-time alerts for critical events
+                          </p>
+                        </div>
+                        <Switch
+                          id="alerts"
+                          checked={notificationForm.watch("alertsEnabled") === "true"}
+                          onCheckedChange={(checked) => 
+                            notificationForm.setValue("alertsEnabled", checked ? "true" : "false")
+                          }
+                        />
+                      </div>
+
+                      <Separator />
+
+                      <div className="space-y-4">
+                        <h3 className="text-lg font-medium">SMTP Configuration</h3>
+                        
+                        <div className="grid grid-cols-2 gap-4">
+                          <div>
+                            <Label htmlFor="smtpHost">SMTP Host</Label>
+                            <Input
+                              id="smtpHost"
+                              {...notificationForm.register("smtpHost")}
+                              placeholder="smtp.gmail.com"
+                            />
+                          </div>
+                          <div>
+                            <Label htmlFor="smtpPort">SMTP Port</Label>
+                            <Input
+                              id="smtpPort"
+                              type="number"
+                              {...notificationForm.register("smtpPort", { valueAsNumber: true })}
+                              placeholder="587"
+                            />
+                          </div>
+                        </div>
+
+                        <div className="grid grid-cols-2 gap-4">
+                          <div>
+                            <Label htmlFor="smtpUser">SMTP Username</Label>
+                            <Input
+                              id="smtpUser"
+                              {...notificationForm.register("smtpUser")}
+                              placeholder="your@email.com"
+                            />
+                          </div>
+                          <div>
+                            <Label htmlFor="smtpPassword">SMTP Password</Label>
+                            <Input
+                              id="smtpPassword"
+                              type="password"
+                              {...notificationForm.register("smtpPassword")}
+                              placeholder="••••••••"
+                            />
+                          </div>
+                        </div>
+                      </div>
+                    </div>
+
+                    <Separator />
+
+                    <div className="flex justify-between">
+                      <Button type="button" variant="outline" onClick={() => resetForm("notification")}>
+                        <RotateCcw className="h-4 w-4 mr-2" />
+                        Reset
+                      </Button>
+                      <Button type="submit" disabled={updateNotificationsMutation.isPending}>
+                        <Save className="h-4 w-4 mr-2" />
+                        Save Changes
+                      </Button>
+                    </div>
+                  </form>
+                </CardContent>
+              </Card>
+            </TabsContent>
+          </Tabs>
+        </div>
+      </div>
     </div>
   );
 }

@@ -1399,6 +1399,155 @@ export function registerRoutes(app: Express): Server {
     }
   });
 
+  // Comprehensive Settings API Routes
+  // GET /api/settings - Fetch full settings (workspace + regions + notifications)
+  app.get("/api/settings", requireAuth, async (req, res) => {
+    try {
+      const user = req.user as any;
+      const organizationId = user?.organizationId || "test-org-id";
+      
+      // Get or create workspace settings
+      let workspace = await storage.getWorkspaceSettings(organizationId);
+      if (!workspace) {
+        workspace = await storage.createWorkspaceSettings(organizationId, {
+          organizationId,
+          orgName: "My Organization",
+          defaultCurrency: "USD", 
+          defaultTimezone: "UTC",
+          dateFormat: "MM/DD/YYYY",
+          numberFormat: "US"
+        });
+      }
+
+      // Get regions and notifications
+      const regions = await storage.getRegions(organizationId);
+      let notifications = await storage.getNotificationSettings(organizationId);
+      if (!notifications) {
+        notifications = await storage.createNotificationSettings(organizationId, {
+          organizationId,
+          dailyDigestEnabled: "true",
+          digestTime: "09:00",
+          alertsEnabled: "true"
+        });
+      }
+
+      res.json({
+        workspace,
+        regions,
+        notifications
+      });
+    } catch (error) {
+      console.error("Error fetching settings:", error);
+      res.status(500).json({ error: "Failed to fetch settings" });
+    }
+  });
+
+  // PUT /api/settings - Update workspace settings
+  app.put("/api/settings", requireAuth, async (req, res) => {
+    try {
+      const user = req.user as any;
+      const organizationId = user?.organizationId || "test-org-id";
+      const updates = req.body;
+      
+      const updatedSettings = await storage.updateWorkspaceSettings(organizationId, updates);
+      res.json(updatedSettings);
+    } catch (error) {
+      console.error("Error updating settings:", error);
+      res.status(500).json({ error: "Failed to update settings" });
+    }
+  });
+
+  // Regions API
+  app.get("/api/regions", requireAuth, async (req, res) => {
+    try {
+      const user = req.user as any;
+      const organizationId = user?.organizationId || "test-org-id";
+      
+      const regions = await storage.getRegions(organizationId);
+      res.json(regions);
+    } catch (error) {
+      console.error("Error fetching regions:", error);
+      res.status(500).json({ error: "Failed to fetch regions" });
+    }
+  });
+
+  app.post("/api/regions", requireAuth, async (req, res) => {
+    try {
+      const user = req.user as any;
+      const organizationId = user?.organizationId || "test-org-id";
+      
+      const regionData = { ...req.body, organizationId };
+      const newRegion = await storage.createRegion(organizationId, regionData);
+      res.status(201).json(newRegion);
+    } catch (error) {
+      console.error("Error creating region:", error);
+      res.status(500).json({ error: "Failed to create region" });
+    }
+  });
+
+  app.put("/api/regions/:id", requireAuth, async (req, res) => {
+    try {
+      const regionId = req.params.id;
+      const updates = req.body;
+      
+      const updatedRegion = await storage.updateRegion(regionId, updates);
+      res.json(updatedRegion);
+    } catch (error) {
+      console.error("Error updating region:", error);
+      res.status(500).json({ error: "Failed to update region" });
+    }
+  });
+
+  app.delete("/api/regions/:id", requireAuth, async (req, res) => {
+    try {
+      const regionId = req.params.id;
+      
+      await storage.deleteRegion(regionId);
+      res.status(204).send();
+    } catch (error) {
+      console.error("Error deleting region:", error);
+      res.status(500).json({ error: "Failed to delete region" });
+    }
+  });
+
+  // Notification Settings API  
+  app.put("/api/settings/notifications", requireAuth, async (req, res) => {
+    try {
+      const user = req.user as any;
+      const organizationId = user?.organizationId || "test-org-id";
+      const updates = req.body;
+      
+      const updatedNotifications = await storage.updateNotificationSettings(organizationId, updates);
+      res.json(updatedNotifications);
+    } catch (error) {
+      console.error("Error updating notification settings:", error);
+      res.status(500).json({ error: "Failed to update notification settings" });
+    }
+  });
+
+  // Mock FX Helper for testing (exposed but not implemented)
+  app.get("/api/fx/rates", requireAuth, async (req, res) => {
+    try {
+      // Mock FX rates for testing
+      res.json({
+        base: "USD",
+        rates: {
+          "USD": 1.0,
+          "EUR": 0.85,
+          "GBP": 0.73,
+          "INR": 83.12,
+          "AED": 3.67,
+          "SGD": 1.35
+        },
+        lastUpdated: new Date().toISOString(),
+        source: "mock"
+      });
+    } catch (error) {
+      console.error("Error fetching FX rates:", error);
+      res.status(500).json({ error: "Failed to fetch FX rates" });
+    }
+  });
+
   const httpServer = createServer(app);
 
   // Analytics V1 API
@@ -1427,14 +1576,11 @@ export function registerRoutes(app: Express): Server {
         // Create default settings if none exist
         settings = await storage.createWorkspaceSettings(organizationId, {
           organizationId,
-          baseCurrency: "INR",
-          timezone: "Asia/Kolkata",
-          regionsEnabled: [],
-          slaDefaults: {
-            RESTOCK: 24,
-            RETRY_SYNC: 2,
-            RECONCILE: 72
-          }
+          orgName: "My Organization",
+          defaultCurrency: "USD",
+          defaultTimezone: "UTC",
+          dateFormat: "MM/DD/YYYY",
+          numberFormat: "US"
         });
       }
       

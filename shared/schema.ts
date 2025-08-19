@@ -28,18 +28,50 @@ export const users = pgTable("users", {
   createdAt: timestamp("created_at").defaultNow(),
 });
 
-// Workspace settings table
+// Comprehensive workspace settings
 export const workspaceSettings = pgTable("workspace_settings", {
   id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
   organizationId: varchar("organization_id").references(() => organizations.id).notNull(),
-  baseCurrency: text("base_currency", { enum: ["INR", "USD", "GBP", "AED", "SGD"] }).default("INR").notNull(),
-  timezone: text("timezone").default("Asia/Kolkata").notNull(),
-  regionsEnabled: text("regions_enabled").array().default([]).notNull(),
-  slaDefaults: jsonb("sla_defaults").default({
-    RESTOCK: 24,
-    RETRY_SYNC: 2,
-    RECONCILE: 72
-  }).notNull(),
+  // General settings
+  orgName: text("org_name").notNull().default("My Organization"),
+  logoUrl: text("logo_url"),
+  // Localization settings
+  defaultCurrency: text("default_currency", { enum: ["INR", "USD", "GBP", "AED", "SGD"] }).default("USD").notNull(),
+  defaultTimezone: text("default_timezone").default("UTC").notNull(),
+  dateFormat: text("date_format", { enum: ["MM/DD/YYYY", "DD/MM/YYYY", "YYYY-MM-DD"] }).default("MM/DD/YYYY").notNull(),
+  numberFormat: text("number_format", { enum: ["US", "EU", "IN"] }).default("US").notNull(),
+  createdAt: timestamp("created_at").defaultNow(),
+  updatedAt: timestamp("updated_at").defaultNow(),
+});
+
+// Regions management for multi-region operations
+export const regions = pgTable("regions", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  organizationId: varchar("organization_id").references(() => organizations.id).notNull(),
+  name: text("name").notNull(),
+  currency: text("currency", { enum: ["INR", "USD", "GBP", "AED", "SGD"] }),
+  timezone: text("timezone"),
+  slaDays: integer("sla_days").notNull().default(7),
+  restockBufferPct: integer("restock_buffer_pct").notNull().default(20),
+  isActive: text("is_active").default("true").notNull(),
+  createdAt: timestamp("created_at").defaultNow(),
+  updatedAt: timestamp("updated_at").defaultNow(),
+});
+
+// Notifications settings
+export const notificationSettings = pgTable("notification_settings", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  organizationId: varchar("organization_id").references(() => organizations.id).notNull(),
+  // SMTP configuration
+  smtpHost: text("smtp_host"),
+  smtpPort: integer("smtp_port"),
+  smtpUsername: text("smtp_username"),
+  smtpPassword: text("smtp_password"), // Encrypted in production
+  smtpFromEmail: text("smtp_from_email"),
+  // Notification preferences
+  dailyDigestEnabled: text("daily_digest_enabled").default("true").notNull(),
+  digestTime: text("digest_time").default("09:00").notNull(), // HH:MM format
+  alertsEnabled: text("alerts_enabled").default("true").notNull(),
   createdAt: timestamp("created_at").defaultNow(),
   updatedAt: timestamp("updated_at").defaultNow(),
 });
@@ -477,11 +509,68 @@ export const simplePurchaseOrderSchema = z.object({
 export type SimplePurchaseOrder = typeof simplePurchaseOrders.$inferSelect;
 export type InsertSimplePurchaseOrder = z.infer<typeof simplePurchaseOrderSchema>;
 
-// Workspace settings types
+// Comprehensive Workspace Settings Schemas
+export const workspaceSettingsUpdateSchema = z.object({
+  // General tab
+  orgName: z.string().min(1, "Organization name is required"),
+  logoUrl: z.string().optional(),
+  // Localization tab  
+  defaultCurrency: z.enum(["INR", "USD", "GBP", "AED", "SGD"]),
+  defaultTimezone: z.string().min(1, "Timezone is required"),
+  dateFormat: z.enum(["MM/DD/YYYY", "DD/MM/YYYY", "YYYY-MM-DD"]),
+  numberFormat: z.enum(["US", "EU", "IN"]),
+});
+
+export const regionCreateSchema = z.object({
+  name: z.string().min(1, "Region name is required"),
+  currency: z.enum(["INR", "USD", "GBP", "AED", "SGD"]).optional(),
+  timezone: z.string().optional(),
+  slaDays: z.number().int().min(1, "SLA days must be at least 1").max(30, "SLA days cannot exceed 30"),
+  restockBufferPct: z.number().int().min(0, "Buffer % must be non-negative").max(100, "Buffer % cannot exceed 100"),
+});
+
+export const regionUpdateSchema = z.object({
+  name: z.string().min(1, "Region name is required").optional(),
+  currency: z.enum(["INR", "USD", "GBP", "AED", "SGD"]).optional(),
+  timezone: z.string().optional(),
+  slaDays: z.number().int().min(1).max(30).optional(),
+  restockBufferPct: z.number().int().min(0).max(100).optional(),
+  isActive: z.string().optional(),
+});
+
+export const notificationSettingsUpdateSchema = z.object({
+  // SMTP settings
+  smtpHost: z.string().optional(),
+  smtpPort: z.number().int().min(1).max(65535).optional(),
+  smtpUsername: z.string().optional(),
+  smtpPassword: z.string().optional(),
+  smtpFromEmail: z.string().email().optional(),
+  // Preferences
+  dailyDigestEnabled: z.string().optional(),
+  digestTime: z.string().regex(/^\d{2}:\d{2}$/, "Time must be in HH:MM format").optional(),
+  alertsEnabled: z.string().optional(),
+});
+
+// Types for the comprehensive settings
 export type WorkspaceSettings = typeof workspaceSettings.$inferSelect;
 export type InsertWorkspaceSettings = typeof workspaceSettings.$inferInsert;
+export type WorkspaceSettingsUpdate = z.infer<typeof workspaceSettingsUpdateSchema>;
 
-export const insertWorkspaceSettingsSchema = createInsertSchema(workspaceSettings);
+export type Region = typeof regions.$inferSelect;
+export type InsertRegion = typeof regions.$inferInsert;
+export type RegionCreate = z.infer<typeof regionCreateSchema>;
+export type RegionUpdate = z.infer<typeof regionUpdateSchema>;
+
+export type NotificationSettings = typeof notificationSettings.$inferSelect;
+export type InsertNotificationSettings = typeof notificationSettings.$inferInsert;
+export type NotificationSettingsUpdate = z.infer<typeof notificationSettingsUpdateSchema>;
+
+// Full settings object for API responses
+export interface FullSettings {
+  workspace: WorkspaceSettings;
+  regions: Region[];
+  notifications: NotificationSettings;
+}
 
 // Analytics data types
 export interface AnalyticsSummary {
