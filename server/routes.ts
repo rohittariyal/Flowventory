@@ -1749,5 +1749,119 @@ export function registerRoutes(app: Express): Server {
     }
   });
 
+  // Daily digest preview endpoint
+  app.get("/api/digest/preview", requireAuth, (req, res) => {
+    try {
+      const { buildDigestPayload } = require('./digestService');
+      const digestData = buildDigestPayload();
+      res.json(digestData);
+    } catch (error) {
+      console.error("Error generating digest preview:", error);
+      res.status(500).json({ error: "Internal server error" });
+    }
+  });
+
+  // Send digest email endpoint
+  app.post("/api/digest/send", requireAuth, async (req, res) => {
+    try {
+      const { recipients, smtpSettings } = req.body;
+      
+      if (!recipients || recipients.length === 0) {
+        return res.status(400).json({ error: "No recipients specified" });
+      }
+
+      if (!smtpSettings?.smtpHost || !smtpSettings?.username || !smtpSettings?.password) {
+        return res.status(400).json({ error: "SMTP configuration incomplete" });
+      }
+
+      const { sendDigestEmail } = require('./digestService');
+      const success = await sendDigestEmail(recipients, smtpSettings);
+      
+      if (success) {
+        res.json({ 
+          success: true, 
+          message: "Daily digest sent successfully",
+          recipients: recipients,
+          sentAt: new Date().toISOString()
+        });
+      } else {
+        res.status(500).json({ error: "Failed to send digest email" });
+      }
+    } catch (error) {
+      console.error("Error sending digest:", error);
+      res.status(500).json({ error: "Failed to send digest" });
+    }
+  });
+
+  // Send test email endpoint
+  app.post("/api/email/test", requireAuth, async (req, res) => {
+    try {
+      const { smtpSettings, recipients } = req.body;
+      
+      if (!recipients || recipients.length === 0) {
+        return res.status(400).json({ error: "No recipients specified" });
+      }
+
+      if (!smtpSettings?.smtpHost || !smtpSettings?.username || !smtpSettings?.password) {
+        return res.status(400).json({ 
+          error: "SMTP configuration incomplete",
+          message: "Please configure SMTP host, username, and password" 
+        });
+      }
+
+      const { sendTestEmail } = require('./digestService');
+      const success = await sendTestEmail(recipients, smtpSettings);
+      
+      if (success) {
+        res.json({ 
+          success: true, 
+          message: "Test email sent successfully",
+          recipients: recipients,
+          sentAt: new Date().toISOString()
+        });
+      } else {
+        res.status(500).json({ error: "Failed to send test email" });
+      }
+    } catch (error) {
+      console.error("Error sending test email:", error);
+      res.status(500).json({ error: "Failed to send test email" });
+    }
+  });
+
+  // Update digest scheduler configuration
+  app.post("/api/digest/configure", requireAuth, async (req, res) => {
+    try {
+      const { enabled, time, recipients, smtpSettings } = req.body;
+      
+      const { digestScheduler } = require('./digestScheduler');
+      digestScheduler.updateConfig({
+        enabled,
+        time,
+        recipients,
+        smtpSettings
+      });
+      
+      res.json({ 
+        success: true, 
+        message: "Digest scheduler configured successfully",
+        status: digestScheduler.getStatus()
+      });
+    } catch (error) {
+      console.error("Error configuring digest scheduler:", error);
+      res.status(500).json({ error: "Failed to configure digest scheduler" });
+    }
+  });
+
+  // Get digest scheduler status
+  app.get("/api/digest/status", requireAuth, (req, res) => {
+    try {
+      const { digestScheduler } = require('./digestScheduler');
+      res.json(digestScheduler.getStatus());
+    } catch (error) {
+      console.error("Error getting digest status:", error);
+      res.status(500).json({ error: "Failed to get digest status" });
+    }
+  });
+
   return httpServer;
 }

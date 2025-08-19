@@ -1,0 +1,63 @@
+You are implementing “Notifications 1.5” for Flowventory.
+ 
+Goal:
+- Use the SMTP settings saved in Workspace Settings to send emails.
+- Add a Daily Digest email (configurable time and recipients).
+- Add a “Send Test Email” action from the Notifications tab in /settings.
+- Provide a preview of the digest in the UI before sending.
+ 
+Scope:
+1) DATA
+- Extend local settings (or DB schema later) with:
+  notifications: {
+    dailyDigestEnabled: boolean,
+    digestTime: "09:00",          // 24h local time
+    digestRecipients: ["ops@example.com"],
+    smtpHost, smtpPort, username, password  // already present; mask in UI
+  }
+ 
+2) UI (Settings → Notifications tab)
+- Fields: dailyDigestEnabled (toggle), digestTime (HH:mm), digestRecipients (comma/email chips).
+- Buttons: [Save], [Send Test Email], [Preview Digest].
+- Validation: valid emails; digestTime required if enabled.
+- If SMTP not configured, show a dismissible warning banner with a link to open SMTP fields.
+ 
+3) DIGEST CONTENT (MVP)
+- Low stock (top 10 by severity): SKU, location, on-hand, days cover.
+- Overdue POs (last 7 days): PO#, supplier, expected date, status.
+- Tasks due today/overdue: title, assignee, due date.
+- Recon anomalies (last 24h): type, SKU, delta, link to detail.
+- Add a “View in app” link for each block.
+ 
+4) API/LOGIC
+- Create endpoints OR local mocks:
+  - GET /api/digest/preview  → returns digest payload.
+  - POST /api/digest/send    → sends digest email using SMTP settings.
+  - POST /api/email/test     → sends a test email to the current user or typed address.
+- For now, if there’s no backend, simulate data with fixtures and send via a mock email adapter that logs to console and resolves; if SMTP is provided, actually attempt send using nodemailer (or your stack’s mailer).
+- Implement a lightweight scheduler stub:
+  - In dev, simulate the daily send by a setInterval check that compares current HH:mm to digestTime and, if enabled and not already sent in the last 24h, calls /api/digest/send. Keep it simple and safe in dev.
+ 
+5) EMAIL TEMPLATE
+- Build a responsive HTML email (Tailwind for email via inline styles or a simple table-based layout).
+- Branding header (logo + “Flowventory Daily Digest”).
+- Sections for each content block; “View in app” links.
+ 
+6) TEST HOOKS
+- Seed fixtures so the preview shows realistic rows (a couple of low stock items, 1–2 overdue POs, etc.)
+- Unit-friendly functions for:
+  - buildDigestPayload()
+  - renderDigestHtml(payload)
+  - sendEmail({to, subject, html})
+ 
+Deliverables:
+- UI updates in /settings (Notifications tab).
+- API routes or mocks for preview/send/test.
+- Email template renderer.
+- Safe dev scheduler (no infinite loops).
+- Console logs for send attempts and error handling.
+ 
+After implementation:
+- Confirm /settings → Notifications shows the new controls.
+- “Preview Digest” renders HTML in a modal/pane.
+- “Send Test Email” completes successfully (or shows SMTP error cleanly).

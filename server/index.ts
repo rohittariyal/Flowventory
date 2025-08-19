@@ -3,6 +3,7 @@ import { registerRoutes } from "./routes";
 import { setupVite, serveStatic, log } from "./vite";
 import { NotificationGenerators } from "./notificationGenerators";
 import { syncManager } from "./syncAdapters";
+import { digestScheduler } from "./digestScheduler";
 
 const app = express();
 app.use(express.json());
@@ -78,5 +79,9 @@ app.use((req, res, next) => {
       // Start auto-sync every 30 minutes (optional cron)
       syncManager.startAutoSync(30);
     }
+
+    // Daily digest scheduler is always running (configured via settings)
+    console.log("Daily digest scheduler initialized and running");
+    console.log("Digest status:", digestScheduler.getStatus());
   });
 })();

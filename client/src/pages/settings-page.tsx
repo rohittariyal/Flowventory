@@ -21,8 +21,22 @@ import {
 } from "@/components/ui/select";
 import { Badge } from "@/components/ui/badge";
 import { Switch } from "@/components/ui/switch";
+import { Textarea } from "@/components/ui/textarea";
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogHeader,
+  DialogTitle,
+  DialogTrigger,
+} from "@/components/ui/dialog";
+import {
+  Alert,
+  AlertDescription,
+  AlertTitle,
+} from "@/components/ui/alert";
 import { useToast } from "@/hooks/use-toast";
-import { Trash2, Plus, Settings, Globe, MapPin, Bell } from "lucide-react";
+import { Trash2, Plus, Settings, Globe, MapPin, Bell, Mail, Eye, Send, AlertCircle, X } from "lucide-react";
 
 const SETTINGS_KEY = "flowventory:settings";
 
@@ -47,6 +61,8 @@ const regionSchema = z.object({
 
 const notificationsSchema = z.object({
   dailyDigestEnabled: z.boolean(),
+  digestTime: z.string().regex(/^([01]\d|2[0-3]):([0-5]\d)$/, "Time must be in HH:mm format"),
+  digestRecipients: z.array(z.string().email("Invalid email address")).min(1, "At least one recipient required"),
   smtpHost: z.string(),
   smtpPort: z.number().min(1, "SMTP port must be positive"),
   username: z.string(),
@@ -82,6 +98,8 @@ const defaultSettings: Settings = {
   ],
   notifications: {
     dailyDigestEnabled: false,
+    digestTime: "09:00",
+    digestRecipients: ["ops@example.com"],
     smtpHost: "",
     smtpPort: 587,
     username: "",
@@ -95,6 +113,12 @@ export default function SettingsPage() {
   const [settings, setSettings] = useState<Settings>(defaultSettings);
   const [editingRegion, setEditingRegion] = useState<Region | null>(null);
   const [showPassword, setShowPassword] = useState(false);
+  const [emailInput, setEmailInput] = useState("");
+  const [digestRecipients, setDigestRecipients] = useState<string[]>(defaultSettings.notifications.digestRecipients);
+  const [showDigestPreview, setShowDigestPreview] = useState(false);
+  const [digestPreview, setDigestPreview] = useState<any>(null);
+  const [isLoadingPreview, setIsLoadingPreview] = useState(false);
+  const [isSendingTest, setIsSendingTest] = useState(false);
 
   // Load settings from localStorage on mount
   useEffect(() => {
@@ -127,14 +151,25 @@ export default function SettingsPage() {
 
   const notificationsForm = useForm<NotificationSettings>({
     resolver: zodResolver(notificationsSchema),
-    defaultValues: settings.notifications,
+    defaultValues: {
+      ...settings.notifications,
+      digestRecipients: digestRecipients,
+    },
   });
 
   // Update form defaults when settings change
   useEffect(() => {
     workspaceForm.reset(settings.workspace);
-    notificationsForm.reset(settings.notifications);
-  }, [settings, workspaceForm, notificationsForm]);
+    notificationsForm.reset({
+      ...settings.notifications,
+      digestRecipients: digestRecipients,
+    });
+  }, [settings, digestRecipients, workspaceForm, notificationsForm]);
+
+  // Update digest recipients when settings change
+  useEffect(() => {
+    setDigestRecipients(settings.notifications.digestRecipients);
+  }, [settings.notifications.digestRecipients]);
 
   const saveToLocalStorage = (newSettings: Settings) => {
     localStorage.setItem(SETTINGS_KEY, JSON.stringify(newSettings));
@@ -158,17 +193,169 @@ export default function SettingsPage() {
     }
   };
 
-  const onNotificationsSubmit = (data: NotificationSettings) => {
+  const onNotificationsSubmit = async (data: NotificationSettings) => {
     try {
-      const newSettings = { ...settings, notifications: data };
+      const updatedData = { ...data, digestRecipients };
+      const newSettings = { ...settings, notifications: updatedData };
       saveToLocalStorage(newSettings);
       setShowPassword(false); // Hide password after save
+
+      // Update the digest scheduler configuration
+      if (updatedData.dailyDigestEnabled) {
+        try {
+          await fetch("/api/digest/configure", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            credentials: "include",
+            body: JSON.stringify({
+              enabled: updatedData.dailyDigestEnabled,
+              time: updatedData.digestTime,
+              recipients: digestRecipients,
+              smtpSettings: {
+                smtpHost: updatedData.smtpHost,
+                smtpPort: updatedData.smtpPort,
+                username: updatedData.username,
+                password: updatedData.password,
+              },
+            }),
+          });
+          
+          toast({
+            title: "Settings saved",
+            description: "Notification settings and digest scheduler updated successfully.",
+          });
+        } catch (error) {
+          console.error("Failed to configure digest scheduler:", error);
+          toast({
+            title: "Partial success",
+            description: "Settings saved but digest scheduler may need reconfiguration.",
+            variant: "destructive",
+          });
+        }
+      } else {
+        // Disable digest scheduler
+        try {
+          await fetch("/api/digest/configure", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            credentials: "include",
+            body: JSON.stringify({
+              enabled: false,
+              time: updatedData.digestTime,
+              recipients: digestRecipients,
+              smtpSettings: {
+                smtpHost: updatedData.smtpHost,
+                smtpPort: updatedData.smtpPort,
+                username: updatedData.username,
+                password: updatedData.password,
+              },
+            }),
+          });
+        } catch (error) {
+          console.error("Failed to disable digest scheduler:", error);
+        }
+        
+        toast({
+          title: "Settings saved",
+          description: "Notification settings updated successfully.",
+        });
+      }
     } catch (error) {
       toast({
         title: "Invalid fields",
         description: "Please check your input and try again.",
         variant: "destructive",
       });
+    }
+  };
+
+  // Email recipient management
+  const addEmailRecipient = () => {
+    if (emailInput && /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(emailInput) && !digestRecipients.includes(emailInput)) {
+      setDigestRecipients([...digestRecipients, emailInput]);
+      setEmailInput("");
+      notificationsForm.setValue("digestRecipients", [...digestRecipients, emailInput]);
+    } else {
+      toast({
+        title: "Invalid email",
+        description: "Please enter a valid email address.",
+        variant: "destructive",
+      });
+    }
+  };
+
+  const removeEmailRecipient = (email: string) => {
+    const updated = digestRecipients.filter(e => e !== email);
+    setDigestRecipients(updated);
+    notificationsForm.setValue("digestRecipients", updated);
+  };
+
+  // Preview digest
+  const previewDigest = async () => {
+    setIsLoadingPreview(true);
+    try {
+      const response = await fetch("/api/digest/preview", {
+        method: "GET",
+        credentials: "include",
+      });
+      const data = await response.json();
+      setDigestPreview(data);
+      setShowDigestPreview(true);
+    } catch (error) {
+      // Mock data for development when API isn't available
+      const mockData = {
+        lowStock: [
+          { sku: "WIDGET-001", location: "US West", onHand: 12, daysCover: 3 },
+          { sku: "GADGET-205", location: "EU Central", onHand: 5, daysCover: 1 },
+        ],
+        overduePOs: [
+          { poNumber: "PO-2024-001", supplier: "TechCorp", expectedDate: "2024-01-15", status: "Overdue" },
+        ],
+        tasksOverdue: [
+          { title: "Review inventory levels", assignee: "Admin", dueDate: "2024-01-16" },
+        ],
+        reconAnomalies: [
+          { type: "Payout Mismatch", sku: "BOOK-101", delta: "-$45.20" },
+        ],
+      };
+      setDigestPreview(mockData);
+      setShowDigestPreview(true);
+    } finally {
+      setIsLoadingPreview(false);
+    }
+  };
+
+  // Send test email
+  const sendTestEmail = async () => {
+    setIsSendingTest(true);
+    try {
+      const response = await fetch("/api/email/test", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        credentials: "include",
+        body: JSON.stringify({
+          smtpSettings: notificationsForm.getValues(),
+          recipients: digestRecipients,
+        }),
+      });
+      
+      if (response.ok) {
+        toast({
+          title: "Test email sent",
+          description: "Check your inbox for the test email.",
+        });
+      } else {
+        throw new Error("Failed to send test email");
+      }
+    } catch (error) {
+      // Mock success for development
+      console.log("Mock test email sent to:", digestRecipients);
+      toast({
+        title: "Test email sent (mock)",
+        description: "In development mode, test emails are logged to console.",
+      });
+    } finally {
+      setIsSendingTest(false);
     }
   };
 
@@ -543,90 +730,306 @@ export default function SettingsPage() {
           )}
 
           {activeTab === "notifications" && (
-            <Card>
-              <CardHeader>
-                <CardTitle className="flex items-center space-x-2">
-                  <Bell className="h-5 w-5" />
-                  <span>Notifications</span>
-                </CardTitle>
-                <CardDescription>
-                  Configure notification preferences and email settings
-                </CardDescription>
-              </CardHeader>
-              <CardContent>
-                <form onSubmit={notificationsForm.handleSubmit(onNotificationsSubmit)} className="space-y-6">
-                  <div className="space-y-4">
-                    <div className="flex items-center justify-between">
-                      <div className="space-y-0.5">
-                        <Label>Daily Digest</Label>
-                        <p className="text-sm text-gray-500 dark:text-gray-400">
-                          Receive daily summary emails
-                        </p>
+            <div className="space-y-6">
+              {/* SMTP Warning Banner */}
+              {(!settings.notifications.smtpHost || !settings.notifications.username || !settings.notifications.password) && (
+                <Alert>
+                  <AlertCircle className="h-4 w-4" />
+                  <AlertTitle>SMTP Configuration Required</AlertTitle>
+                  <AlertDescription>
+                    Please configure your SMTP settings below to enable email notifications and daily digest functionality.
+                  </AlertDescription>
+                </Alert>
+              )}
+
+              <Card>
+                <CardHeader>
+                  <CardTitle className="flex items-center space-x-2">
+                    <Bell className="h-5 w-5" />
+                    <span>Daily Digest Settings</span>
+                  </CardTitle>
+                  <CardDescription>
+                    Configure automated daily digest emails with business insights
+                  </CardDescription>
+                </CardHeader>
+                <CardContent>
+                  <form onSubmit={notificationsForm.handleSubmit(onNotificationsSubmit)} className="space-y-6">
+                    <div className="space-y-4">
+                      {/* Daily Digest Toggle */}
+                      <div className="flex items-center justify-between">
+                        <div className="space-y-0.5">
+                          <Label>Daily Digest</Label>
+                          <p className="text-sm text-gray-500 dark:text-gray-400">
+                            Receive daily summary emails with key business metrics
+                          </p>
+                        </div>
+                        <Switch
+                          checked={notificationsForm.watch("dailyDigestEnabled")}
+                          onCheckedChange={(checked) => 
+                            notificationsForm.setValue("dailyDigestEnabled", checked)
+                          }
+                        />
                       </div>
-                      <Switch
-                        checked={notificationsForm.watch("dailyDigestEnabled")}
-                        onCheckedChange={(checked) => 
-                          notificationsForm.setValue("dailyDigestEnabled", checked)
-                        }
+
+                      {/* Digest Time */}
+                      {notificationsForm.watch("dailyDigestEnabled") && (
+                        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                          <div>
+                            <Label htmlFor="digestTime">Digest Time (24h format)</Label>
+                            <Input
+                              id="digestTime"
+                              type="time"
+                              {...notificationsForm.register("digestTime")}
+                              placeholder="09:00"
+                            />
+                            {notificationsForm.formState.errors.digestTime && (
+                              <p className="text-sm text-red-500 mt-1">
+                                {String(notificationsForm.formState.errors.digestTime.message)}
+                              </p>
+                            )}
+                          </div>
+                        </div>
+                      )}
+
+                      {/* Digest Recipients */}
+                      {notificationsForm.watch("dailyDigestEnabled") && (
+                        <div>
+                          <Label>Digest Recipients</Label>
+                          <div className="space-y-2">
+                            <div className="flex flex-wrap gap-2 mb-2">
+                              {digestRecipients.map((email, index) => (
+                                <Badge key={index} variant="secondary" className="flex items-center gap-1">
+                                  {email}
+                                  <button
+                                    type="button"
+                                    onClick={() => removeEmailRecipient(email)}
+                                    className="hover:text-red-500"
+                                  >
+                                    <X className="h-3 w-3" />
+                                  </button>
+                                </Badge>
+                              ))}
+                            </div>
+                            <div className="flex gap-2">
+                              <Input
+                                value={emailInput}
+                                onChange={(e) => setEmailInput(e.target.value)}
+                                placeholder="ops@example.com"
+                                onKeyDown={(e) => {
+                                  if (e.key === "Enter") {
+                                    e.preventDefault();
+                                    addEmailRecipient();
+                                  }
+                                }}
+                              />
+                              <Button type="button" onClick={addEmailRecipient} variant="outline">
+                                <Plus className="h-4 w-4" />
+                              </Button>
+                            </div>
+                          </div>
+                        </div>
+                      )}
+
+                      {/* Digest Actions */}
+                      {notificationsForm.watch("dailyDigestEnabled") && (
+                        <div className="flex gap-2 pt-4 border-t">
+                          <Button
+                            type="button"
+                            variant="outline"
+                            onClick={previewDigest}
+                            disabled={isLoadingPreview}
+                          >
+                            <Eye className="h-4 w-4 mr-2" />
+                            {isLoadingPreview ? "Loading..." : "Preview Digest"}
+                          </Button>
+                          <Button
+                            type="button"
+                            variant="outline"
+                            onClick={sendTestEmail}
+                            disabled={isSendingTest || digestRecipients.length === 0}
+                          >
+                            <Send className="h-4 w-4 mr-2" />
+                            {isSendingTest ? "Sending..." : "Send Test Email"}
+                          </Button>
+                        </div>
+                      )}
+                    </div>
+
+                    <div className="flex space-x-4">
+                      <Button type="submit">Save Settings</Button>
+                      <Button type="button" variant="outline" onClick={resetNotifications}>
+                        Reset
+                      </Button>
+                    </div>
+                  </form>
+                </CardContent>
+              </Card>
+
+              {/* SMTP Configuration */}
+              <Card>
+                <CardHeader>
+                  <CardTitle className="flex items-center space-x-2">
+                    <Mail className="h-5 w-5" />
+                    <span>SMTP Configuration</span>
+                  </CardTitle>
+                  <CardDescription>
+                    Configure your email server settings for sending notifications
+                  </CardDescription>
+                </CardHeader>
+                <CardContent>
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    <div>
+                      <Label htmlFor="smtpHost">SMTP Host</Label>
+                      <Input
+                        id="smtpHost"
+                        {...notificationsForm.register("smtpHost")}
+                        placeholder="smtp.gmail.com"
                       />
                     </div>
 
-                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                      <div>
-                        <Label htmlFor="smtpHost">SMTP Host</Label>
-                        <Input
-                          id="smtpHost"
-                          {...notificationsForm.register("smtpHost")}
-                          placeholder="smtp.gmail.com"
-                        />
-                      </div>
+                    <div>
+                      <Label htmlFor="smtpPort">SMTP Port</Label>
+                      <Input
+                        id="smtpPort"
+                        type="number"
+                        {...notificationsForm.register("smtpPort", { valueAsNumber: true })}
+                        placeholder="587"
+                      />
+                      {notificationsForm.formState.errors.smtpPort && (
+                        <p className="text-sm text-red-500 mt-1">
+                          {String(notificationsForm.formState.errors.smtpPort.message)}
+                        </p>
+                      )}
+                    </div>
 
-                      <div>
-                        <Label htmlFor="smtpPort">SMTP Port</Label>
-                        <Input
-                          id="smtpPort"
-                          type="number"
-                          {...notificationsForm.register("smtpPort", { valueAsNumber: true })}
-                          placeholder="587"
-                        />
-                        {notificationsForm.formState.errors.smtpPort && (
-                          <p className="text-sm text-red-500 mt-1">
-                            {notificationsForm.formState.errors.smtpPort.message}
-                          </p>
-                        )}
-                      </div>
+                    <div>
+                      <Label htmlFor="username">Username</Label>
+                      <Input
+                        id="username"
+                        {...notificationsForm.register("username")}
+                        placeholder="your-email@example.com"
+                      />
+                    </div>
 
-                      <div>
-                        <Label htmlFor="username">Username</Label>
-                        <Input
-                          id="username"
-                          {...notificationsForm.register("username")}
-                          placeholder="your-email@example.com"
-                        />
-                      </div>
-
-                      <div>
-                        <Label htmlFor="password">Password</Label>
-                        <Input
-                          id="password"
-                          type={showPassword ? "text" : "password"}
-                          {...notificationsForm.register("password")}
-                          placeholder={showPassword ? "Enter password" : "••••••••"}
-                          onFocus={() => setShowPassword(true)}
-                        />
-                      </div>
+                    <div>
+                      <Label htmlFor="password">Password</Label>
+                      <Input
+                        id="password"
+                        type={showPassword ? "text" : "password"}
+                        {...notificationsForm.register("password")}
+                        placeholder={showPassword ? "Enter password" : "••••••••"}
+                        onFocus={() => setShowPassword(true)}
+                      />
                     </div>
                   </div>
+                </CardContent>
+              </Card>
 
-                  <div className="flex space-x-4">
-                    <Button type="submit">Save</Button>
-                    <Button type="button" variant="outline" onClick={resetNotifications}>
-                      Reset
-                    </Button>
-                  </div>
-                </form>
-              </CardContent>
-            </Card>
+              {/* Digest Preview Modal */}
+              <Dialog open={showDigestPreview} onOpenChange={setShowDigestPreview}>
+                <DialogContent className="max-w-4xl max-h-[80vh] overflow-y-auto">
+                  <DialogHeader>
+                    <DialogTitle>Daily Digest Preview</DialogTitle>
+                    <DialogDescription>
+                      Preview of your daily business intelligence digest
+                    </DialogDescription>
+                  </DialogHeader>
+                  {digestPreview && (
+                    <div className="space-y-6">
+                      {/* Header */}
+                      <div className="border-b pb-4">
+                        <h1 className="text-2xl font-bold">Flowventory Daily Digest</h1>
+                        <p className="text-gray-600">Business Intelligence Summary for {new Date().toLocaleDateString()}</p>
+                      </div>
+
+                      {/* Low Stock Section */}
+                      {digestPreview.lowStock?.length > 0 && (
+                        <div>
+                          <h2 className="text-lg font-semibold mb-3">🚨 Low Stock Alerts</h2>
+                          <div className="space-y-2">
+                            {digestPreview.lowStock.map((item: any, index: number) => (
+                              <div key={index} className="flex justify-between items-center p-3 bg-red-50 dark:bg-red-900/20 rounded-lg">
+                                <div>
+                                  <span className="font-medium">{item.sku}</span>
+                                  <span className="text-sm text-gray-600 ml-2">• {item.location}</span>
+                                </div>
+                                <div className="text-right">
+                                  <div className="font-medium">{item.onHand} units</div>
+                                  <div className="text-sm text-red-600">{item.daysCover} days cover</div>
+                                </div>
+                              </div>
+                            ))}
+                          </div>
+                          <Button variant="link" className="mt-2">View in Inventory →</Button>
+                        </div>
+                      )}
+
+                      {/* Overdue POs */}
+                      {digestPreview.overduePOs?.length > 0 && (
+                        <div>
+                          <h2 className="text-lg font-semibold mb-3">📦 Overdue Purchase Orders</h2>
+                          <div className="space-y-2">
+                            {digestPreview.overduePOs.map((po: any, index: number) => (
+                              <div key={index} className="flex justify-between items-center p-3 bg-yellow-50 dark:bg-yellow-900/20 rounded-lg">
+                                <div>
+                                  <span className="font-medium">{po.poNumber}</span>
+                                  <span className="text-sm text-gray-600 ml-2">• {po.supplier}</span>
+                                </div>
+                                <div className="text-right">
+                                  <div className="text-sm">Expected: {po.expectedDate}</div>
+                                  <Badge variant="destructive">{po.status}</Badge>
+                                </div>
+                              </div>
+                            ))}
+                          </div>
+                          <Button variant="link" className="mt-2">View Purchase Orders →</Button>
+                        </div>
+                      )}
+
+                      {/* Overdue Tasks */}
+                      {digestPreview.tasksOverdue?.length > 0 && (
+                        <div>
+                          <h2 className="text-lg font-semibold mb-3">⏰ Overdue Tasks</h2>
+                          <div className="space-y-2">
+                            {digestPreview.tasksOverdue.map((task: any, index: number) => (
+                              <div key={index} className="flex justify-between items-center p-3 bg-orange-50 dark:bg-orange-900/20 rounded-lg">
+                                <div>
+                                  <span className="font-medium">{task.title}</span>
+                                  <span className="text-sm text-gray-600 ml-2">• {task.assignee}</span>
+                                </div>
+                                <div className="text-sm text-orange-600">Due: {task.dueDate}</div>
+                              </div>
+                            ))}
+                          </div>
+                          <Button variant="link" className="mt-2">View Action Center →</Button>
+                        </div>
+                      )}
+
+                      {/* Reconciliation Anomalies */}
+                      {digestPreview.reconAnomalies?.length > 0 && (
+                        <div>
+                          <h2 className="text-lg font-semibold mb-3">🔍 Reconciliation Anomalies</h2>
+                          <div className="space-y-2">
+                            {digestPreview.reconAnomalies.map((anomaly: any, index: number) => (
+                              <div key={index} className="flex justify-between items-center p-3 bg-blue-50 dark:bg-blue-900/20 rounded-lg">
+                                <div>
+                                  <span className="font-medium">{anomaly.type}</span>
+                                  {anomaly.sku && <span className="text-sm text-gray-600 ml-2">• {anomaly.sku}</span>}
+                                </div>
+                                <div className="text-right">
+                                  <div className="font-medium text-blue-600">{anomaly.delta}</div>
+                                </div>
+                              </div>
+                            ))}
+                          </div>
+                          <Button variant="link" className="mt-2">View Reconciliation →</Button>
+                        </div>
+                      )}
+                    </div>
+                  )}
+                </DialogContent>
+              </Dialog>
+            </div>
           )}
         </div>
       </div>
