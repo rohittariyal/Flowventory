@@ -13,28 +13,10 @@ import { AlertTriangle, Package, Plus, FileText, CheckCircle, Search } from "luc
 import { Link } from "wouter";
 import { apiRequest } from "@/lib/queryClient";
 import { useToast } from "@/hooks/use-toast";
+import { getAllProducts, type Product } from "@/data/seedProductData";
 
-interface InventoryItem {
-  sku: string;
-  channels: string[];
-  stock: number;
-  threshold: number;
-  daysCover: number;
-  hasLinkedTask?: boolean;
-  latestEventId?: string;
-}
-
-// Mock inventory data - in real app this would come from API
-const INVENTORY_DATA: InventoryItem[] = [
-  { sku: "SKU-001", channels: ["Shopify", "Amazon"], stock: 5, threshold: 20, daysCover: 2.0, hasLinkedTask: false, latestEventId: "event-1" },
-  { sku: "SKU-002", channels: ["Shopify"], stock: 15, threshold: 25, daysCover: 8.3, hasLinkedTask: true },
-  { sku: "SKU-003", channels: ["Amazon", "eBay"], stock: 3, threshold: 15, daysCover: 3.75, hasLinkedTask: false, latestEventId: "event-2" },
-  { sku: "SKU-004", channels: ["Shopify", "Amazon", "Meta"], stock: 45, threshold: 30, daysCover: 14.1 },
-  { sku: "SKU-005", channels: ["Shopify"], stock: 8, threshold: 18, daysCover: 3.8, hasLinkedTask: false, latestEventId: "event-3" },
-  { sku: "SKU-006", channels: ["Amazon"], stock: 22, threshold: 20, daysCover: 7.3 },
-  { sku: "SKU-007", channels: ["Shopify", "eBay"], stock: 1, threshold: 12, daysCover: 1.25, hasLinkedTask: false, latestEventId: "event-4" },
-  { sku: "SKU-008", channels: ["Amazon", "Meta"], stock: 35, threshold: 25, daysCover: 11.7 }
-];
+// Use Product type from seedProductData - inventory data now comes from there
+const INVENTORY_DATA = getAllProducts();
 
 const SUPPLIERS = [
   "Supplier A - Electronics",
@@ -131,8 +113,8 @@ function InventoryPage() {
   });
 
   // Feature 3: Low-stock highlight with accessibility
-  const getRowClassName = (item: InventoryItem) => {
-    const isLowStock = item.stock <= item.threshold;
+  const getRowClassName = (item: Product) => {
+    const isLowStock = item.stock <= item.reorderPoint;
     if (isLowStock) {
       return "bg-red-50 dark:bg-red-950/20 border-l-4 border-l-red-500 dark:border-l-red-400";
     }
@@ -222,7 +204,7 @@ function InventoryPage() {
                     </TableCell>
                   </TableRow>
                 ) : (
-                  filteredInventory.map((item) => (
+                  filteredInventory.map((item: Product) => (
                   <TableRow 
                     key={item.sku} 
                     className={getRowClassName(item)}
@@ -248,7 +230,7 @@ function InventoryPage() {
                       {item.stock}
                     </TableCell>
                     <TableCell className="text-right font-mono">
-                      {item.threshold}
+                      {item.reorderPoint}
                     </TableCell>
                     <TableCell className="text-right">
                       <Badge variant={getDaysCoverBadge(item.daysCover)}>
@@ -268,7 +250,7 @@ function InventoryPage() {
                             <span className="hidden sm:inline ml-1">Suggest Reorder</span>
                           </Button>
                         )}
-                        {item.stock <= item.threshold && (
+                        {item.stock <= item.reorderPoint && (
                           <>
                             {!item.hasLinkedTask && item.latestEventId ? (
                               <Button

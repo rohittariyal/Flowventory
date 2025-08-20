@@ -28,6 +28,7 @@ import ProductDetailPage from "@/pages/product-detail-page";
 import { ProtectedRoute } from "./lib/protected-route";
 import { initializeSeedData } from "@/data/seedInvoiceData";
 import { initializeSessionData, initializeProductNotesData } from "@/data/seedSessionData";
+import { initializeProductData } from "@/data/seedProductData";
 
 function Router() {
   return (
@@ -61,6 +62,7 @@ function App() {
   initializeSeedData();
   initializeSessionData();
   initializeProductNotesData();
+  initializeProductData();
   
   return (
     <QueryClientProvider client={queryClient}>

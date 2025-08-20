@@ -5,25 +5,9 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { ArrowLeft, Package } from "lucide-react";
 import { NotesTab } from "@/components/product/NotesTab";
+import { getProductBySku, type Product } from "@/data/seedProductData";
 
-interface Product {
-  id: string;
-  sku: string;
-  name: string;
-  category: string;
-  cost: number;
-  price: number;
-  stock: number;
-  reserved: number;
-  available: number;
-  supplier: string;
-  location: string;
-  status: string;
-  velocity: number;
-  daysLeft: number;
-  reorderPoint: number;
-  maxStock: number;
-}
+// Product interface imported from seedProductData
 
 export default function ProductDetailPage() {
   const { id } = useParams<{ id: string }>();
@@ -31,17 +15,9 @@ export default function ProductDetailPage() {
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    // Load product from localStorage (inventory data)
-    const storedProducts = localStorage.getItem("flowventory:inventory");
-    if (storedProducts) {
-      try {
-        const products: Product[] = JSON.parse(storedProducts);
-        const foundProduct = products.find(p => p.id === id || p.sku === id);
-        setProduct(foundProduct || null);
-      } catch (error) {
-        console.error("Error loading product:", error);
-      }
-    }
+    // Load product using the product data helper
+    const foundProduct = getProductBySku(id || "");
+    setProduct(foundProduct || null);
     setLoading(false);
   }, [id]);
 

@@ -29,30 +29,39 @@ export function initializeProductNotesData() {
     return; // Notes already exist, don't overwrite
   }
   
-  // Create sample notes for demo products
+  // Create sample notes for demo products using actual SKUs
   const sampleNotes = {
-    "inv-001": [
+    "SKU-001": [
       {
         id: "n_demo1",
-        text: "Product quality excellent. Consider increasing order quantity for next batch.",
+        text: "Customer feedback on Bluetooth headphones has been excellent. Audio quality and battery life are standout features. Consider increasing order quantity for next batch due to high demand.",
         author: "Demo User",
         date: new Date(Date.now() - 24 * 60 * 60 * 1000).toISOString(), // 1 day ago
-        attachments: [{ name: "quality-report.pdf" }]
+        attachments: [{ name: "customer-reviews-summary.pdf" }]
       },
       {
         id: "n_demo2", 
-        text: "Customer feedback: packaging could be improved. Working with supplier on this.",
+        text: "Packaging feedback: Some customers mentioned the box could be more premium given the price point. Working with supplier on packaging upgrade.",
         author: "Demo User",
         date: new Date(Date.now() - 3 * 24 * 60 * 60 * 1000).toISOString(), // 3 days ago
       }
     ],
-    "inv-002": [
+    "SKU-002": [
       {
         id: "n_demo3",
-        text: "New supplier quote received. 15% cost reduction possible if we switch.",
+        text: "New supplier quote received for smartphone cases. 15% cost reduction possible if we switch suppliers, but need to verify quality standards first.",
         author: "Demo User", 
         date: new Date(Date.now() - 2 * 60 * 60 * 1000).toISOString(), // 2 hours ago
         attachments: [{ name: "supplier-quote.xlsx" }]
+      }
+    ],
+    "SKU-003": [
+      {
+        id: "n_demo4",
+        text: "Critical stock alert! USB-C cables are selling fast. Need to reorder immediately. Current supplier lead time is 2 weeks.",
+        author: "Demo User",
+        date: new Date(Date.now() - 1 * 60 * 60 * 1000).toISOString(), // 1 hour ago
+        attachments: [{ name: "stock-alert.pdf" }]
       }
     ]
   };
