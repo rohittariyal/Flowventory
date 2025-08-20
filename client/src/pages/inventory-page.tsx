@@ -16,7 +16,6 @@ import { useToast } from "@/hooks/use-toast";
 import { getAllProducts, type Product } from "@/data/seedProductData";
 
 // Use Product type from seedProductData - inventory data now comes from there
-const INVENTORY_DATA = getAllProducts();
 
 const SUPPLIERS = [
   "Supplier A - Electronics",
@@ -40,6 +39,9 @@ function InventoryPage() {
   // Feature 2: Search and filter
   const [searchQuery, setSearchQuery] = useState("");
   
+  // Get inventory data dynamically 
+  const INVENTORY_DATA = getAllProducts();
+  
   // Filter inventory data based on search query
   const filteredInventory = useMemo(() => {
     if (!searchQuery.trim()) return INVENTORY_DATA;
@@ -47,7 +49,7 @@ function InventoryPage() {
     const query = searchQuery.toLowerCase().trim();
     return INVENTORY_DATA.filter(item => 
       item.sku.toLowerCase().includes(query) ||
-      item.channels.some(channel => channel.toLowerCase().includes(query))
+      (item.channels || []).some(channel => channel.toLowerCase().includes(query))
     );
   }, [searchQuery]);
 
