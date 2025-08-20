@@ -13,9 +13,27 @@ import { AlertTriangle, Package, Plus, FileText, CheckCircle, Search } from "luc
 import { Link } from "wouter";
 import { apiRequest } from "@/lib/queryClient";
 import { useToast } from "@/hooks/use-toast";
-import { getAllProducts, type Product } from "@/data/seedProductData";
+interface InventoryItem {
+  sku: string;
+  channels: string[];
+  stock: number;
+  threshold: number;
+  daysCover: number;
+  hasLinkedTask?: boolean;
+  latestEventId?: string;
+}
 
-// Use Product type from seedProductData - inventory data now comes from there
+// Dummy inventory data
+const INVENTORY_DATA: InventoryItem[] = [
+  { sku: "SKU-001", channels: ["Shopify", "Amazon"], stock: 5, threshold: 20, daysCover: 2.0, hasLinkedTask: false, latestEventId: "event-1" },
+  { sku: "SKU-002", channels: ["Shopify"], stock: 15, threshold: 25, daysCover: 8.3, hasLinkedTask: true },
+  { sku: "SKU-003", channels: ["Amazon", "eBay"], stock: 3, threshold: 15, daysCover: 3.75, hasLinkedTask: false, latestEventId: "event-2" },
+  { sku: "SKU-004", channels: ["Shopify", "Amazon", "Meta"], stock: 45, threshold: 30, daysCover: 14.1 },
+  { sku: "SKU-005", channels: ["Shopify"], stock: 8, threshold: 18, daysCover: 3.8, hasLinkedTask: false, latestEventId: "event-3" },
+  { sku: "SKU-006", channels: ["Amazon"], stock: 22, threshold: 20, daysCover: 7.3 },
+  { sku: "SKU-007", channels: ["Shopify", "eBay"], stock: 1, threshold: 12, daysCover: 1.25, hasLinkedTask: false, latestEventId: "event-4" },
+  { sku: "SKU-008", channels: ["Amazon", "Meta"], stock: 35, threshold: 25, daysCover: 11.7 }
+];
 
 const SUPPLIERS = [
   "Supplier A - Electronics",
@@ -39,9 +57,6 @@ function InventoryPage() {
   // Feature 2: Search and filter
   const [searchQuery, setSearchQuery] = useState("");
   
-  // Get inventory data dynamically 
-  const INVENTORY_DATA = getAllProducts();
-  
   // Filter inventory data based on search query
   const filteredInventory = useMemo(() => {
     if (!searchQuery.trim()) return INVENTORY_DATA;
@@ -49,7 +64,7 @@ function InventoryPage() {
     const query = searchQuery.toLowerCase().trim();
     return INVENTORY_DATA.filter(item => 
       item.sku.toLowerCase().includes(query) ||
-      (item.channels || []).some(channel => channel.toLowerCase().includes(query))
+      item.channels.some(channel => channel.toLowerCase().includes(query))
     );
   }, [searchQuery]);
 
@@ -115,8 +130,8 @@ function InventoryPage() {
   });
 
   // Feature 3: Low-stock highlight with accessibility
-  const getRowClassName = (item: Product) => {
-    const isLowStock = item.stock <= item.reorderPoint;
+  const getRowClassName = (item: InventoryItem) => {
+    const isLowStock = item.stock <= item.threshold;
     if (isLowStock) {
       return "bg-red-50 dark:bg-red-950/20 border-l-4 border-l-red-500 dark:border-l-red-400";
     }
@@ -206,7 +221,7 @@ function InventoryPage() {
                     </TableCell>
                   </TableRow>
                 ) : (
-                  filteredInventory.map((item: Product) => (
+                  filteredInventory.map((item) => (
                   <TableRow 
                     key={item.sku} 
                     className={getRowClassName(item)}
@@ -221,7 +236,7 @@ function InventoryPage() {
                     </TableCell>
                     <TableCell>
                       <div className="flex gap-1 flex-wrap">
-                        {(item.channels || []).map((channel) => (
+                        {item.channels.map((channel) => (
                           <Badge key={channel} variant="outline" className="text-xs">
                             {channel}
                           </Badge>
@@ -232,7 +247,7 @@ function InventoryPage() {
                       {item.stock}
                     </TableCell>
                     <TableCell className="text-right font-mono">
-                      {item.reorderPoint}
+                      {item.threshold}
                     </TableCell>
                     <TableCell className="text-right">
                       <Badge variant={getDaysCoverBadge(item.daysCover)}>
@@ -252,7 +267,7 @@ function InventoryPage() {
                             <span className="hidden sm:inline ml-1">Suggest Reorder</span>
                           </Button>
                         )}
-                        {item.stock <= item.reorderPoint && (
+                        {item.stock <= item.threshold && (
                           <>
                             {!item.hasLinkedTask && item.latestEventId ? (
                               <Button
