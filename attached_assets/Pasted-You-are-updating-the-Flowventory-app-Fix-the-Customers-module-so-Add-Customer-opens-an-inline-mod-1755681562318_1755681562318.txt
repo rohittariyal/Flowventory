@@ -1,0 +1,61 @@
+You are updating the Flowventory app. Fix the Customers module so "Add Customer" opens an inline modal and never navigates to a blank route.
+ 
+GOALS
+- Customers live under /customers.
+- Add/Edit happens in a modal over the list (NO navigation).
+- Persist customers to localStorage (key: "flowventory:customers").
+- Seed 2 example customers on first run.
+- Defensive rendering to avoid blanks/errors.
+ 
+CHANGES TO MAKE
+1) ROUTES
+- Ensure routes (React Router) include:
+  <Route path="/customers" element={<CustomersPage />} />
+  (Optional for viewing): <Route path="/customers/:id" element={<CustomerProfile />} />
+- Make sure the sidebar links to "/customers".
+ 
+2) CUSTOMERS LIST PAGE (src/pages/CustomersPage.jsx)
+- Implement a page with:
+  - Header with "Customers" title and an "Add Customer" button.
+  - Search input (filters by name/email/company).
+  - Table: Name, Company, Email, Phone, Address, Actions (Edit/Delete).
+- Clicking "Add Customer" opens a modal (no route change).
+- Modal fields: name (required), email (valid email if present), phone, address, company.
+- Validate on Save:
+  - name required
+  - email must be a valid email if present
+  - phone min length 5 if present
+- On Save:
+  - If editing: update in place.
+  - If new: generate id "c_" + random 6 chars, prepend to list.
+  - Close modal and persist to localStorage.
+- LocalStorage key: "flowventory:customers".
+- On mount: load from localStorage; if empty, seed two rows:
+  - { id:'c1', name:'Acme Inc.', email:'ops@acme.com', phone:'+1 555-0100', address:'NY, USA', company:'Acme Inc.' }
+  - { id:'c2', name:'BlueBay Retail', email:'hello@bluebay.sg', phone:'+65 555-0123', address:'Singapore', company:'BlueBay' }
+ 
+3) OPTIONAL CUSTOMER PROFILE (src/pages/CustomerProfile.jsx)
+- Safe component for /customers/:id.
+- Reads from localStorage; if not found, show “Customer not found” + link back.
+ 
+4) DO NOT NAVIGATE ON CREATE/EDIT
+- Add/Edit uses a modal component inside CustomersPage.
+- Remove or ignore any "/customers/new" route; if it must exist, render a simple safe component that redirects to "/customers".
+ 
+5) STYLING
+- Use existing Tailwind setup.
+- Keep to the product's "neon SaaS" cleanliness: rounded cards, subtle borders, hover states.
+ 
+6) ACCEPTANCE TESTS (Frontend)
+- Sidebar → "Customers" is visible and loads without errors.
+- Click "Add Customer" → modal appears (page does NOT change route).
+- Fill valid data → Save → new row appears immediately; refresh persists data.
+- Edit an existing row → Save → changes persist after refresh.
+- Delete asks confirmation and removes the row.
+- Search filters by name/email/company.
+- (Optional) Navigate to /customers/c1 → profile renders or shows "not found" safely.
+ 
+DELIVERABLES
+- src/pages/CustomersPage.jsx (modal-based create/edit, localStorage persistence, seeded data, validations)
+- (Optional) src/pages/CustomerProfile.jsx (defensive "not found" message)
+- Routes updated and sidebar link in place

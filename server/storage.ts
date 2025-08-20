@@ -1908,8 +1908,8 @@ export class MemStorage implements IStorage {
   }
 
   async initializeSampleCustomers(): Promise<void> {
-    // Use the same workspace ID as the actual user organization
-    const workspaceId = "81ba3f5b-89b3-4fe7-a630-4dd1fe3cdbad";
+    // Use the current user's workspace ID
+    const workspaceId = "1607cbd7-2c11-414b-a9ec-79083eecbee5";
     
     // Create sample customers
     const sampleCustomers = [
