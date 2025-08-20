@@ -1,0 +1,95 @@
+Implement an “Invoices & Billing” module for Flowventory (frontend-first with localStorage persistence).
+ 
+GOALS
+- Generate invoices from Orders.
+- Show an Invoice list + detail view with PDF/export (stub).
+- Apply region currency & tax rules from existing Finance settings.
+- Track payment status (Unpaid / Partially Paid / Paid).
+- Keep the UI consistent with the existing neon SaaS style.
+ 
+DATA (localStorage keys)
+- "flowventory:invoices": [
+    {
+      id, number, orderId, customerId,
+      issueDate, dueDate,
+      currency, locale,
+      lineItems: [{ skuId, name, qty, unitPrice, taxRate }], // taxRate = 0..1
+      subtotal, taxTotal, grandTotal,
+      payments: [{ id, date, amount, method }], // optional
+      status: "UNPAID"|"PARTIAL"|"PAID",
+      notes
+    }
+  ]
+- Use existing:
+  - "flowventory:settings:finance" (baseCurrency, regions[], tax rules, rates)
+  - "flowventory:products" (price, regionId, taxOverride?)
+  - "flowventory:orders" (if missing, seed a couple simple orders with items)
+ 
+UTILS
+- currencyFormat(amount, currency, locale) -> Intl.NumberFormat
+- fx(amount, fromCurrency, toCurrency) -> use manualRates from finance settings
+- calcInvoiceTotals(lineItems):
+    subtotal = Σ(qty * unitPrice)
+    taxTotal = Σ(qty * unitPrice * taxRate)
+    grandTotal = subtotal + taxTotal
+ 
+ROUTES
+- /invoices            -> InvoiceList
+- /invoices/:id        -> InvoiceDetail
+- Order detail page    -> “Generate Invoice” button (opens new modal)
+ 
+UI SCOPE
+1) Invoice List (/invoices)
+   - Table: Number, Customer, Issue Date, Due Date, Amount (grandTotal), Status, Actions
+   - Filters: Status (All/Unpaid/Partial/Paid), Customer, Date range, Search (number/customer)
+   - Bulk: Export CSV (current filter)
+ 
+2) Create Invoice (from Order)
+   - On Order detail, add “Generate Invoice”:
+     - Modal shows: Customer (locked from order), currency (from region), locale, issueDate, dueDate (+30d default)
+     - Line items prefilled from order: name, qty, unitPrice, taxRate (use product taxOverride or region default)
+     - Editable qty & unitPrice; taxRate selectable (dropdown from region tax rules + “Custom”)
+     - Summary: subtotal, tax, total (formatted currency)
+     - Save -> create invoice with a new number like INV-YYYYMM-#### (increment per month)
+     - Navigate to /invoices/:id after save
+ 
+3) Invoice Detail (/invoices/:id)
+   - Header: Number, Customer, Status chip (UNPAID/PAID/PARTIAL)
+   - “Download PDF” button (stub: generate a print view or HTML -> window.print() now)
+   - “Add Payment” button -> modal { date, amount, method: Cash/Card/Bank/Other }
+     - Apply payment: update payments[], recompute status:
+        - if paid >= total -> PAID
+        - if 0 < paid < total -> PARTIAL
+        - if 0 == paid -> UNPAID
+   - Show line items with qty, unit, tax, line totals
+   - Show “Converted to Base Currency” line using fx() beneath totals
+ 
+4) Finance Settings integration
+   - currency default from order’s region -> if missing, use baseCurrency
+   - locale default from region locale -> else use displayLocale
+   - tax rules dropdown comes from region taxRules; taxOverride on product wins
+ 
+5) Validations & UX
+   - qty > 0, unitPrice >= 0, taxRate between 0 and 1
+   - dueDate >= issueDate
+   - payment.amount > 0 and not more than remaining balance (warn if exceeded; allow capping)
+   - toasts on save, payment add, export
+ 
+SEED (for demo)
+- 2 orders with 2–3 line items each, linked to different regions (e.g., UK with VAT 20%, UAE with VAT 5%)
+- products with/without taxOverride to demonstrate behavior
+- 1 existing invoice in list to show variety of statuses
+ 
+DELIVERABLES
+- src/pages/InvoiceList.jsx
+- src/pages/InvoiceDetail.jsx
+- Update Order detail to include “Generate Invoice”
+- utils/currency.js with currencyFormat, fx
+- helpers/invoiceNumber.js to generate INV-YYYYMM-####
+ 
+ACCEPTANCE (Frontend only)
+- /invoices shows seeded invoice(s), filters work
+- From an order, Generate Invoice -> creates from items with correct currency & taxes; invoice opens
+- Add Payment updates status chips (UNPAID -> PARTIAL -> PAID)
+- Download PDF triggers print-friendly view (stub acceptable)
+- Base-currency conversion note displays under totals

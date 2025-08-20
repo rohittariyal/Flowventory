@@ -8,6 +8,8 @@ interface Permissions {
   returns: boolean;
   settings: boolean;
   analytics: boolean;
+  reconciliation: boolean;
+  users: boolean;
 }
 
 interface Role {
@@ -43,7 +45,9 @@ const DEFAULT_ROLES: Role[] = [
       customers: true,
       returns: true,
       settings: true,
-      analytics: true
+      analytics: true,
+      reconciliation: true,
+      users: true
     }
   },
   {
@@ -56,7 +60,9 @@ const DEFAULT_ROLES: Role[] = [
       customers: true,
       returns: true,
       settings: false,
-      analytics: true
+      analytics: true,
+      reconciliation: true,
+      users: false
     }
   },
   {
@@ -69,7 +75,9 @@ const DEFAULT_ROLES: Role[] = [
       customers: true,
       returns: true,
       settings: false,
-      analytics: false
+      analytics: false,
+      reconciliation: false,
+      users: false
     }
   }
 ];

@@ -22,7 +22,10 @@ import ReturnsPage from "@/pages/returns-page";
 import CustomersPage from "@/pages/customers-page";
 import CustomerDetailPage from "@/pages/customer-detail-page";
 import UsersPage from "@/pages/users-page";
+import InvoicesPage from "@/pages/invoices-page";
+import InvoiceDetailPage from "@/pages/invoice-detail-page";
 import { ProtectedRoute } from "./lib/protected-route";
+import { initializeSeedData } from "@/data/seedInvoiceData";
 
 function Router() {
   return (
@@ -41,6 +44,8 @@ function Router() {
       <ProtectedRoute path="/returns" component={ReturnsPage} />
       <ProtectedRoute path="/customers" component={CustomersPage} />
       <ProtectedRoute path="/customers/:id" component={CustomerDetailPage} />
+      <ProtectedRoute path="/invoices" component={InvoicesPage} />
+      <ProtectedRoute path="/invoices/:id" component={InvoiceDetailPage} />
       <ProtectedRoute path="/workspace/users" component={UsersPage} />
       <Route path="/auth" component={AuthPage} />
       <Route component={NotFound} />
@@ -49,6 +54,9 @@ function Router() {
 }
 
 function App() {
+  // Initialize seed data on app start
+  initializeSeedData();
+  
   return (
     <QueryClientProvider client={queryClient}>
       <AuthProvider>
