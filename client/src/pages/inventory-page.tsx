@@ -219,7 +219,7 @@ function InventoryPage() {
                     </TableCell>
                     <TableCell>
                       <div className="flex gap-1 flex-wrap">
-                        {item.channels.map((channel) => (
+                        {(item.channels || []).map((channel) => (
                           <Badge key={channel} variant="outline" className="text-xs">
                             {channel}
                           </Badge>
