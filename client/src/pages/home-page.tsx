@@ -2,6 +2,7 @@ import { useState, useEffect } from "react";
 import { useAuth } from "@/hooks/use-auth";
 import { useQuery } from "@tanstack/react-query";
 import { DashboardHeader } from "@/components/dashboard/dashboard-header";
+import { AnalyticsCards } from "@/components/dashboard/analytics-cards";
 import { BusinessPulsePanel } from "@/components/dashboard/business-pulse-panel";
 import { InventoryBrainPanel } from "@/components/dashboard/inventory-brain-panel";
 import { SalesIntelligencePanel } from "@/components/dashboard/sales-intelligence-panel";
@@ -109,6 +110,9 @@ export default function HomePage() {
         onSettingsClick={() => setShowSettings(true)}
       />
       <main className="p-3 sm:p-6 space-y-4 sm:space-y-6">
+        {/* Quick Analytics Cards - Always shown at top */}
+        <AnalyticsCards />
+        
         {/* Smart Alerts - Users with inventory or suppliers permission - Responsive */}
         {onboardingData && (selectedPanels.includes("inventory-brain") || selectedPanels.includes("po-generator")) && 
          (hasPermission('inventory') || hasPermission('suppliers')) && (

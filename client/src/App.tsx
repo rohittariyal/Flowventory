@@ -29,6 +29,7 @@ import { ProtectedRoute } from "./lib/protected-route";
 import { initializeSeedData } from "@/data/seedInvoiceData";
 import { initializeSessionData, initializeProductNotesData } from "@/data/seedSessionData";
 import { initializeProductData } from "@/data/seedProductData";
+import { initializeAnalyticsData } from "@/utils/analytics";
 
 function Router() {
   return (
@@ -38,6 +39,8 @@ function Router() {
       <ProtectedRoute path="/team" component={TeamPage} />
       <ProtectedRoute path="/action-center" component={ActionCenterPage} />
       <ProtectedRoute path="/inventory" component={InventoryPage} />
+      <ProtectedRoute path="/products" component={InventoryPage} />
+      <ProtectedRoute path="/orders" component={PurchaseOrdersPage} />
       <ProtectedRoute path="/purchase-orders" component={PurchaseOrdersPage} />
       <ProtectedRoute path="/recon" component={ReconciliationPage} />
       <ProtectedRoute path="/recon/:batchId" component={ReconciliationDetailPage} />
@@ -63,6 +66,7 @@ function App() {
   initializeSessionData();
   initializeProductNotesData();
   initializeProductData();
+  initializeAnalyticsData();
   
   return (
     <QueryClientProvider client={queryClient}>
