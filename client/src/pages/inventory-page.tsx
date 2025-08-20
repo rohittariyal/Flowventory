@@ -10,6 +10,7 @@ import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { AlertTriangle, Package, Plus, FileText, CheckCircle, Search } from "lucide-react";
+import { Link } from "wouter";
 import { apiRequest } from "@/lib/queryClient";
 import { useToast } from "@/hooks/use-toast";
 
@@ -226,7 +227,14 @@ function InventoryPage() {
                     key={item.sku} 
                     className={getRowClassName(item)}
                   >
-                    <TableCell className="font-medium">{item.sku}</TableCell>
+                    <TableCell className="font-medium">
+                      <Link 
+                        href={`/products/${item.sku}`}
+                        className="text-green-400 hover:text-green-300 hover:underline transition-colors"
+                      >
+                        {item.sku}
+                      </Link>
+                    </TableCell>
                     <TableCell>
                       <div className="flex gap-1 flex-wrap">
                         {item.channels.map((channel) => (

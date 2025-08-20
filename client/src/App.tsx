@@ -24,8 +24,10 @@ import CustomerDetailPage from "@/pages/customer-detail-page";
 import UsersPage from "@/pages/users-page";
 import InvoicesPage from "@/pages/invoices-page";
 import InvoiceDetailPage from "@/pages/invoice-detail-page";
+import ProductDetailPage from "@/pages/product-detail-page";
 import { ProtectedRoute } from "./lib/protected-route";
 import { initializeSeedData } from "@/data/seedInvoiceData";
+import { initializeSessionData, initializeProductNotesData } from "@/data/seedSessionData";
 
 function Router() {
   return (
@@ -46,6 +48,7 @@ function Router() {
       <ProtectedRoute path="/customers/:id" component={CustomerDetailPage} />
       <ProtectedRoute path="/invoices" component={InvoicesPage} />
       <ProtectedRoute path="/invoices/:id" component={InvoiceDetailPage} />
+      <ProtectedRoute path="/products/:id" component={ProductDetailPage} />
       <ProtectedRoute path="/workspace/users" component={UsersPage} />
       <Route path="/auth" component={AuthPage} />
       <Route component={NotFound} />
@@ -56,6 +59,8 @@ function Router() {
 function App() {
   // Initialize seed data on app start
   initializeSeedData();
+  initializeSessionData();
+  initializeProductNotesData();
   
   return (
     <QueryClientProvider client={queryClient}>
