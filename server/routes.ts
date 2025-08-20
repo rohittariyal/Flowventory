@@ -1132,6 +1132,164 @@ export function registerRoutes(app: Express): Server {
     }
   });
 
+  // Customer API routes
+  app.get("/api/customers", requireAuth, async (req, res) => {
+    try {
+      const user = req.user!;
+      const workspaceId = user.organizationId || user.id;
+      const { search, company } = req.query;
+      
+      const filters = {
+        search: search as string,
+        company: company as string,
+      };
+      
+      const customers = await storage.getCustomers(workspaceId, filters);
+      res.json(customers);
+    } catch (error) {
+      console.error("Error fetching customers:", error);
+      res.status(500).json({ error: "Failed to fetch customers" });
+    }
+  });
+
+  app.post("/api/customers", requireAuth, async (req, res) => {
+    try {
+      const user = req.user!;
+      const workspaceId = user.organizationId || user.id;
+      
+      const customerData = {
+        ...req.body,
+        workspaceId
+      };
+
+      const customer = await storage.createCustomer(customerData);
+      res.status(201).json(customer);
+    } catch (error) {
+      console.error("Error creating customer:", error);
+      res.status(400).json({ error: "Failed to create customer" });
+    }
+  });
+
+  app.get("/api/customers/:id", requireAuth, async (req, res) => {
+    try {
+      const customer = await storage.getCustomer(req.params.id);
+      if (!customer) {
+        return res.status(404).json({ error: "Customer not found" });
+      }
+      res.json(customer);
+    } catch (error) {
+      console.error("Error fetching customer:", error);
+      res.status(500).json({ error: "Failed to fetch customer" });
+    }
+  });
+
+  app.put("/api/customers/:id", requireAuth, async (req, res) => {
+    try {
+      const customer = await storage.updateCustomer(req.params.id, req.body);
+      if (!customer) {
+        return res.status(404).json({ error: "Customer not found" });
+      }
+      res.json(customer);
+    } catch (error) {
+      console.error("Error updating customer:", error);
+      res.status(500).json({ error: "Failed to update customer" });
+    }
+  });
+
+  app.delete("/api/customers/:id", requireAuth, async (req, res) => {
+    try {
+      await storage.deleteCustomer(req.params.id);
+      res.json({ message: "Customer deleted successfully" });
+    } catch (error) {
+      console.error("Error deleting customer:", error);
+      res.status(500).json({ error: "Failed to delete customer" });
+    }
+  });
+
+  app.get("/api/customers/:id/orders", requireAuth, async (req, res) => {
+    try {
+      const orders = await storage.getCustomerOrders(req.params.id);
+      res.json(orders);
+    } catch (error) {
+      console.error("Error fetching customer orders:", error);
+      res.status(500).json({ error: "Failed to fetch customer orders" });
+    }
+  });
+
+  // Sales Order API routes
+  app.get("/api/sales-orders", requireAuth, async (req, res) => {
+    try {
+      const user = req.user!;
+      const workspaceId = user.organizationId || user.id;
+      const { customerId, status } = req.query;
+      
+      const filters = {
+        customerId: customerId as string,
+        status: status as string,
+      };
+      
+      const orders = await storage.getSalesOrders(workspaceId, filters);
+      res.json(orders);
+    } catch (error) {
+      console.error("Error fetching sales orders:", error);
+      res.status(500).json({ error: "Failed to fetch sales orders" });
+    }
+  });
+
+  app.post("/api/sales-orders", requireAuth, async (req, res) => {
+    try {
+      const user = req.user!;
+      const workspaceId = user.organizationId || user.id;
+      
+      const orderData = {
+        ...req.body,
+        workspaceId
+      };
+
+      const order = await storage.createSalesOrder(orderData);
+      res.status(201).json(order);
+    } catch (error) {
+      console.error("Error creating sales order:", error);
+      res.status(400).json({ error: "Failed to create sales order" });
+    }
+  });
+
+  app.get("/api/sales-orders/:id", requireAuth, async (req, res) => {
+    try {
+      const order = await storage.getSalesOrder(req.params.id);
+      if (!order) {
+        return res.status(404).json({ error: "Sales order not found" });
+      }
+      res.json(order);
+    } catch (error) {
+      console.error("Error fetching sales order:", error);
+      res.status(500).json({ error: "Failed to fetch sales order" });
+    }
+  });
+
+  app.put("/api/sales-orders/:id", requireAuth, async (req, res) => {
+    try {
+      const order = await storage.updateSalesOrder(req.params.id, req.body);
+      if (!order) {
+        return res.status(404).json({ error: "Sales order not found" });
+      }
+      res.json(order);
+    } catch (error) {
+      console.error("Error updating sales order:", error);
+      res.status(500).json({ error: "Failed to update sales order" });
+    }
+  });
+
+  app.delete("/api/sales-orders/:id", requireAuth, async (req, res) => {
+    try {
+      await storage.deleteSalesOrder(req.params.id);
+      res.json({ message: "Sales order deleted successfully" });
+    } catch (error) {
+      console.error("Error deleting sales order:", error);
+      res.status(500).json({ error: "Failed to delete sales order" });
+    }
+  });
+
   // Restock Autopilot - Reorder Policy API routes
   app.get("/api/reorder/policy", requireAuth, async (req, res) => {
     try {

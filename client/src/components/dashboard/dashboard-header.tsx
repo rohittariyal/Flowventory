@@ -1,6 +1,6 @@
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
-import { LogOut, Settings, Bell, Upload, FileSpreadsheet, Users, BarChart3, Package, DollarSign, Globe, Truck, RotateCcw } from "lucide-react";
+import { LogOut, Settings, Bell, Upload, FileSpreadsheet, Users, BarChart3, Package, DollarSign, Globe, Truck, RotateCcw, UserCheck } from "lucide-react";
 import { Link } from "wouter";
 import { useAuth } from "@/hooks/use-auth";
 import { useLocation } from "wouter";
@@ -113,6 +113,12 @@ export function DashboardHeader({ user, onImportClick, onSettingsClick }: Dashbo
                 <Link href="/suppliers">
                   <Truck className="h-3 w-3 sm:h-4 sm:w-4 sm:mr-1" />
                   <span className="hidden sm:inline">Suppliers</span>
+                </Link>
+              </Button>
+              <Button asChild variant="ghost" size="sm" className="shrink-0">
+                <Link href="/customers">
+                  <UserCheck className="h-3 w-3 sm:h-4 sm:w-4 sm:mr-1" />
+                  <span className="hidden sm:inline">Customers</span>
                 </Link>
               </Button>
               <Button asChild variant="ghost" size="sm" className="shrink-0">

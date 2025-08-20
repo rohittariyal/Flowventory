@@ -130,7 +130,7 @@ export const returns = pgTable("returns", {
   id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
   rmaId: text("rma_id").notNull().unique(), // Human-readable RMA ID
   organizationId: varchar("organization_id").references(() => organizations.id).notNull(),
-  customerId: varchar("customer_id"), // Can be null for guest orders
+  customerId: varchar("customer_id").references(() => customers.id, { onDelete: "set null" }), // Can be null for guest orders
   customerName: text("customer_name").notNull(),
   customerEmail: text("customer_email").notNull(),
   orderReference: text("order_reference").notNull(), // Linked order ID
@@ -804,6 +804,46 @@ export const supplierDeliveries = pgTable("supplier_deliveries", {
   updatedAt: timestamp("updated_at").defaultNow().notNull()
 });
 
+// Customers table
+export const customers = pgTable("customers", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  name: text("name").notNull(),
+  email: text("email"),
+  phone: text("phone"),
+  address: text("address"),
+  company: text("company"),
+  workspaceId: varchar("workspace_id").notNull(),
+  createdAt: timestamp("created_at").defaultNow(),
+  updatedAt: timestamp("updated_at").defaultNow(),
+});
+
+// Sales Orders table - for customer orders
+export const salesOrders = pgTable("sales_orders", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  orderNumber: text("order_number").notNull().unique(),
+  customerId: varchar("customer_id").references(() => customers.id, { onDelete: "cascade" }).notNull(),
+  customerName: text("customer_name").notNull(),
+  customerEmail: text("customer_email"),
+  workspaceId: varchar("workspace_id").notNull(),
+  currency: text("currency", { enum: ["INR", "GBP", "USD", "AED", "SGD"] }).notNull().default("USD"),
+  status: text("status", { enum: ["PENDING", "PROCESSING", "SHIPPED", "DELIVERED", "CANCELLED"] }).notNull().default("PENDING"),
+  items: jsonb("items").$type<{
+    sku: string;
+    productName: string;
+    quantity: number;
+    unitPrice: number;
+    subtotal: number;
+  }[]>().notNull().default([]),
+  subtotal: integer("subtotal").notNull().default(0), // In cents
+  tax: integer("tax").notNull().default(0), // In cents
+  shipping: integer("shipping").notNull().default(0), // In cents
+  total: integer("total").notNull().default(0), // In cents
+  shippingAddress: text("shipping_address"),
+  notes: text("notes"),
+  createdAt: timestamp("created_at").defaultNow(),
+  updatedAt: timestamp("updated_at").defaultNow(),
+});
+
 // Reorder Policy schema
 export const reorderPolicies = pgTable("reorder_policies", {
   id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
@@ -873,3 +913,46 @@ export type ReorderPolicy = typeof reorderPolicies.$inferSelect;
 export type InsertReorderPolicy = z.infer<typeof insertReorderPolicySchema>;
 export type ReorderSuggestData = z.infer<typeof reorderSuggestRequestSchema>;
 export type UpdatePurchaseOrderStatusData = z.infer<typeof updatePurchaseOrderStatusSchema>;
+
+// Customer schemas
+export const insertCustomerSchema = createInsertSchema(customers, {
+  name: z.string().min(1, "Customer name is required"),
+  email: z.string().email("Invalid email address").optional().or(z.literal("")),
+  phone: z.string().optional(),
+  address: z.string().optional(),
+  company: z.string().optional(),
+});
+
+export const updateCustomerSchema = insertCustomerSchema.partial().omit({ workspaceId: true });
+
+// Sales Order schemas
+export const insertSalesOrderSchema = createInsertSchema(salesOrders, {
+  orderNumber: z.string().min(1, "Order number is required"),
+  customerId: z.string().min(1, "Customer is required"),
+  customerName: z.string().min(1, "Customer name is required"),
+  customerEmail: z.string().email("Invalid email address").optional(),
+  currency: z.enum(["INR", "GBP", "USD", "AED", "SGD"]).default("USD"),
+  status: z.enum(["PENDING", "PROCESSING", "SHIPPED", "DELIVERED", "CANCELLED"]).default("PENDING"),
+  items: z.array(z.object({
+    sku: z.string().min(1, "SKU is required"),
+    productName: z.string().min(1, "Product name is required"),
+    quantity: z.number().int().min(1, "Quantity must be at least 1"),
+    unitPrice: z.number().min(0, "Unit price must be positive"),
+    subtotal: z.number().min(0, "Subtotal must be positive"),
+  })).min(1, "At least one item is required"),
+  subtotal: z.number().int().min(0),
+  tax: z.number().int().min(0),
+  shipping: z.number().int().min(0),
+  total: z.number().int().min(0),
+  shippingAddress: z.string().optional(),
+  notes: z.string().optional(),
+});
+
+export const updateSalesOrderSchema = insertSalesOrderSchema.partial().omit({ workspaceId: true });
+
+export type Customer = typeof customers.$inferSelect;
+export type InsertCustomer = z.infer<typeof insertCustomerSchema>;
+export type UpdateCustomer = z.infer<typeof updateCustomerSchema>;
+export type SalesOrder = typeof salesOrders.$inferSelect;
+export type InsertSalesOrder = z.infer<typeof insertSalesOrderSchema>;
+export type UpdateSalesOrder = z.infer<typeof updateSalesOrderSchema>;

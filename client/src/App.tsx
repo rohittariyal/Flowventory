@@ -18,6 +18,8 @@ import WorkspaceSettingsPage from "@/pages/workspace-settings-page";
 import SettingsPage from "@/pages/settings-page";
 import SuppliersPage from "@/pages/suppliers-page";
 import ReturnsPage from "@/pages/returns-page";
+import CustomersPage from "@/pages/customers-page";
+import CustomerDetailPage from "@/pages/customer-detail-page";
 import { ProtectedRoute } from "./lib/protected-route";
 
 function Router() {
@@ -35,6 +37,8 @@ function Router() {
       <ProtectedRoute path="/settings" component={SettingsPage} />
       <ProtectedRoute path="/suppliers" component={SuppliersPage} />
       <ProtectedRoute path="/returns" component={ReturnsPage} />
+      <ProtectedRoute path="/customers" component={CustomersPage} />
+      <ProtectedRoute path="/customers/:id" component={CustomerDetailPage} />
       <Route path="/auth" component={AuthPage} />
       <Route component={NotFound} />
     </Switch>

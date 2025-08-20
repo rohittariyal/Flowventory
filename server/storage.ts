@@ -1,4 +1,4 @@
-import { type User, type InsertUser, type OnboardingData, type InsertOnboardingData, type PlatformConnections, type Organization, type TeamInvitation, type InviteTeamMemberData, type UpdateTeamMemberData, type Notification, type CreateNotificationData, type Event, type InsertEvent, type Task, type InsertTask, type CreateEventData, type CreateTaskData, type UpdateTaskData, type PurchaseOrder, type InsertPurchaseOrder, type Comment, type InsertComment, type Activity, type InsertActivity, type Rule, type InsertRule, type CreateCommentData, type CreateRuleData, type ReconBatch, type InsertReconBatch, type ReconRow, type InsertReconRow, type ReconIngestData, type UpdateReconRowData, type Supplier, type InsertSupplier, type SupplierDelivery, type InsertSupplierDelivery, type ReorderPolicy, type InsertReorderPolicy, type ReorderSuggestData, type UpdatePurchaseOrderStatusData, type SimplePurchaseOrder, type InsertSimplePurchaseOrder, type WorkspaceSettings, type InsertWorkspaceSettings, type Region, type InsertRegion, type NotificationSettings, type InsertNotificationSettings } from "@shared/schema";
+import { type User, type InsertUser, type OnboardingData, type InsertOnboardingData, type PlatformConnections, type Organization, type TeamInvitation, type InviteTeamMemberData, type UpdateTeamMemberData, type Notification, type CreateNotificationData, type Event, type InsertEvent, type Task, type InsertTask, type CreateEventData, type CreateTaskData, type UpdateTaskData, type PurchaseOrder, type InsertPurchaseOrder, type Comment, type InsertComment, type Activity, type InsertActivity, type Rule, type InsertRule, type CreateCommentData, type CreateRuleData, type ReconBatch, type InsertReconBatch, type ReconRow, type InsertReconRow, type ReconIngestData, type UpdateReconRowData, type Supplier, type InsertSupplier, type SupplierDelivery, type InsertSupplierDelivery, type ReorderPolicy, type InsertReorderPolicy, type ReorderSuggestData, type UpdatePurchaseOrderStatusData, type SimplePurchaseOrder, type InsertSimplePurchaseOrder, type WorkspaceSettings, type InsertWorkspaceSettings, type Region, type InsertRegion, type NotificationSettings, type InsertNotificationSettings, type Customer, type InsertCustomer, type UpdateCustomer, type SalesOrder, type InsertSalesOrder, type UpdateSalesOrder } from "@shared/schema";
 import { randomUUID } from "crypto";
 import session from "express-session";
 import createMemoryStore from "memorystore";
@@ -121,6 +121,21 @@ export interface IStorage {
   getSuppliersWithSLABreaches(workspaceId: string): Promise<Supplier[]>;
   getSupplierSLAMetrics(workspaceId: string): Promise<{ suppliers: any[], global: any }>;
   
+  // Customer methods
+  createCustomer(customerData: InsertCustomer): Promise<Customer>;
+  getCustomers(workspaceId: string, filters?: { search?: string, company?: string }): Promise<Customer[]>;
+  getCustomer(id: string): Promise<Customer | undefined>;
+  updateCustomer(id: string, updates: UpdateCustomer): Promise<Customer | undefined>;
+  deleteCustomer(id: string): Promise<void>;
+  getCustomerOrders(customerId: string): Promise<SalesOrder[]>;
+  
+  // Sales Order methods
+  createSalesOrder(orderData: InsertSalesOrder): Promise<SalesOrder>;
+  getSalesOrders(workspaceId: string, filters?: { customerId?: string, status?: string }): Promise<SalesOrder[]>;
+  getSalesOrder(id: string): Promise<SalesOrder | undefined>;
+  updateSalesOrder(id: string, updates: UpdateSalesOrder): Promise<SalesOrder | undefined>;
+  deleteSalesOrder(id: string): Promise<void>;
+  
   sessionStore: session.Store;
 }
 
@@ -145,6 +160,8 @@ export class MemStorage implements IStorage {
   private workspaceSettings: Map<string, WorkspaceSettings>;
   private regions: Map<string, Region>;
   private notificationSettings: Map<string, NotificationSettings>;
+  private customers: Map<string, Customer>;
+  private salesOrders: Map<string, SalesOrder>;
   public sessionStore: session.Store;
 
   constructor() {
@@ -168,6 +185,8 @@ export class MemStorage implements IStorage {
     this.workspaceSettings = new Map();
     this.regions = new Map();
     this.notificationSettings = new Map();
+    this.customers = new Map();
+    this.salesOrders = new Map();
     this.sessionStore = new MemoryStore({
       checkPeriod: 86400000,
     });
@@ -186,6 +205,9 @@ export class MemStorage implements IStorage {
     
     // Initialize sample suppliers for testing
     this.initializeSampleSuppliers();
+    
+    // Initialize sample customers for testing
+    this.initializeSampleCustomers();
   }
 
   private initializeSampleNotifications() {
@@ -1765,6 +1787,219 @@ export class MemStorage implements IStorage {
     
     for (const deliveryData of sampleDeliveries) {
       await this.createSupplierDelivery(deliveryData);
+    }
+  }
+
+  // Customer methods
+  async createCustomer(customerData: InsertCustomer): Promise<Customer> {
+    const customer: Customer = {
+      id: randomUUID(),
+      ...customerData,
+      createdAt: new Date(),
+      updatedAt: new Date(),
+    };
+    this.customers.set(customer.id, customer);
+    return customer;
+  }
+
+  async getCustomers(workspaceId: string, filters?: { search?: string, company?: string }): Promise<Customer[]> {
+    let customers = Array.from(this.customers.values()).filter(c => c.workspaceId === workspaceId);
+    
+    if (filters?.search) {
+      const search = filters.search.toLowerCase();
+      customers = customers.filter(c => 
+        c.name.toLowerCase().includes(search) ||
+        (c.email && c.email.toLowerCase().includes(search)) ||
+        (c.company && c.company.toLowerCase().includes(search))
+      );
+    }
+    
+    if (filters?.company) {
+      customers = customers.filter(c => c.company === filters.company);
+    }
+    
+    return customers.sort((a, b) => a.name.localeCompare(b.name));
+  }
+
+  async getCustomer(id: string): Promise<Customer | undefined> {
+    return this.customers.get(id);
+  }
+
+  async updateCustomer(id: string, updates: UpdateCustomer): Promise<Customer | undefined> {
+    const customer = this.customers.get(id);
+    if (!customer) return undefined;
+    
+    const updatedCustomer: Customer = {
+      ...customer,
+      ...updates,
+      updatedAt: new Date(),
+    };
+    
+    this.customers.set(id, updatedCustomer);
+    return updatedCustomer;
+  }
+
+  async deleteCustomer(id: string): Promise<void> {
+    this.customers.delete(id);
+    // Also soft delete related orders (set customerId to null)
+    for (const [orderId, order] of this.salesOrders) {
+      if (order.customerId === id) {
+        this.salesOrders.set(orderId, {
+          ...order,
+          customerId: "",  // Empty string instead of null for compatibility
+          customerName: "Deleted Customer",
+        });
+      }
+    }
+  }
+
+  async getCustomerOrders(customerId: string): Promise<SalesOrder[]> {
+    return Array.from(this.salesOrders.values())
+      .filter(order => order.customerId === customerId)
+      .sort((a, b) => new Date(b.createdAt!).getTime() - new Date(a.createdAt!).getTime());
+  }
+
+  // Sales Order methods
+  async createSalesOrder(orderData: InsertSalesOrder): Promise<SalesOrder> {
+    const order: SalesOrder = {
+      id: randomUUID(),
+      ...orderData,
+      createdAt: new Date(),
+      updatedAt: new Date(),
+    };
+    this.salesOrders.set(order.id, order);
+    return order;
+  }
+
+  async getSalesOrders(workspaceId: string, filters?: { customerId?: string, status?: string }): Promise<SalesOrder[]> {
+    let orders = Array.from(this.salesOrders.values()).filter(o => o.workspaceId === workspaceId);
+    
+    if (filters?.customerId) {
+      orders = orders.filter(o => o.customerId === filters.customerId);
+    }
+    
+    if (filters?.status) {
+      orders = orders.filter(o => o.status === filters.status);
+    }
+    
+    return orders.sort((a, b) => new Date(b.createdAt!).getTime() - new Date(a.createdAt!).getTime());
+  }
+
+  async getSalesOrder(id: string): Promise<SalesOrder | undefined> {
+    return this.salesOrders.get(id);
+  }
+
+  async updateSalesOrder(id: string, updates: UpdateSalesOrder): Promise<SalesOrder | undefined> {
+    const order = this.salesOrders.get(id);
+    if (!order) return undefined;
+    
+    const updatedOrder: SalesOrder = {
+      ...order,
+      ...updates,
+      updatedAt: new Date(),
+    };
+    
+    this.salesOrders.set(id, updatedOrder);
+    return updatedOrder;
+  }
+
+  async deleteSalesOrder(id: string): Promise<void> {
+    this.salesOrders.delete(id);
+  }
+
+  async initializeSampleCustomers(): Promise<void> {
+    const workspaceId = "sample-org-123";
+    
+    // Create sample customers
+    const sampleCustomers = [
+      {
+        name: "Acme Corporation",
+        email: "contact@acme-corp.com",
+        phone: "+1-555-0123",
+        company: "Acme Corporation",
+        address: "123 Business Ave, New York, NY 10001",
+        workspaceId,
+      },
+      {
+        name: "TechStart Solutions",
+        email: "hello@techstart.io",
+        phone: "+1-555-0456",
+        company: "TechStart Solutions",
+        address: "456 Innovation Dr, San Francisco, CA 94105",
+        workspaceId,
+      },
+      {
+        name: "Global Enterprises",
+        email: "info@globalent.com",
+        phone: "+1-555-0789",
+        company: "Global Enterprises",
+        address: "789 Corporate Blvd, Chicago, IL 60601",
+        workspaceId,
+      },
+      {
+        name: "John Smith",
+        email: "john@smith.com",
+        phone: "+1-555-1234",
+        company: null,
+        address: "321 Residential St, Austin, TX 73301",
+        workspaceId,
+      },
+      {
+        name: "Sarah Johnson",
+        email: "sarah.johnson@email.com",
+        phone: "+1-555-5678",
+        company: "Freelance Design Co",
+        address: "654 Creative Way, Portland, OR 97201",
+        workspaceId,
+      },
+    ];
+
+    for (const customerData of sampleCustomers) {
+      const customer = await this.createCustomer(customerData);
+      
+      // Create some sample orders for each customer
+      const orderCount = Math.floor(Math.random() * 3) + 1; // 1-3 orders per customer
+      
+      for (let i = 0; i < orderCount; i++) {
+        const orderNumber = `SO-${Date.now()}-${Math.floor(Math.random() * 1000)}`;
+        const statuses = ["PENDING", "PROCESSING", "SHIPPED", "DELIVERED", "CANCELLED"];
+        const status = statuses[Math.floor(Math.random() * statuses.length)];
+        
+        const items = [
+          {
+            sku: `ITEM-${Math.floor(Math.random() * 1000)}`,
+            productName: `Sample Product ${Math.floor(Math.random() * 100)}`,
+            quantity: Math.floor(Math.random() * 5) + 1,
+            unitPrice: Math.floor(Math.random() * 10000) + 1000, // $10-$100 in cents
+            subtotal: 0, // Will be calculated
+          }
+        ];
+        
+        // Calculate subtotal
+        items[0].subtotal = items[0].quantity * items[0].unitPrice;
+        
+        const subtotal = items.reduce((sum, item) => sum + item.subtotal, 0);
+        const tax = Math.floor(subtotal * 0.08); // 8% tax
+        const shipping = Math.floor(Math.random() * 1000) + 500; // $5-$15 shipping
+        const total = subtotal + tax + shipping;
+
+        await this.createSalesOrder({
+          orderNumber,
+          customerId: customer.id,
+          customerName: customer.name,
+          customerEmail: customer.email,
+          workspaceId,
+          currency: "USD",
+          status: status as any,
+          items,
+          subtotal,
+          tax,
+          shipping,
+          total,
+          shippingAddress: customer.address,
+          notes: i === 0 ? "First order - welcome customer!" : null,
+        });
+      }
     }
   }
 }
