@@ -128,12 +128,15 @@ export default function CustomersPage() {
               />
             </div>
             
-            <Select value={companyFilter} onValueChange={setCompanyFilter}>
+            <Select 
+              value={companyFilter || "all"} 
+              onValueChange={(value) => setCompanyFilter(value === "all" ? "" : value)}
+            >
               <SelectTrigger className="w-48 bg-zinc-900 border-zinc-700 text-white">
                 <SelectValue placeholder="Filter by company" />
               </SelectTrigger>
               <SelectContent className="bg-zinc-900 border-zinc-700">
-                <SelectItem value="">All Companies</SelectItem>
+                <SelectItem value="all">All Companies</SelectItem>
                 {companies.map((company) => (
                   <SelectItem key={company} value={company!}>
                     {company}
