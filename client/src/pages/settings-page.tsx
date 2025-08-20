@@ -36,7 +36,10 @@ import {
   AlertTitle,
 } from "@/components/ui/alert";
 import { useToast } from "@/hooks/use-toast";
-import { Trash2, Plus, Settings, Globe, MapPin, Bell, Mail, Eye, Send, AlertCircle, X, RotateCcw } from "lucide-react";
+import { usePerms } from "@/hooks/use-perms";
+import { Trash2, Plus, Settings, Globe, MapPin, Bell, Mail, Eye, Send, AlertCircle, X, RotateCcw, Users, Shield } from "lucide-react";
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { RolesPermissions } from "@/components/RolesPermissions";
 
 const SETTINGS_KEY = "flowventory:settings";
 
@@ -124,6 +127,7 @@ const defaultSettings: Settings = {
 
 export default function SettingsPage() {
   const { toast } = useToast();
+  const { hasPermission } = usePerms();
   const [activeTab, setActiveTab] = useState("general");
   const [settings, setSettings] = useState<Settings>(defaultSettings);
   const [editingRegion, setEditingRegion] = useState<Region | null>(null);
@@ -459,6 +463,7 @@ export default function SettingsPage() {
     { id: "regions", label: "Regions & SLAs", icon: MapPin },
     { id: "notifications", label: "Notifications", icon: Bell },
     { id: "returns", label: "Returns & RMA", icon: RotateCcw },
+    ...(hasPermission('settings') ? [{ id: "roles", label: "Roles & Permissions", icon: Shield }] : []),
   ];
 
   return (
@@ -1174,6 +1179,10 @@ export default function SettingsPage() {
                 </form>
               </CardContent>
             </Card>
+          )}
+
+          {activeTab === "roles" && hasPermission('settings') && (
+            <RolesPermissions />
           )}
         </div>
       </div>

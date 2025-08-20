@@ -15,9 +15,11 @@ import { CSVImportModal } from "@/components/csv-import-modal";
 import { SettingsPanel } from "@/components/settings-panel";
 import { AnalyticsPanel } from "@/components/analytics-panel";
 import { type OnboardingData } from "@shared/schema";
+import { usePerms } from "@/hooks/use-perms";
 
 export default function HomePage() {
   const { user } = useAuth();
+  const { hasPermission } = usePerms();
   const [selectedPanels, setSelectedPanels] = useState<string[]>([]);
   const [showImportModal, setShowImportModal] = useState(false);
   const [importType, setImportType] = useState<'inventory' | 'sales'>('inventory');
@@ -44,9 +46,9 @@ export default function HomePage() {
         panels.push("inventory-brain");
       }
       
-      // Show AI Copilot Panel if user selected any AI features (Admin/Manager only)
+      // Show AI Copilot Panel if user selected any AI features (with analytics permission)
       if (onboardingData.aiAssistance && onboardingData.aiAssistance.length > 0 && 
-          (user.role === "admin" || user.role === "manager")) {
+          hasPermission('analytics')) {
         panels.push("ai-copilot");
       }
       
@@ -55,19 +57,19 @@ export default function HomePage() {
         panels.push("customer-radar");
       }
       
-      // Show Return Abuse Panel if user selected Return Alerts (admin/manager only)
+      // Show Return Abuse Panel if user selected Return Alerts (with returns permission)
       if (onboardingData.aiAssistance?.includes("return-alerts") && 
-          (user.role === "admin" || user.role === "manager")) {
+          hasPermission('returns')) {
         panels.push("return-abuse");
       }
       
-      // Show PO Generator Panel for admins only
-      if (user.role === "admin") {
+      // Show PO Generator Panel for users with suppliers permission
+      if (hasPermission('suppliers')) {
         panels.push("po-generator");
       }
 
-      // Show Supplier Management Panel for admins and managers
-      if (user.role === "admin" || user.role === "manager") {
+      // Show Supplier Management Panel for users with suppliers permission
+      if (hasPermission('suppliers')) {
         panels.push("supplier-management");
         // Also show SLA Tracker Panel for supply chain monitoring
         panels.push("supplier-sla");
@@ -78,7 +80,7 @@ export default function HomePage() {
       
       setSelectedPanels(panels);
     }
-  }, [onboardingData, user]);
+  }, [onboardingData, user, hasPermission]);
 
   const handleImport = (data: any[], type: 'inventory' | 'sales') => {
     setImportedData(prev => ({
@@ -107,9 +109,9 @@ export default function HomePage() {
         onSettingsClick={() => setShowSettings(true)}
       />
       <main className="p-3 sm:p-6 space-y-4 sm:space-y-6">
-        {/* Smart Alerts - Admin/Manager only - Responsive */}
+        {/* Smart Alerts - Users with inventory or suppliers permission - Responsive */}
         {onboardingData && (selectedPanels.includes("inventory-brain") || selectedPanels.includes("po-generator")) && 
-         (user.role === "admin" || user.role === "manager") && (
+         (hasPermission('inventory') || hasPermission('suppliers')) && (
           <div className="bg-yellow-500/10 border border-yellow-500/20 rounded-lg p-3 sm:p-4">
             <div className="flex flex-col sm:flex-row sm:items-center space-y-1 sm:space-y-0 sm:space-x-2">
               <div className="text-yellow-400">⚠️</div>

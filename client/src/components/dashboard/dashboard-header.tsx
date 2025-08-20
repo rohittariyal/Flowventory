@@ -6,6 +6,7 @@ import { useAuth } from "@/hooks/use-auth";
 import { useLocation } from "wouter";
 import { NotificationPanel } from "../NotificationPanel";
 import { type User, type OnboardingData } from "@shared/schema";
+import { usePerms } from "@/hooks/use-perms";
 
 interface DashboardHeaderProps {
   user: User;
@@ -16,6 +17,7 @@ interface DashboardHeaderProps {
 export function DashboardHeader({ user, onImportClick, onSettingsClick }: DashboardHeaderProps) {
   const { logoutMutation } = useAuth();
   const [, setLocation] = useLocation();
+  const { hasPermission } = usePerms();
 
   const getRoleBadgeColor = (role: string) => {
     switch (role) {
@@ -55,8 +57,8 @@ export function DashboardHeader({ user, onImportClick, onSettingsClick }: Dashbo
         </div>
 
         <div className="flex items-center gap-2 sm:space-x-3 overflow-x-auto">
-          {/* CSV Import Buttons - Admin and Manager only - Responsive */}
-          {onImportClick && (user.role === "admin" || user.role === "manager") && (
+          {/* CSV Import Buttons - Users with inventory permission - Responsive */}
+          {onImportClick && hasPermission('inventory') && (
             <div className="flex items-center gap-1 sm:gap-2 mr-2 sm:mr-4">
               <Button 
                 variant="outline" 
@@ -79,75 +81,93 @@ export function DashboardHeader({ user, onImportClick, onSettingsClick }: Dashbo
             </div>
           )}
 
-          {/* Navigation Buttons - Admin and Manager only - Responsive */}
-          {(user.role === "admin" || user.role === "manager") && (
+          {/* Navigation Buttons - Permission-based - Responsive */}
+          {(hasPermission('inventory') || hasPermission('analytics') || hasPermission('reconciliation') || hasPermission('customers') || hasPermission('suppliers') || hasPermission('returns') || hasPermission('users') || hasPermission('settings')) && (
             <>
-              <Button asChild variant="ghost" size="sm" className="shrink-0">
-                <Link href="/inventory">
-                  <Package className="h-3 w-3 sm:h-4 sm:w-4 sm:mr-1" />
-                  <span className="hidden sm:inline">Inventory</span>
-                </Link>
-              </Button>
-              <Button asChild variant="ghost" size="sm" className="shrink-0">
-                <Link href="/action-center">
-                  <BarChart3 className="h-3 w-3 sm:h-4 sm:w-4 sm:mr-1" />
-                  <span className="hidden sm:inline">Action Center</span>
-                </Link>
-              </Button>
-              <Button asChild variant="ghost" size="sm" className="shrink-0">
-                <Link href="/recon">
-                  <DollarSign className="h-3 w-3 sm:h-4 sm:w-4 sm:mr-1" />
-                  <span className="hidden sm:inline">Reconciliation</span>
-                </Link>
-              </Button>
-              <Button 
-                variant="ghost" 
-                size="sm" 
-                onClick={() => setLocation("/team")}
-                className="text-blue-400 hover:text-blue-300 shrink-0"
-              >
-                <Users className="h-3 w-3 sm:h-4 sm:w-4" />
-                <span className="hidden sm:inline ml-1">Team</span>
-              </Button>
-              <Button asChild variant="ghost" size="sm" className="shrink-0">
-                <Link href="/suppliers">
-                  <Truck className="h-3 w-3 sm:h-4 sm:w-4 sm:mr-1" />
-                  <span className="hidden sm:inline">Suppliers</span>
-                </Link>
-              </Button>
-              <Button asChild variant="ghost" size="sm" className="shrink-0">
-                <Link href="/customers">
-                  <UserCheck className="h-3 w-3 sm:h-4 sm:w-4 sm:mr-1" />
-                  <span className="hidden sm:inline">Customers</span>
-                </Link>
-              </Button>
-              <Button asChild variant="ghost" size="sm" className="shrink-0">
-                <Link href="/returns">
-                  <RotateCcw className="h-3 w-3 sm:h-4 sm:w-4 sm:mr-1" />
-                  <span className="hidden sm:inline">Returns</span>
-                </Link>
-              </Button>
-              <Button asChild variant="ghost" size="sm" className="shrink-0">
-                <Link href="/workspace-settings">
-                  <Globe className="h-3 w-3 sm:h-4 sm:w-4 sm:mr-1" />
-                  <span className="hidden sm:inline">Workspace</span>
-                </Link>
-              </Button>
-              <Button asChild variant="ghost" size="sm" className="shrink-0">
-                <Link href="/settings">
-                  <Settings className="h-3 w-3 sm:h-4 sm:w-4 sm:mr-1" />
-                  <span className="hidden sm:inline">Settings</span>
-                </Link>
-              </Button>
+              {hasPermission('inventory') && (
+                <Button asChild variant="ghost" size="sm" className="shrink-0">
+                  <Link href="/inventory">
+                    <Package className="h-3 w-3 sm:h-4 sm:w-4 sm:mr-1" />
+                    <span className="hidden sm:inline">Inventory</span>
+                  </Link>
+                </Button>
+              )}
+              {hasPermission('analytics') && (
+                <Button asChild variant="ghost" size="sm" className="shrink-0">
+                  <Link href="/action-center">
+                    <BarChart3 className="h-3 w-3 sm:h-4 sm:w-4 sm:mr-1" />
+                    <span className="hidden sm:inline">Action Center</span>
+                  </Link>
+                </Button>
+              )}
+              {hasPermission('reconciliation') && (
+                <Button asChild variant="ghost" size="sm" className="shrink-0">
+                  <Link href="/recon">
+                    <DollarSign className="h-3 w-3 sm:h-4 sm:w-4 sm:mr-1" />
+                    <span className="hidden sm:inline">Reconciliation</span>
+                  </Link>
+                </Button>
+              )}
+              {hasPermission('users') && (
+                <Button 
+                  variant="ghost" 
+                  size="sm" 
+                  onClick={() => setLocation("/team")}
+                  className="text-blue-400 hover:text-blue-300 shrink-0"
+                >
+                  <Users className="h-3 w-3 sm:h-4 sm:w-4" />
+                  <span className="hidden sm:inline ml-1">Team</span>
+                </Button>
+              )}
+              {hasPermission('suppliers') && (
+                <Button asChild variant="ghost" size="sm" className="shrink-0">
+                  <Link href="/suppliers">
+                    <Truck className="h-3 w-3 sm:h-4 sm:w-4 sm:mr-1" />
+                    <span className="hidden sm:inline">Suppliers</span>
+                  </Link>
+                </Button>
+              )}
+              {hasPermission('customers') && (
+                <Button asChild variant="ghost" size="sm" className="shrink-0">
+                  <Link href="/customers">
+                    <UserCheck className="h-3 w-3 sm:h-4 sm:w-4 sm:mr-1" />
+                    <span className="hidden sm:inline">Customers</span>
+                  </Link>
+                </Button>
+              )}
+              {hasPermission('returns') && (
+                <Button asChild variant="ghost" size="sm" className="shrink-0">
+                  <Link href="/returns">
+                    <RotateCcw className="h-3 w-3 sm:h-4 sm:w-4 sm:mr-1" />
+                    <span className="hidden sm:inline">Returns</span>
+                  </Link>
+                </Button>
+              )}
+              {hasPermission('settings') && (
+                <Button asChild variant="ghost" size="sm" className="shrink-0">
+                  <Link href="/workspace-settings">
+                    <Globe className="h-3 w-3 sm:h-4 sm:w-4 sm:mr-1" />
+                    <span className="hidden sm:inline">Workspace</span>
+                  </Link>
+                </Button>
+              )}
+              {hasPermission('settings') && (
+                <Button asChild variant="ghost" size="sm" className="shrink-0">
+                  <Link href="/settings">
+                    <Settings className="h-3 w-3 sm:h-4 sm:w-4 sm:mr-1" />
+                    <span className="hidden sm:inline">Settings</span>
+                  </Link>
+                </Button>
+              )}
             </>
           )}
           
-          {/* Notification Panel - Admin and Manager only */}
-          {(user.role === "admin" || user.role === "manager") && (
+          {/* Notification Panel - Users with analytics permission */}
+          {hasPermission('analytics') && (
             <NotificationPanel user={user} />
           )}
-          {/* Settings - Admin only */}
-          {user.role === "admin" && (
+          {/* Settings - Users with settings permission */}
+          {hasPermission('settings') && (
             <Button 
               variant="ghost" 
               size="sm" 

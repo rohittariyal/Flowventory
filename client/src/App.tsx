@@ -4,6 +4,7 @@ import { QueryClientProvider } from "@tanstack/react-query";
 import { Toaster } from "@/components/ui/toaster";
 import { TooltipProvider } from "@/components/ui/tooltip";
 import { AuthProvider } from "@/hooks/use-auth";
+import { PermissionsProvider } from "@/hooks/use-perms";
 import HomePage from "@/pages/home-page";
 import NotFound from "@/pages/not-found";
 import AuthPage from "@/pages/auth-page";
@@ -20,6 +21,7 @@ import SuppliersPage from "@/pages/suppliers-page";
 import ReturnsPage from "@/pages/returns-page";
 import CustomersPage from "@/pages/customers-page";
 import CustomerDetailPage from "@/pages/customer-detail-page";
+import UsersPage from "@/pages/users-page";
 import { ProtectedRoute } from "./lib/protected-route";
 
 function Router() {
@@ -39,6 +41,7 @@ function Router() {
       <ProtectedRoute path="/returns" component={ReturnsPage} />
       <ProtectedRoute path="/customers" component={CustomersPage} />
       <ProtectedRoute path="/customers/:id" component={CustomerDetailPage} />
+      <ProtectedRoute path="/workspace/users" component={UsersPage} />
       <Route path="/auth" component={AuthPage} />
       <Route component={NotFound} />
     </Switch>
@@ -49,10 +52,12 @@ function App() {
   return (
     <QueryClientProvider client={queryClient}>
       <AuthProvider>
-        <TooltipProvider>
-          <Toaster />
-          <Router />
-        </TooltipProvider>
+        <PermissionsProvider>
+          <TooltipProvider>
+            <Toaster />
+            <Router />
+          </TooltipProvider>
+        </PermissionsProvider>
       </AuthProvider>
     </QueryClientProvider>
   );

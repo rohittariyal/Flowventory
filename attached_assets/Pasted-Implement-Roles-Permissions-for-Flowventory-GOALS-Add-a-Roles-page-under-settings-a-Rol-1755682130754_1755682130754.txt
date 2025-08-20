@@ -1,0 +1,58 @@
+Implement “Roles & Permissions” for Flowventory.
+ 
+GOALS
+- Add a Roles page under /settings → a “Roles & Permissions” tab.
+- Seed 3 roles: Owner, Manager, Staff.
+- Each role has toggles for module access: Inventory, POs, Suppliers, Customers, Returns, Settings, Analytics.
+- Add a Users page under /workspace/users to assign a user to a role (localStorage for now).
+- Gate UI: hide/disable nav items and actions based on the logged-in user’s role.
+ 
+DETAILS
+1) DATA (localStorage keys)
+- "flowventory:roles": [
+   { id:"owner", name:"Owner", perms: { inventory:true, pos:true, suppliers:true, customers:true, returns:true, settings:true, analytics:true } },
+   { id:"manager", name:"Manager", perms: { inventory:true, pos:true, suppliers:true, customers:true, returns:true, settings:false, analytics:true } },
+   { id:"staff", name:"Staff", perms: { inventory:true, pos:false, suppliers:false, customers:true, returns:true, settings:false, analytics:false } }
+]
+- "flowventory:users": [
+   { id:"u1", name:"Demo Owner", email:"owner@demo", roleId:"owner" }
+]
+- "flowventory:session": { currentUserId:"u1" }
+ 
+2) UI
+- Settings → Roles & Permissions tab:
+  - Table of roles with toggles per module (Inventory, POs, Suppliers, Customers, Returns, Settings, Analytics).
+  - Add Role, Edit Role, Delete Role (prevent deleting the last role or the one currently assigned to any user).
+  - Save persists to localStorage.
+- Workspace → Users (/workspace/users):
+  - Table of users (name, email, role).
+  - Add/Edit user modal (name, email, roleId select).
+  - Change role updates what they can see immediately after page refresh or soft reload.
+ 
+3) NAV + GUARD
+- Add a simple permission hook: usePerms() returns current user’s perms from role.
+- Guard: Sidebar nav items and action buttons should check perms before rendering. Example:
+  - If !perms.suppliers → hide Suppliers nav item & related actions.
+  - If !perms.pos → hide “Create PO” button.
+  - If !perms.settings → hide Settings menu entirely.
+- Add a basic “no access” component for direct route hits without perms (renders friendly message + link to home).
+ 
+4) ROUTES
+- /settings/roles → Roles & Permissions tab (within Settings page tabs)
+- /workspace/users → Users page
+- Ensure the app initializes default roles/users if localStorage is empty.
+ 
+5) VALIDATION
+- Role name required, must be unique.
+- At least one module must be enabled for a role (to avoid a useless role).
+- A user must have a role; prevent deleting a role that is assigned to existing users (show error toast).
+ 
+6) STYLING
+- Keep consistent Tailwind look (rounded cards, subtle borders).
+- Status chips for roles (e.g., Owner = dark chip; Manager = blue; Staff = gray).
+ 
+ACCEPTANCE (Frontend only)
+- /settings → Roles & Permissions shows Owner/Manager/Staff with toggles.
+- Toggle a module off for Staff (e.g., Suppliers) → save → refresh → Staff cannot see Suppliers in sidebar.
+- /workspace/users lists users; Add/Edit user, change role, persists after refresh.
+- Directly visiting a disabled route shows a “No access” view instead of a blank page.
