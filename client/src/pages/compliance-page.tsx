@@ -14,9 +14,7 @@ import {
   generateComplianceReport, 
   exportComplianceReportCSV,
   currencyFormat,
-  initializeFinanceSettings,
-  initializeProductsForTax,
-  initializeOrdersForTax
+  initializeTaxationData
 } from "@/utils/taxation";
 
 export default function CompliancePage() {
@@ -32,10 +30,8 @@ export default function CompliancePage() {
   const { toast } = useToast();
 
   useEffect(() => {
-    // Initialize sample data if not present
-    initializeFinanceSettings();
-    initializeProductsForTax();
-    initializeOrdersForTax();
+    // Initialize comprehensive taxation data if not present
+    initializeTaxationData();
     
     const financeSettings = getFinanceSettings();
     setSettings(financeSettings);
@@ -285,8 +281,10 @@ export default function CompliancePage() {
                   <TableHead>Date</TableHead>
                   <TableHead>Customer/Supplier</TableHead>
                   <TableHead>Region</TableHead>
+                  <TableHead>Place of Supply</TableHead>
                   <TableHead className="text-right">Subtotal</TableHead>
                   <TableHead className="text-right">Tax</TableHead>
+                  <TableHead>Tax Breakdown</TableHead>
                   <TableHead className="text-right">Grand Total</TableHead>
                   <TableHead>Tax Rule</TableHead>
                   <TableHead>Currency</TableHead>
@@ -304,6 +302,11 @@ export default function CompliancePage() {
                         <span>{row.region}</span>
                       </div>
                     </TableCell>
+                    <TableCell>
+                      <Badge variant="outline" className="text-xs">
+                        {row.placeOfSupply || row.region}
+                      </Badge>
+                    </TableCell>
                     <TableCell className="text-right font-mono">
                       {currencyFormat(row.subtotal, row.currency, settings.displayLocale)}
                     </TableCell>
@@ -311,6 +314,22 @@ export default function CompliancePage() {
                       <Badge variant={getStatusColor(row.tax)} className="font-mono">
                         {currencyFormat(row.tax, row.currency, settings.displayLocale)}
                       </Badge>
+                    </TableCell>
+                    <TableCell>
+                      {row.taxBreakdown && row.taxBreakdown.length > 0 ? (
+                        <div className="space-y-1">
+                          {row.taxBreakdown.map((breakdown, idx) => (
+                            <div key={idx} className="text-xs">
+                              <Badge variant="outline" className="mr-1 text-xs">
+                                {breakdown.name}
+                              </Badge>
+                              {currencyFormat(breakdown.amount, row.currency, settings.displayLocale)}
+                            </div>
+                          ))}
+                        </div>
+                      ) : (
+                        <div className="text-xs text-gray-500">No breakdown</div>
+                      )}
                     </TableCell>
                     <TableCell className="text-right font-mono font-semibold">
                       {currencyFormat(row.grand, row.currency, settings.displayLocale)}
