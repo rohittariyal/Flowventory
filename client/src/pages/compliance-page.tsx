@@ -48,7 +48,7 @@ export default function CompliancePage() {
 
   const generateReport = () => {
     const data = generateComplianceReport(
-      filters.regionId || undefined,
+      filters.regionId && filters.regionId !== "all" ? filters.regionId : undefined,
       filters.dateStart || undefined,
       filters.dateEnd || undefined,
       filters.docType
@@ -161,7 +161,7 @@ export default function CompliancePage() {
                   <SelectValue placeholder="All regions" />
                 </SelectTrigger>
                 <SelectContent>
-                  <SelectItem value="">All Regions</SelectItem>
+                  <SelectItem value="all">All Regions</SelectItem>
                   {settings.regions.map((region: any) => (
                     <SelectItem key={region.id} value={region.id}>
                       {region.name} ({region.currency})
