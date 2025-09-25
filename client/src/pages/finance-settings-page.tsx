@@ -10,12 +10,13 @@ import { Badge } from "@/components/ui/badge";
 import { useToast } from "@/hooks/use-toast";
 import { Plus, Settings, DollarSign, Globe, Percent } from "lucide-react";
 import { nanoid } from "nanoid";
-import type { FinanceSettings, TaxRegion, TaxRule, InsertTaxRule } from "@shared/schema";
+import type { FinanceSettings, TaxRegion, TaxRule, InsertTaxRule, StateRate } from "@shared/schema";
 import { 
   getFinanceSettings, 
   saveFinanceSettings, 
   addTaxRuleToRegion, 
-  currencyFormat 
+  currencyFormat,
+  initializeTaxationData
 } from "@/utils/taxation";
 
 export default function FinanceSettingsPage() {
@@ -25,11 +26,13 @@ export default function FinanceSettingsPage() {
   const [newRule, setNewRule] = useState<InsertTaxRule>({
     name: "",
     rate: 0,
-    scope: "all"
+    category: "standard"
   });
   const { toast } = useToast();
 
   useEffect(() => {
+    // Initialize taxation data if not present
+    initializeTaxationData();
     loadSettings();
   }, []);
 
@@ -70,6 +73,22 @@ export default function FinanceSettingsPage() {
     });
   };
 
+  const handleBusinessStateChange = (state: string) => {
+    if (!settings) return;
+    
+    const updatedSettings = {
+      ...settings,
+      businessState: state
+    };
+    
+    setSettings(updatedSettings);
+    saveFinanceSettings(updatedSettings);
+    toast({
+      title: "Business State Updated",
+      description: `Business state changed to ${state} (for India GST calculations)`,
+    });
+  };
+
   const handleAddTaxRule = () => {
     if (!selectedRegionId || !newRule.name || newRule.rate < 0 || newRule.rate > 1) {
       toast({
@@ -89,7 +108,7 @@ export default function FinanceSettingsPage() {
     loadSettings(); // Reload to get updated data
     
     // Reset form
-    setNewRule({ name: "", rate: 0, scope: "all" });
+    setNewRule({ name: "", rate: 0, category: "standard" });
     setSelectedRegionId("");
     setIsAddRuleModalOpen(false);
     
@@ -103,11 +122,12 @@ export default function FinanceSettingsPage() {
     return `${(rate * 100).toFixed(1)}%`;
   };
 
-  const getScopeColor = (scope: string): "default" | "secondary" | "destructive" | "outline" => {
-    switch (scope) {
-      case "all": return "default";
-      case "category": return "secondary";
-      case "sku": return "outline";
+  const getCategoryColor = (category: string): "default" | "secondary" | "destructive" | "outline" => {
+    switch (category) {
+      case "standard": return "default";
+      case "reduced": return "secondary";
+      case "zero": return "outline";
+      case "state": return "destructive";
       default: return "outline";
     }
   };
@@ -175,6 +195,29 @@ export default function FinanceSettingsPage() {
                   <SelectItem value="en-IN">en-IN (India)</SelectItem>
                 </SelectContent>
               </Select>
+            </div>
+          </div>
+          
+          {/* Business State for India GST */}
+          <div className="space-y-2">
+            <Label htmlFor="business-state">Business State (for India GST)</Label>
+            <Select value={settings.businessState || ""} onValueChange={handleBusinessStateChange}>
+              <SelectTrigger data-testid="select-business-state">
+                <SelectValue placeholder="Select your business state for GST calculations" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="KA">Karnataka (KA)</SelectItem>
+                <SelectItem value="MH">Maharashtra (MH)</SelectItem>
+                <SelectItem value="DL">Delhi (DL)</SelectItem>
+                <SelectItem value="TN">Tamil Nadu (TN)</SelectItem>
+                <SelectItem value="GJ">Gujarat (GJ)</SelectItem>
+                <SelectItem value="UP">Uttar Pradesh (UP)</SelectItem>
+                <SelectItem value="WB">West Bengal (WB)</SelectItem>
+                <SelectItem value="RJ">Rajasthan (RJ)</SelectItem>
+              </SelectContent>
+            </Select>
+            <div className="text-sm text-gray-500">
+              This determines CGST/SGST vs IGST calculations for India invoices
             </div>
           </div>
         </CardContent>
@@ -246,15 +289,16 @@ export default function FinanceSettingsPage() {
                     </div>
                   </div>
                   <div className="space-y-2">
-                    <Label htmlFor="rule-scope">Scope</Label>
-                    <Select value={newRule.scope} onValueChange={(value: any) => setNewRule(prev => ({ ...prev, scope: value }))}>
-                      <SelectTrigger data-testid="select-tax-scope">
+                    <Label htmlFor="rule-category">Tax Category</Label>
+                    <Select value={newRule.category} onValueChange={(value: any) => setNewRule(prev => ({ ...prev, category: value }))}>
+                      <SelectTrigger data-testid="select-tax-category">
                         <SelectValue />
                       </SelectTrigger>
                       <SelectContent>
-                        <SelectItem value="all">All Products</SelectItem>
-                        <SelectItem value="category">By Category</SelectItem>
-                        <SelectItem value="sku">By SKU</SelectItem>
+                        <SelectItem value="standard">Standard Rate</SelectItem>
+                        <SelectItem value="reduced">Reduced Rate</SelectItem>
+                        <SelectItem value="zero">Zero Rate</SelectItem>
+                        <SelectItem value="state">State Specific</SelectItem>
                       </SelectContent>
                     </Select>
                   </div>
@@ -282,6 +326,7 @@ export default function FinanceSettingsPage() {
                 <TableHead>Currency</TableHead>
                 <TableHead>Locale</TableHead>
                 <TableHead>Tax Rules</TableHead>
+                <TableHead>States/Additional Info</TableHead>
               </TableRow>
             </TableHeader>
             <TableBody>
@@ -296,12 +341,44 @@ export default function FinanceSettingsPage() {
                     <div className="flex flex-wrap gap-2">
                       {region.taxRules.map((rule) => (
                         <div key={rule.id} className="flex items-center space-x-2">
-                          <Badge variant={getScopeColor(rule.scope)} data-testid={`badge-tax-rule-${rule.id}`}>
+                          <Badge variant={getCategoryColor(rule.category)} data-testid={`badge-tax-rule-${rule.id}`}>
                             {rule.name} - {formatTaxRate(rule.rate)}
                           </Badge>
                         </div>
                       ))}
                     </div>
+                  </TableCell>
+                  <TableCell>
+                    {region.states && region.states.length > 0 && (
+                      <div className="space-y-1">
+                        <div className="text-sm font-medium">States:</div>
+                        <div className="flex flex-wrap gap-1">
+                          {region.states.map((state) => (
+                            <Badge key={state} variant="secondary" className="text-xs">
+                              {state}
+                            </Badge>
+                          ))}
+                        </div>
+                      </div>
+                    )}
+                    {region.stateRates && region.stateRates.length > 0 && (
+                      <div className="space-y-1 mt-2">
+                        <div className="text-sm font-medium">State Rates:</div>
+                        <div className="space-y-1">
+                          {region.stateRates.map((stateRate) => (
+                            <div key={stateRate.code} className="text-xs">
+                              <Badge variant="outline" className="mr-1">{stateRate.code}</Badge>
+                              {formatTaxRate(stateRate.rate)}
+                            </div>
+                          ))}
+                        </div>
+                      </div>
+                    )}
+                    {region.id === "IN" && (
+                      <div className="text-xs text-gray-500 mt-1">
+                        Uses CGST/SGST (same state) or IGST (different state)
+                      </div>
+                    )}
                   </TableCell>
                 </TableRow>
               ))}
