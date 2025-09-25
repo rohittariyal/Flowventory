@@ -1,0 +1,133 @@
+Implement “External Shipping Connectors (V1)” for Flowventory with a provider-agnostic adapter layer and a secure server proxy.
+ 
+ARCHITECTURE GOALS
+- Provider-agnostic interface: rate shopping, create shipment, fetch tracking, cancel.
+- Server-side proxy for API calls; NEVER expose API keys to frontend.
+- UI for adding multiple connectors (per workspace), storing credentials securely.
+- Webhook endpoints for async status updates (where provider supports webhooks).
+- Backoff/retry + error normalization.
+ 
+STACK
+- server: Node + Express
+- client: React (existing app)
+- storage: for V1, simple JSON/lowdb on the server; later swap for DB.
+- secrets: .env for development; in prod use env vars/secret manager.
+ 
+FOLDER STRUCTURE
+/server
+  index.js (Express app)
+  adapters/
+    base.js
+    shiprocket.js
+    dhl.js
+    ups.js
+    fedex.js
+  db/
+    connectors.json          // encrypted fields stored as base64 for V1
+    shipments.json
+  webhooks/
+    dhl.js
+    ups.js
+    fedex.js
+  utils/
+    crypto.js                // AES-256-GCM helper for encrypt/decrypt
+/client
+  (existing React app)
+ 
+SHARED CONNECTOR INTERFACE (server/adapters/base.js)
+export class ShippingAdapter {
+  constructor({ credentials, options }) {}
+  async getRates({ shipFrom, shipTo, parcels, items }) {}
+  async createShipment({ order, shipFrom, shipTo, parcels, items, service }) {}
+  async fetchTracking({ trackingId }) {}
+  async cancelShipment({ shipmentId }) {}
+  // helpers to normalize responses to:
+  // Rate: { service, serviceCode, currency, amount, etaDays }
+  // Shipment: { id, number, trackingId, trackingUrl, labelHtmlOrPdfUrl, cost: {currency, amount} }
+  // Tracking: { status, events: [{ts, code, message, location}] }
+}
+ 
+ADAPTERS (server/adapters/*.js)
+- shiprocket.js: implement against Shiprocket API (token auth). For V1, include env var placeholders and example calls; if no creds set, return friendly error.
+- dhl.js / ups.js / fedex.js: basic skeletons with TODOs; return “not configured” until creds added.
+ 
+SERVER ROUTES (server/index.js)
+// auth-less for V1 dev; later add JWT/session
+POST   /api/connectors          -> create/update connector (provider, name, credentials {apiKey, secret, accountId...})
+GET    /api/connectors          -> list connectors
+DELETE /api/connectors/:id      -> delete
+ 
+POST   /api/shipping/:id/rates  -> get rates using connector :id
+POST   /api/shipping/:id/create -> create shipment (returns shipment object)
+POST   /api/shipping/:id/track  -> fetch tracking (returns tracking object)
+POST   /api/shipping/:id/cancel -> cancel shipment
+ 
+// webhooks (providers call these)
+POST   /webhooks/dhl
+POST   /webhooks/ups
+POST   /webhooks/fedex
+// handlers parse payload, map to normalized tracking, and upsert into db/shipments.json
+ 
+CREDENTIALS STORAGE (server/db/connectors.json)
+- Store: { id, provider, name, createdAt, encrypted: { iv, tag, data } }
+- Use utils/crypto.js to AES-256-GCM encrypt credentials object using SECRET_KEY from .env.
+ 
+CLIENT UI (React)
+// Settings → Shipping Integrations
+Route: /settings/shipping
+- List existing connectors: provider logo, name, status (Configured/Not configured)
+- “Add Connector” modal:
+  - Select provider: Shiprocket, DHL, UPS, FedEx
+  - Dynamic fields per provider (e.g., Shiprocket: email/password or token; DHL: siteId/password; UPS: accessKey, account, user/pass)
+  - Save -> POST /api/connectors (server encrypts)
+- Connector actions: Test (ping provider), Edit, Delete
+ 
+// Orders → Create Shipment flow
+- Replace mock “Get Rates” with call to selected connector:
+  POST /api/shipping/:connectorId/rates  { shipFrom, shipTo, parcels, items }
+  - Render rate cards, choose one.
+  POST /api/shipping/:connectorId/create { order, shipFrom, shipTo, parcels, items, service }
+  - Save shipment in localStorage (existing) AND also POST to server to persist in db/shipments.json for webhook updates.
+- Shipment detail page adds “Update Tracking”:
+  POST /api/shipping/:connectorId/track { trackingId }
+ 
+// Shipments list
+- Add a “Source” column (Connector name).
+- Add “Sync All” button -> iterates open shipments and calls /track.
+ 
+ERROR HANDLING
+- Normalize errors from adapters to:
+  { code: "AUTH_ERROR"|"RATE_ERROR"|"CREATE_ERROR"|"TRACK_ERROR", message, provider }
+- Show human-friendly toasts; link to connector edit if AUTH_ERROR.
+ 
+CORS/PROXY
+- Enable CORS from client origin in server/index.js for dev.
+- In Replit, run both client and server; client uses relative /api/* paths via Replit reverse proxy.
+ 
+ENV (.env on server)
+PORT=4000
+SECRET_KEY=change_me_in_prod
+SHIPROCKET_BASE_URL=https://apiv2.shiprocket.in/...
+DHL_BASE_URL=...
+UPS_BASE_URL=...
+FEDEX_BASE_URL=...
+// leave provider keys blank for now; entered via UI and encrypted
+ 
+SEED
+- If no connectors exist, show empty state with “Add Connector.”
+- Optionally seed one “Shiprocket (Demo)” connector with placeholder (not authenticated) for UI walkthrough.
+ 
+ACCEPTANCE (end-to-end, manual)
+1) Settings → Shipping Integrations:
+   - Add “Shiprocket” connector with creds (or placeholders); Save -> appears as Configured.
+   - Click “Test” -> success or clear AUTH_ERROR.
+2) Orders → Create Shipment:
+   - Click “Get Rates” -> returns rates from adapter (or friendly error if not configured).
+   - Choose service -> Create Shipment -> lands on detail page with tracking id/url.
+3) Shipments list:
+   - “Update Tracking” progresses via adapter; timeline events append.
+   - “Sync All” calls track for all in-transit shipments.
+4) Webhooks:
+   - Provide endpoints ready; if provider not sending, simulate by POSTing sample payload to /webhooks/{provider}; shipment updates.
+5) Security:
+   - Verify no creds are visible in browser devtools; only connector metadata is returned, not secrets.
