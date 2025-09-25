@@ -535,7 +535,7 @@ export const taxRuleSchema = z.object({
   scope: z.enum(["all", "category", "sku"]),
 });
 
-export const regionSchema = z.object({
+export const taxRegionSchema = z.object({
   id: z.string(),
   name: z.string(),
   currency: z.enum(["USD", "GBP", "EUR", "AED", "SGD", "INR"]),
@@ -546,7 +546,7 @@ export const regionSchema = z.object({
 export const financeSettingsSchema = z.object({
   baseCurrency: z.enum(["USD", "GBP", "EUR", "AED", "SGD", "INR"]),
   displayLocale: z.string(),
-  regions: z.array(regionSchema),
+  regions: z.array(taxRegionSchema),
 });
 
 export const taxOverrideSchema = z.object({
@@ -605,24 +605,24 @@ export const invoiceSchema = z.object({
 
 // Insert schemas for forms
 export const insertTaxRuleSchema = taxRuleSchema.omit({ id: true });
-export const insertRegionSchema = regionSchema.omit({ id: true });
+export const insertTaxRegionSchema = taxRegionSchema.omit({ id: true });
 export const insertOrderSchema = orderSchema.omit({ id: true, number: true, createdAt: true });
 export const insertInvoiceSchema = invoiceSchema.omit({ id: true, number: true, createdAt: true });
 
 // Types
 export type TaxRule = z.infer<typeof taxRuleSchema>;
-export type Region = z.infer<typeof regionSchema>;
+export type TaxRegion = z.infer<typeof taxRegionSchema>;
 export type FinanceSettings = z.infer<typeof financeSettingsSchema>;
 export type TaxOverride = z.infer<typeof taxOverrideSchema>;
-export type Product = z.infer<typeof productSchema>;
+export type TaxProduct = z.infer<typeof productSchema>;
 export type OrderTotals = z.infer<typeof orderTotalsSchema>;
 export type OrderItem = z.infer<typeof orderItemSchema>;
-export type Order = z.infer<typeof orderSchema>;
-export type Invoice = z.infer<typeof invoiceSchema>;
+export type TaxOrder = z.infer<typeof orderSchema>;
+export type TaxInvoice = z.infer<typeof invoiceSchema>;
 export type InsertTaxRule = z.infer<typeof insertTaxRuleSchema>;
-export type InsertRegion = z.infer<typeof insertRegionSchema>;
-export type InsertOrder = z.infer<typeof insertOrderSchema>;
-export type InsertInvoice = z.infer<typeof insertInvoiceSchema>;
+export type InsertTaxRegion = z.infer<typeof insertTaxRegionSchema>;
+export type InsertTaxOrder = z.infer<typeof insertOrderSchema>;
+export type InsertTaxInvoice = z.infer<typeof insertInvoiceSchema>;
 
 // Reconciliation Schema
 export const reconBatches = pgTable("recon_batches", {
