@@ -4,6 +4,46 @@ import { setupVite, serveStatic, log } from "./vite";
 import { NotificationGenerators } from "./notificationGenerators";
 import { syncManager } from "./syncAdapters";
 import { digestScheduler } from "./digestScheduler";
+import { storage } from "./storage";
+import { hashPassword } from "./auth";
+
+// Seed demo users for development
+async function seedDemoUsers() {
+  try {
+    const demoEmail = "john.doe@company.com";
+    
+    // Check if demo user already exists
+    const existingUser = await storage.getUserByUsername(demoEmail);
+    if (existingUser) {
+      console.log("✅ Demo user already exists:", demoEmail);
+      return;
+    }
+    
+    // Create demo user
+    const hashedPassword = await hashPassword("password");
+    const demoUser = await storage.createUser({
+      username: demoEmail,
+      email: demoEmail,
+      password: hashedPassword,
+      fullName: "John Doe",
+      companyName: "Demo Company", 
+      role: "admin" as const,
+    });
+    
+    // Mark onboarding as complete for demo user to skip onboarding flow
+    await storage.updateUserOnboarding(demoUser.id, true);
+    
+    // Add test alerts for the demo user
+    const organizationId = demoUser.organizationId || "sample-org-123";
+    await storage.addTestAlertsForUser(demoUser.id, organizationId);
+    
+    console.log("🎉 Demo user created successfully:", demoEmail);
+    console.log("   ID:", demoUser.id);
+    console.log("   Role:", demoUser.role);
+  } catch (error) {
+    console.error("❌ Failed to seed demo users:", error);
+  }
+}
 
 const app = express();
 app.use(express.json());
@@ -73,6 +113,9 @@ app.use((req, res, next) => {
     
     // Start notification generators in development
     if (app.get("env") === "development") {
+      // Seed demo users automatically on startup
+      seedDemoUsers();
+      
       // Start periodic checks every 5 minutes for demo purposes
       NotificationGenerators.startPeriodicChecks(5);
       

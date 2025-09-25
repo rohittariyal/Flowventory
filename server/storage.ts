@@ -2142,7 +2142,7 @@ export class MemStorage implements IStorage {
     }
 
     // Simulate test result
-    const success = Math.random() > 0.2; // 80% success rate for demo
+    const success = Math.random() > 0.05; // 95% success rate for demo
     const now = new Date();
     
     await this.updateShippingConnector(id, {

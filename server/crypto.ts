@@ -1,4 +1,4 @@
-import { createCipheriv, createDecipheriv, randomBytes } from 'crypto';
+import { createCipheriv, createDecipheriv, randomBytes, scryptSync } from 'crypto';
 
 const ALGORITHM = 'aes-256-gcm';
 const IV_LENGTH = 12; // 96-bit IV (recommended for GCM mode)
@@ -14,8 +14,7 @@ function getEncryptionKey(): Buffer {
   }
   
   // Create a consistent 32-byte key from the secret
-  const crypto = require('crypto');
-  return crypto.scryptSync(secretKey, 'flowventory-shipping', KEY_LENGTH);
+  return scryptSync(secretKey, 'flowventory-shipping', KEY_LENGTH);
 }
 
 /**
