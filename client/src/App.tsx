@@ -31,7 +31,7 @@ import CompliancePage from "@/pages/compliance-page";
 import { ProtectedRoute } from "./lib/protected-route";
 import { initializeSeedData } from "@/data/seedInvoiceData";
 import { initializeSessionData, initializeProductNotesData } from "@/data/seedSessionData";
-import { initializeProductData } from "@/data/seedProductData";
+import { initializeProductData, initializeBatchInventoryData, initializeBatchEventsData } from "@/data/seedProductData";
 import { initializeAnalyticsData } from "@/utils/analytics";
 import { initializeTaxationData } from "@/utils/taxation";
 
@@ -73,6 +73,8 @@ function App() {
   initializeSessionData();
   initializeProductNotesData();
   initializeProductData();
+  initializeBatchInventoryData();
+  initializeBatchEventsData();
   initializeAnalyticsData();
   initializeTaxationData();
   

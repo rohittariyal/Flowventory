@@ -102,7 +102,9 @@ export const PRODUCT_DATA: Product[] = [
     maxStock: 200,
     channels: ["Shopify"],
     daysCover: 8.3,
-    hasLinkedTask: true
+    hasLinkedTask: true,
+    isBatchTracked: true,
+    shelfLifeDays: 90
   },
   {
     id: "prod-003",
@@ -186,7 +188,9 @@ export const PRODUCT_DATA: Product[] = [
     reorderPoint: 20,
     maxStock: 60,
     channels: ["Amazon"],
-    daysCover: 7.3
+    daysCover: 7.3,
+    isBatchTracked: true,
+    shelfLifeDays: 365
   },
   {
     id: "prod-007",
@@ -228,7 +232,216 @@ export const PRODUCT_DATA: Product[] = [
     reorderPoint: 25,
     maxStock: 75,
     channels: ["Amazon", "Meta"],
-    daysCover: 11.7
+    daysCover: 11.7,
+    isBatchTracked: true,
+    shelfLifeDays: 730
+  }
+];
+
+// Seed batch inventory data
+export const BATCH_INVENTORY_DATA: BatchInventory[] = [
+  // SKU-002 (Smartphone Case) - 90 day shelf life
+  {
+    id: "batch-001",
+    productId: "prod-002",
+    locationId: "WH-B2-A1",
+    batchNo: "SC240815",
+    mfgDate: "2024-08-15",
+    expiryDate: "2024-11-13", // Expired (90 days from mfg)
+    qty: 5
+  },
+  {
+    id: "batch-002", 
+    productId: "prod-002",
+    locationId: "WH-B2-A2",
+    batchNo: "SC240920",
+    mfgDate: "2024-09-20",
+    expiryDate: "2024-12-19", // Expiring soon (90 days from mfg)
+    qty: 7
+  },
+  {
+    id: "batch-003",
+    productId: "prod-002", 
+    locationId: "WH-B2-B1",
+    batchNo: "SC241201",
+    mfgDate: "2024-12-01",
+    expiryDate: "2025-03-01", // OK (90 days from mfg)
+    qty: 3
+  },
+
+  // SKU-006 (Bluetooth Speaker) - 365 day shelf life
+  {
+    id: "batch-004",
+    productId: "prod-006",
+    locationId: "WH-A2-A1",
+    batchNo: "BS231201",
+    mfgDate: "2023-12-01", 
+    expiryDate: "2024-11-30", // Expired (365 days from mfg)
+    qty: 4
+  },
+  {
+    id: "batch-005",
+    productId: "prod-006",
+    locationId: "WH-A2-A2", 
+    batchNo: "BS240515",
+    mfgDate: "2024-05-15",
+    expiryDate: "2025-05-15", // Expiring soon (365 days from mfg)
+    qty: 8
+  },
+  {
+    id: "batch-006",
+    productId: "prod-006",
+    locationId: "WH-A2-B1",
+    batchNo: "BS241001",
+    mfgDate: "2024-10-01",
+    expiryDate: "2025-09-30", // OK (365 days from mfg)
+    qty: 10
+  },
+
+  // SKU-008 (Power Bank) - 730 day shelf life  
+  {
+    id: "batch-007",
+    productId: "prod-008",
+    locationId: "WH-A4-A1",
+    batchNo: "PB231215",
+    mfgDate: "2023-12-15",
+    expiryDate: "2025-12-15", // OK (730 days from mfg)
+    qty: 15
+  },
+  {
+    id: "batch-008",
+    productId: "prod-008",
+    locationId: "WH-A4-A2",
+    batchNo: "PB240301",
+    mfgDate: "2024-03-01", 
+    expiryDate: "2026-02-28", // OK (730 days from mfg)
+    qty: 20
+  }
+];
+
+// Seed batch events data
+export const BATCH_EVENTS_DATA: BatchEvent[] = [
+  // Receipt events for the batches above
+  {
+    id: "event-batch-001",
+    timestamp: "2024-08-15T10:00:00Z",
+    type: "RECEIPT",
+    productId: "prod-002",
+    locationId: "WH-B2-A1",
+    batchNo: "SC240815",
+    qty: 5,
+    refType: "PO",
+    refId: "PO-2024-0815",
+    note: "Initial receipt from supplier"
+  },
+  {
+    id: "event-batch-002",
+    timestamp: "2024-09-20T14:30:00Z",
+    type: "RECEIPT",
+    productId: "prod-002",
+    locationId: "WH-B2-A2",
+    batchNo: "SC240920",
+    qty: 7,
+    refType: "PO",
+    refId: "PO-2024-0920",
+    note: "Second batch receipt"
+  },
+  {
+    id: "event-batch-003",
+    timestamp: "2024-12-01T09:15:00Z",
+    type: "RECEIPT",
+    productId: "prod-002",
+    locationId: "WH-B2-B1",
+    batchNo: "SC241201",
+    qty: 3,
+    refType: "PO",
+    refId: "PO-2024-1201",
+    note: "Latest batch receipt"
+  },
+  {
+    id: "event-batch-004",
+    timestamp: "2023-12-01T11:00:00Z",
+    type: "RECEIPT",
+    productId: "prod-006",
+    locationId: "WH-A2-A1",
+    batchNo: "BS231201",
+    qty: 4,
+    refType: "PO",
+    refId: "PO-2023-1201",
+    note: "Old batch now expired"
+  },
+  {
+    id: "event-batch-005",
+    timestamp: "2024-05-15T08:45:00Z",
+    type: "RECEIPT",
+    productId: "prod-006",
+    locationId: "WH-A2-A2",
+    batchNo: "BS240515",
+    qty: 8,
+    refType: "PO",
+    refId: "PO-2024-0515",
+    note: "Spring batch receipt"
+  },
+  {
+    id: "event-batch-006",
+    timestamp: "2024-10-01T13:20:00Z",
+    type: "RECEIPT",
+    productId: "prod-006",
+    locationId: "WH-A2-B1",
+    batchNo: "BS241001",
+    qty: 10,
+    refType: "PO",
+    refId: "PO-2024-1001",
+    note: "Fresh batch receipt"
+  },
+  {
+    id: "event-batch-007",
+    timestamp: "2023-12-15T16:30:00Z",
+    type: "RECEIPT",
+    productId: "prod-008",
+    locationId: "WH-A4-A1",
+    batchNo: "PB231215",
+    qty: 15,
+    refType: "PO",
+    refId: "PO-2023-1215",
+    note: "Long shelf life batch"
+  },
+  {
+    id: "event-batch-008",
+    timestamp: "2024-03-01T12:00:00Z",
+    type: "RECEIPT",
+    productId: "prod-008",
+    locationId: "WH-A4-A2",
+    batchNo: "PB240301",
+    qty: 20,
+    refType: "PO", 
+    refId: "PO-2024-0301",
+    note: "Latest power bank batch"
+  },
+  
+  // Some adjustment and sale events for testing
+  {
+    id: "event-batch-009",
+    timestamp: "2024-12-20T10:30:00Z",
+    type: "ADJUST",
+    productId: "prod-002",
+    locationId: "WH-B2-A1",
+    batchNo: "SC240815",
+    qty: -2, // Adjustment down
+    refType: "MANUAL",
+    note: "Cycle count adjustment - expired product"
+  },
+  {
+    id: "event-batch-010",
+    timestamp: "2024-12-22T15:45:00Z",
+    type: "SALE",
+    productId: "prod-006",
+    locationId: "WH-A2-B1",
+    batchNo: "BS241001",
+    qty: -3, // Sale allocation
+    refType: "ORDER",
+    refId: "ORD-2024-1222",
+    note: "FIFO sale allocation"
   }
 ];
 
@@ -244,6 +457,42 @@ export function initializeProductData() {
   
   localStorage.setItem(productKey, JSON.stringify(PRODUCT_DATA));
   console.log("Seeded product data");
+}
+
+// Initialize batch inventory data in localStorage
+export function initializeBatchInventoryData() {
+  const batchInventoryKey = "flowventory:batch-inventory";
+  
+  // Check if batch inventory already exists
+  const existingBatchInventory = localStorage.getItem(batchInventoryKey);
+  if (existingBatchInventory) {
+    return; // Batch inventory already exists, don't overwrite
+  }
+  
+  localStorage.setItem(batchInventoryKey, JSON.stringify(BATCH_INVENTORY_DATA));
+  console.log("Seeded batch inventory data");
+}
+
+// Initialize batch events data in localStorage
+export function initializeBatchEventsData() {
+  const batchEventsKey = "flowventory:batch-events";
+  
+  // Check if batch events already exist
+  const existingBatchEvents = localStorage.getItem(batchEventsKey);
+  if (existingBatchEvents) {
+    return; // Batch events already exist, don't overwrite
+  }
+  
+  localStorage.setItem(batchEventsKey, JSON.stringify(BATCH_EVENTS_DATA));
+  console.log("Seeded batch events data");
+}
+
+// Initialize all seed data at once
+export function initializeAllSeedData() {
+  initializeProductData();
+  initializeBatchInventoryData();
+  initializeBatchEventsData();
+  console.log("All seed data initialized");
 }
 
 // Get product by SKU or ID
