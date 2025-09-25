@@ -37,7 +37,7 @@ import {
 } from "@/components/ui/alert";
 import { useToast } from "@/hooks/use-toast";
 import { usePerms } from "@/hooks/use-perms";
-import { Trash2, Plus, Settings, Globe, MapPin, Bell, Mail, Eye, Send, AlertCircle, X, RotateCcw, Users, Shield, DollarSign, FileText } from "lucide-react";
+import { Trash2, Plus, Settings, Globe, MapPin, Bell, Mail, Eye, Send, AlertCircle, X, RotateCcw, Users, Shield, DollarSign, FileText, Truck } from "lucide-react";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { RolesPermissions } from "@/components/RolesPermissions";
 
@@ -464,6 +464,7 @@ export default function SettingsPage() {
     { id: "notifications", label: "Notifications", icon: Bell },
     { id: "returns", label: "Returns & RMA", icon: RotateCcw },
     { id: "finance", label: "Finance & Tax", icon: DollarSign },
+    { id: "shipping", label: "Shipping", icon: Truck },
     ...(hasPermission('settings') ? [{ id: "roles", label: "Roles & Permissions", icon: Shield }] : []),
   ];
 
@@ -1275,6 +1276,83 @@ export default function SettingsPage() {
 
           {activeTab === "roles" && hasPermission('settings') && (
             <RolesPermissions />
+          )}
+
+          {activeTab === "shipping" && (
+            <Card>
+              <CardHeader>
+                <CardTitle className="flex items-center space-x-2">
+                  <Truck className="h-5 w-5" />
+                  <span>Shipping Integrations</span>
+                </CardTitle>
+                <CardDescription>
+                  Configure shipping providers and manage delivery settings
+                </CardDescription>
+              </CardHeader>
+              <CardContent>
+                <div className="space-y-4">
+                  <p className="text-gray-600">
+                    Manage your shipping integrations with providers like Shiprocket, DHL, UPS, and FedEx.
+                    Configure credentials, test connections, and track shipments all from one place.
+                  </p>
+                  
+                  <div className="bg-blue-50 dark:bg-blue-950 p-4 rounded-lg">
+                    <div className="flex items-start space-x-3">
+                      <Truck className="h-5 w-5 text-blue-600 mt-0.5" />
+                      <div>
+                        <h4 className="font-medium text-blue-900 dark:text-blue-100">
+                          Advanced Shipping Management
+                        </h4>
+                        <p className="text-sm text-blue-700 dark:text-blue-300 mt-1">
+                          Access the full shipping settings page to configure providers, test connections, 
+                          view shipment status, and manage all your shipping integrations.
+                        </p>
+                        <a
+                          href="/settings/shipping"
+                          className="inline-flex items-center mt-3 px-4 py-2 bg-blue-600 text-white text-sm font-medium rounded-md hover:bg-blue-700 transition-colors"
+                          data-testid="link-shipping-settings"
+                        >
+                          <Truck className="h-4 w-4 mr-2" />
+                          Open Shipping Settings
+                        </a>
+                      </div>
+                    </div>
+                  </div>
+                  
+                  <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                    <div className="p-3 border rounded-lg">
+                      <div className="flex items-center space-x-2 mb-2">
+                        <Shield className="h-4 w-4 text-green-600" />
+                        <span className="text-sm font-medium">Provider Management</span>
+                      </div>
+                      <p className="text-xs text-gray-600">
+                        Add and configure shipping provider credentials securely
+                      </p>
+                    </div>
+                    
+                    <div className="p-3 border rounded-lg">
+                      <div className="flex items-center space-x-2 mb-2">
+                        <Eye className="h-4 w-4 text-blue-600" />
+                        <span className="text-sm font-medium">Real-time Tracking</span>
+                      </div>
+                      <p className="text-xs text-gray-600">
+                        Monitor shipment status with live webhook updates
+                      </p>
+                    </div>
+                    
+                    <div className="p-3 border rounded-lg">
+                      <div className="flex items-center space-x-2 mb-2">
+                        <DollarSign className="h-4 w-4 text-purple-600" />
+                        <span className="text-sm font-medium">Rate Comparison</span>
+                      </div>
+                      <p className="text-xs text-gray-600">
+                        Compare rates across providers to optimize costs
+                      </p>
+                    </div>
+                  </div>
+                </div>
+              </CardContent>
+            </Card>
           )}
         </div>
       </div>

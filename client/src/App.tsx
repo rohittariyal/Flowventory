@@ -26,6 +26,7 @@ import InvoicesPage from "@/pages/invoices-page";
 import InvoiceDetailPage from "@/pages/invoice-detail-page";
 import ProductDetailPage from "@/pages/product-detail-page";
 import FinanceSettingsPage from "@/pages/finance-settings-page";
+import ShippingSettingsPage from "@/pages/shipping-settings-page";
 import CompliancePage from "@/pages/compliance-page";
 import { ProtectedRoute } from "./lib/protected-route";
 import { initializeSeedData } from "@/data/seedInvoiceData";
@@ -58,6 +59,7 @@ function Router() {
       <ProtectedRoute path="/products/:id" component={ProductDetailPage} />
       <ProtectedRoute path="/workspace/users" component={UsersPage} />
       <ProtectedRoute path="/settings/finance" component={FinanceSettingsPage} />
+      <ProtectedRoute path="/settings/shipping" component={ShippingSettingsPage} />
       <ProtectedRoute path="/compliance" component={CompliancePage} />
       <Route path="/auth" component={AuthPage} />
       <Route component={NotFound} />
