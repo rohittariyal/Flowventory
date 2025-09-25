@@ -22,6 +22,12 @@ export function registerRoutes(app: Express): Server {
 
   // Onboarding routes
   app.post("/api/onboarding/save", async (req, res) => {
+    console.log("Onboarding save attempt:");
+    console.log("  - Session ID:", req.sessionID);
+    console.log("  - Is authenticated:", req.isAuthenticated());
+    console.log("  - Session:", req.session);
+    console.log("  - User:", req.user);
+    
     if (!req.isAuthenticated()) {
       console.log("Onboarding save: User not authenticated");
       return res.status(401).json({ error: "Unauthorized" });
