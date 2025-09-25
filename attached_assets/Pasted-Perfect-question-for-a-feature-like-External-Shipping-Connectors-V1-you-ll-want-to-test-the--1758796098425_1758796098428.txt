@@ -1,0 +1,108 @@
+Perfect question 👌 — for a feature like External Shipping Connectors (V1), you’ll want to test the front-end flow very deliberately. Here’s a clear checklist you can hand to your developer or QA to verify everything is wired correctly:
+ 
+ 
+---
+ 
+🔑 Settings → Shipping Integrations
+ 
+Empty State:
+If no connectors are set up, does the UI show an empty state with an “Add Connector” button?
+ 
+Add Connector Modal:
+Can you open the modal, select a provider (Shiprocket, DHL, UPS, FedEx), enter credentials, and save?
+ 
+Connector List:
+After saving, does the connector appear in the list with the correct provider logo, name, and status badge (Configured/Not Configured)?
+ 
+Edit & Delete:
+Can you click edit, update credentials, and see the change persist? Can you delete the connector, and does the UI refresh correctly?
+ 
+Test Connection:
+If the “Test” button exists, does it show success/failure and surface any AUTH_ERROR cleanly?
+ 
+ 
+ 
+---
+ 
+📦 Orders → Create Shipment
+ 
+Get Rates:
+When creating a shipment and selecting a connector, does the “Get Rates” button fetch and display rate cards?
+→ Check: service name, ETA, currency, amount.
+ 
+Create Shipment:
+After selecting a rate, does “Create Shipment” produce a Shipment object with:
+ 
+ID / Number
+ 
+Tracking ID
+ 
+Tracking URL
+ 
+Cost (currency + amount)
+ 
+Label (HTML or PDF link)?
+ 
+ 
+Error Handling:
+If credentials are missing or invalid, does the frontend show a user-friendly toast (not a raw API error)?
+ 
+ 
+ 
+---
+ 
+🚚 Shipments → List & Detail
+ 
+Shipment List View:
+ 
+Does each shipment show its “Source” (which connector it used)?
+ 
+Does the list persist across reloads (fetched from backend, not just local)?
+ 
+ 
+Detail Page:
+ 
+Does it display tracking ID, tracking URL, label link, and current status?
+ 
+Do timeline events (tracking updates) render cleanly?
+ 
+ 
+Update Tracking:
+ 
+Clicking “Update Tracking” should refresh the status via the adapter.
+ 
+ 
+Sync All:
+ 
+If you click “Sync All,” do multiple shipments refresh together?
+ 
+ 
+ 
+ 
+---
+ 
+🔔 Webhooks (if provider supports it)
+ 
+Simulated POST:
+POST a sample payload to /webhooks/{provider}. Does the shipment update in the frontend UI automatically (after a refresh/poll)?
+→ e.g., status moves from In Transit → Delivered.
+ 
+ 
+ 
+---
+ 
+🚨 Edge Case Checks
+ 
+Wrong credentials entered → Does the UI clearly flag an AUTH_ERROR with a call to action (“Fix credentials”)?
+ 
+No rates returned → Does the UI show “No services available” gracefully instead of breaking?
+ 
+Create shipment failed → Does the order still exist, but shipment shows as failed with retry option?
+ 
+Deleted connector with existing shipments → Do old shipments remain visible but marked with “Connector removed”?
+ 
+ 
+ 
+---
+ 
+👉 If you want, I can also draft a front-end acceptance script (step-by-step in plain English, like “Click here, expect this”) so even a non-technical tester could follow it. Would you like me to prepare that?
