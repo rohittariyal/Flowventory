@@ -37,7 +37,7 @@ import {
 } from "@/components/ui/alert";
 import { useToast } from "@/hooks/use-toast";
 import { usePerms } from "@/hooks/use-perms";
-import { Trash2, Plus, Settings, Globe, MapPin, Bell, Mail, Eye, Send, AlertCircle, X, RotateCcw, Users, Shield } from "lucide-react";
+import { Trash2, Plus, Settings, Globe, MapPin, Bell, Mail, Eye, Send, AlertCircle, X, RotateCcw, Users, Shield, DollarSign, FileText } from "lucide-react";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { RolesPermissions } from "@/components/RolesPermissions";
 
@@ -463,6 +463,7 @@ export default function SettingsPage() {
     { id: "regions", label: "Regions & SLAs", icon: MapPin },
     { id: "notifications", label: "Notifications", icon: Bell },
     { id: "returns", label: "Returns & RMA", icon: RotateCcw },
+    { id: "finance", label: "Finance & Tax", icon: DollarSign },
     ...(hasPermission('settings') ? [{ id: "roles", label: "Roles & Permissions", icon: Shield }] : []),
   ];
 
@@ -1179,6 +1180,97 @@ export default function SettingsPage() {
                 </form>
               </CardContent>
             </Card>
+          )}
+
+          {activeTab === "finance" && (
+            <div className="space-y-6">
+              <Card>
+                <CardHeader>
+                  <CardTitle className="flex items-center space-x-2">
+                    <DollarSign className="h-5 w-5" />
+                    <span>Finance & Tax Settings</span>
+                  </CardTitle>
+                  <CardDescription>
+                    Configure taxation rules, regional compliance, and financial reporting
+                  </CardDescription>
+                </CardHeader>
+                <CardContent>
+                  <div className="space-y-6">
+                    <div className="bg-blue-50 dark:bg-blue-900/20 p-4 rounded-lg">
+                      <h3 className="font-medium text-blue-900 dark:text-blue-200 mb-2">
+                        Advanced Finance Management
+                      </h3>
+                      <p className="text-blue-700 dark:text-blue-300 text-sm mb-4">
+                        Access comprehensive taxation and compliance features including regional tax rules, 
+                        product tax overrides, and automated compliance reporting.
+                      </p>
+                      <div className="flex space-x-3">
+                        <Button 
+                          onClick={() => window.open('/settings/finance', '_blank')}
+                          className="bg-blue-600 hover:bg-blue-700"
+                        >
+                          <Settings className="h-4 w-4 mr-2" />
+                          Finance & Tax Settings
+                        </Button>
+                        <Button 
+                          variant="outline"
+                          onClick={() => window.open('/compliance', '_blank')}
+                        >
+                          <FileText className="h-4 w-4 mr-2" />
+                          Compliance Reports
+                        </Button>
+                      </div>
+                    </div>
+                    
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                      <div className="space-y-4">
+                        <h4 className="font-medium">Tax Management Features</h4>
+                        <div className="space-y-2 text-sm text-gray-600 dark:text-gray-300">
+                          <div className="flex items-center space-x-2">
+                            <div className="w-2 h-2 bg-green-500 rounded-full"></div>
+                            <span>Multi-region tax rules (US, UK, UAE, Singapore)</span>
+                          </div>
+                          <div className="flex items-center space-x-2">
+                            <div className="w-2 h-2 bg-green-500 rounded-full"></div>
+                            <span>Product-level tax overrides</span>
+                          </div>
+                          <div className="flex items-center space-x-2">
+                            <div className="w-2 h-2 bg-green-500 rounded-full"></div>
+                            <span>Automatic tax calculations on orders</span>
+                          </div>
+                          <div className="flex items-center space-x-2">
+                            <div className="w-2 h-2 bg-green-500 rounded-full"></div>
+                            <span>Multi-currency support</span>
+                          </div>
+                        </div>
+                      </div>
+                      
+                      <div className="space-y-4">
+                        <h4 className="font-medium">Compliance & Reporting</h4>
+                        <div className="space-y-2 text-sm text-gray-600 dark:text-gray-300">
+                          <div className="flex items-center space-x-2">
+                            <div className="w-2 h-2 bg-blue-500 rounded-full"></div>
+                            <span>Regional compliance reports</span>
+                          </div>
+                          <div className="flex items-center space-x-2">
+                            <div className="w-2 h-2 bg-blue-500 rounded-full"></div>
+                            <span>CSV export functionality</span>
+                          </div>
+                          <div className="flex items-center space-x-2">
+                            <div className="w-2 h-2 bg-blue-500 rounded-full"></div>
+                            <span>Date range filtering</span>
+                          </div>
+                          <div className="flex items-center space-x-2">
+                            <div className="w-2 h-2 bg-blue-500 rounded-full"></div>
+                            <span>Tax breakdown analysis</span>
+                          </div>
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+                </CardContent>
+              </Card>
+            </div>
           )}
 
           {activeTab === "roles" && hasPermission('settings') && (

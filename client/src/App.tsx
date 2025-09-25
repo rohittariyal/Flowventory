@@ -25,6 +25,8 @@ import UsersPage from "@/pages/users-page";
 import InvoicesPage from "@/pages/invoices-page";
 import InvoiceDetailPage from "@/pages/invoice-detail-page";
 import ProductDetailPage from "@/pages/product-detail-page";
+import FinanceSettingsPage from "@/pages/finance-settings-page";
+import CompliancePage from "@/pages/compliance-page";
 import { ProtectedRoute } from "./lib/protected-route";
 import { initializeSeedData } from "@/data/seedInvoiceData";
 import { initializeSessionData, initializeProductNotesData } from "@/data/seedSessionData";
@@ -55,6 +57,8 @@ function Router() {
       <ProtectedRoute path="/invoices/:id" component={InvoiceDetailPage} />
       <ProtectedRoute path="/products/:id" component={ProductDetailPage} />
       <ProtectedRoute path="/workspace/users" component={UsersPage} />
+      <ProtectedRoute path="/settings/finance" component={FinanceSettingsPage} />
+      <ProtectedRoute path="/compliance" component={CompliancePage} />
       <Route path="/auth" component={AuthPage} />
       <Route component={NotFound} />
     </Switch>
