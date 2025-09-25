@@ -1053,3 +1053,227 @@ export type UpdateCustomer = z.infer<typeof updateCustomerSchema>;
 export type SalesOrder = typeof salesOrders.$inferSelect;
 export type InsertSalesOrder = z.infer<typeof insertSalesOrderSchema>;
 export type UpdateSalesOrder = z.infer<typeof updateSalesOrderSchema>;
+
+// Shipping Connectors - Store provider configurations with encrypted credentials
+export const shippingConnectors = pgTable("shipping_connectors", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  organizationId: varchar("organization_id").references(() => organizations.id).notNull(),
+  provider: text("provider", { enum: ["shiprocket", "dhl", "ups", "fedex"] }).notNull(),
+  name: text("name").notNull(), // User-friendly name (e.g., "Shiprocket Main Account")
+  status: text("status", { enum: ["active", "inactive", "error"] }).notNull().default("inactive"),
+  // Encrypted credentials stored as JSON with IV and auth tag
+  encryptedCredentials: jsonb("encrypted_credentials").$type<{
+    iv: string;
+    authTag: string;
+    data: string; // Base64 encoded encrypted JSON
+  }>(),
+  // Provider-specific configuration
+  config: jsonb("config").$type<{
+    testMode?: boolean;
+    defaultService?: string;
+    webhookUrl?: string;
+    [key: string]: any;
+  }>().default({}),
+  lastTestAt: timestamp("last_test_at"),
+  lastTestStatus: text("last_test_status", { enum: ["success", "failed"] }),
+  lastTestError: text("last_test_error"),
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+  updatedAt: timestamp("updated_at").defaultNow().notNull(),
+});
+
+// Shipments - Track individual shipments created through connectors
+export const shipments = pgTable("shipments", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  organizationId: varchar("organization_id").references(() => organizations.id).notNull(),
+  connectorId: varchar("connector_id").references(() => shippingConnectors.id, { onDelete: "set null" }),
+  salesOrderId: varchar("sales_order_id").references(() => salesOrders.id, { onDelete: "cascade" }),
+  // Provider details
+  provider: text("provider").notNull(), // Cached from connector for history
+  providerShipmentId: text("provider_shipment_id"), // Provider's shipment ID
+  trackingNumber: text("tracking_number"),
+  trackingUrl: text("tracking_url"),
+  labelUrl: text("label_url"), // PDF/HTML label URL
+  // Shipping details
+  service: text("service").notNull(), // e.g., "Standard", "Express"
+  serviceCode: text("service_code"), // Provider-specific service code
+  currency: text("currency", { enum: ["INR", "GBP", "USD", "AED", "SGD"] }).notNull(),
+  cost: integer("cost").notNull().default(0), // Cost in cents
+  estimatedDays: integer("estimated_days"),
+  // Addresses (JSON for flexibility)
+  shipFrom: jsonb("ship_from").$type<{
+    name?: string;
+    company?: string;
+    address1: string;
+    address2?: string;
+    city: string;
+    state: string;
+    postalCode: string;
+    country: string;
+    phone?: string;
+    email?: string;
+  }>().notNull(),
+  shipTo: jsonb("ship_to").$type<{
+    name: string;
+    company?: string;
+    address1: string;
+    address2?: string;
+    city: string;
+    state: string;
+    postalCode: string;
+    country: string;
+    phone?: string;
+    email?: string;
+  }>().notNull(),
+  // Package details
+  parcels: jsonb("parcels").$type<{
+    length: number;
+    width: number;
+    height: number;
+    weight: number;
+    units: 'cm' | 'in';
+    weightUnits: 'kg' | 'lb';
+  }[]>().notNull().default([]),
+  // Status tracking
+  status: text("status", { 
+    enum: ["created", "label_created", "picked_up", "in_transit", "delivered", "exception", "cancelled"] 
+  }).notNull().default("created"),
+  // Tracking events history
+  trackingEvents: jsonb("tracking_events").$type<{
+    timestamp: string;
+    status: string;
+    location?: string;
+    description: string;
+    code?: string;
+  }[]>().notNull().default([]),
+  // Metadata
+  metadata: jsonb("metadata").default({}),
+  notes: text("notes"),
+  // Webhook data for status updates
+  lastWebhookAt: timestamp("last_webhook_at"),
+  lastSyncAt: timestamp("last_sync_at"),
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+  updatedAt: timestamp("updated_at").defaultNow().notNull(),
+});
+
+// Shipping Rates Cache - Optional table to cache rates for performance
+export const shippingRates = pgTable("shipping_rates", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  organizationId: varchar("organization_id").references(() => organizations.id).notNull(),
+  connectorId: varchar("connector_id").references(() => shippingConnectors.id, { onDelete: "cascade" }).notNull(),
+  // Cache key components
+  shipFromHash: text("ship_from_hash").notNull(), // Hash of ship from address
+  shipToHash: text("ship_to_hash").notNull(), // Hash of ship to address
+  parcelsHash: text("parcels_hash").notNull(), // Hash of parcels data
+  // Cached rates
+  rates: jsonb("rates").$type<{
+    service: string;
+    serviceCode: string;
+    currency: string;
+    amount: number; // In cents
+    estimatedDays?: number;
+    provider: string;
+  }[]>().notNull().default([]),
+  expiresAt: timestamp("expires_at").notNull(),
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+});
+
+// Shipping Connector schemas and types
+export const insertShippingConnectorSchema = z.object({
+  organizationId: z.string(),
+  provider: z.enum(["shiprocket", "dhl", "ups", "fedex"]),
+  name: z.string().min(1, "Connector name is required"),
+  credentials: z.record(z.any()), // Will be encrypted before storage
+  config: z.record(z.any()).optional(),
+});
+
+export const updateShippingConnectorSchema = insertShippingConnectorSchema.partial().omit({ 
+  organizationId: true 
+});
+
+export const createShipmentSchema = z.object({
+  connectorId: z.string(),
+  salesOrderId: z.string().optional(),
+  service: z.string(),
+  serviceCode: z.string().optional(),
+  shipFrom: z.object({
+    name: z.string().optional(),
+    company: z.string().optional(),
+    address1: z.string(),
+    address2: z.string().optional(),
+    city: z.string(),
+    state: z.string(),
+    postalCode: z.string(),
+    country: z.string(),
+    phone: z.string().optional(),
+    email: z.string().email().optional(),
+  }),
+  shipTo: z.object({
+    name: z.string(),
+    company: z.string().optional(),
+    address1: z.string(),
+    address2: z.string().optional(),
+    city: z.string(),
+    state: z.string(),
+    postalCode: z.string(),
+    country: z.string(),
+    phone: z.string().optional(),
+    email: z.string().email().optional(),
+  }),
+  parcels: z.array(z.object({
+    length: z.number().positive(),
+    width: z.number().positive(),
+    height: z.number().positive(),
+    weight: z.number().positive(),
+    units: z.enum(['cm', 'in']).default('cm'),
+    weightUnits: z.enum(['kg', 'lb']).default('kg'),
+  })),
+  items: z.array(z.object({
+    sku: z.string(),
+    name: z.string(),
+    quantity: z.number().int().positive(),
+    value: z.number().min(0), // In cents
+    weight: z.number().positive(),
+  })).optional(),
+  metadata: z.record(z.any()).optional(),
+});
+
+export const getRatesSchema = z.object({
+  connectorId: z.string(),
+  shipFrom: z.object({
+    address1: z.string(),
+    city: z.string(),
+    state: z.string(),
+    postalCode: z.string(),
+    country: z.string(),
+  }),
+  shipTo: z.object({
+    address1: z.string(),
+    city: z.string(),
+    state: z.string(),
+    postalCode: z.string(),
+    country: z.string(),
+  }),
+  parcels: z.array(z.object({
+    length: z.number().positive(),
+    width: z.number().positive(),
+    height: z.number().positive(),
+    weight: z.number().positive(),
+    units: z.enum(['cm', 'in']).default('cm'),
+    weightUnits: z.enum(['kg', 'lb']).default('kg'),
+  })),
+  items: z.array(z.object({
+    sku: z.string(),
+    name: z.string(),
+    quantity: z.number().int().positive(),
+    value: z.number().min(0), // In cents
+    weight: z.number().positive(),
+  })).optional(),
+});
+
+export type ShippingConnector = typeof shippingConnectors.$inferSelect;
+export type InsertShippingConnector = z.infer<typeof insertShippingConnectorSchema>;
+export type UpdateShippingConnector = z.infer<typeof updateShippingConnectorSchema>;
+export type Shipment = typeof shipments.$inferSelect;
+export type CreateShipment = z.infer<typeof createShipmentSchema>;
+export type GetRates = z.infer<typeof getRatesSchema>;
+export type ShippingRate = typeof shippingRates.$inferSelect;
