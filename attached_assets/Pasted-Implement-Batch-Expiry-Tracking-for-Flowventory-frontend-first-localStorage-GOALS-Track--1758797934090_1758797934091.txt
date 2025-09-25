@@ -1,0 +1,69 @@
+Implement “Batch & Expiry Tracking” for Flowventory (frontend-first, localStorage).
+ 
+GOALS
+- Track stock by batches (lot numbers) with expiry dates.
+- Support batch-aware receipts, transfers, sales/returns, and adjustments.
+- Show “Expiring Soon” / “Expired” alerts and FIFO batch picking.
+- Keep UI consistent with the app’s neon SaaS styling.
+ 
+DATA (localStorage)
+- "flowventory:products": add flags:
+    { id, sku, name, isBatchTracked?: boolean, shelfLifeDays?: number, ... }
+- "flowventory:inventory": switch to per-location, per-batch:
+    [{ id, productId, locationId, batchNo, mfgDate?, expiryDate?, qty }]
+- "flowventory:batches:events":
+    [{ id, ts, type: "RECEIPT"|"TRANSFER"|"SALE"|"RETURN"|"ADJUST",
+       productId, locationId, batchNo, qty, refType?: "PO"|"ORDER"|"RMA"|"MANUAL", refId?: string, note?: string }]
+ 
+UTILS
+- now(), addDays(date, n), daysUntil(date)
+- fifoPick(batches[], requiredQty) → returns list of {batchNo, qty} from earliest expiry first
+- statusFor(expiryDate):
+    - if today > expiry → "EXPIRED"
+    - else if daysUntil <= 30 → "EXPIRING_SOON"
+    - else "OK"
+ 
+UI/ROUTES
+1) Product detail → “Batches” tab
+   - Toggle: “Batch tracking” (on/off) + default shelfLifeDays
+   - Table (location, batchNo, mfgDate, expiryDate, qty, status chip)
+   - “Receive Batch” button → modal:
+        fields: location, batchNo, mfgDate (optional), expiryDate (or auto = mfg + shelfLifeDays), qty(+)
+        Save → upsert into inventory, log event
+   - Actions per row: Adjust (+/−), Transfer (to another location), Split/Merge batches (optional)
+ 
+2) Inventory list (global)
+   - If product.isBatchTracked:
+     - show a small “stack” icon; clicking opens drawer listing batches for that SKU (grouped by location)
+     - status chips: EXPIRED (red), EXPIRING SOON (amber), OK (green/gray)
+     - “Sell/Allocate” → uses fifoPick, shows the picked batches in confirmation
+ 
+3) Sales / Orders (wherever items are deducted)
+   - If batch-tracked, prompt to auto-allocate via FIFO (allow override to pick specific batch)
+   - Persist allocations by adding negative quantity events (type="SALE")
+ 
+4) Returns & RMAs
+   - If a product is returned, ask for batchNo (default recent sale batch if known)
+   - Add positive qty to that batch (type="RETURN")
+ 
+5) Alerts page (/alerts) additions
+   - New filter “Expiry Status” (Expired / Expiring soon)
+   - Rows show product, location, batchNo, expiry, qty, status
+   - Bulk actions: Export CSV, Create Transfer (to quarantine/clearance location), Adjust to 0 (write-off)
+ 
+VALIDATION
+- qty > 0 on receipt; adjustments can be ±
+- if expiryDate < today on receipt → warn & allow (sometimes backdated intake)
+- batchNo required for batch-tracked SKUs
+- sales allocation cannot exceed available qty
+ 
+SEED
+- Mark 3 products as batch-tracked; seed 5–6 batches across 2 locations.
+- Ensure at least 1 EXPIRED and 1 EXPIRING_SOON.
+ 
+ACCEPTANCE (Frontend)
+- Toggle batch tracking on a SKU; receive a batch → visible under Batches tab.
+- Inventory drawer shows batches with correct status chips.
+- Selling that SKU auto-allocates via FIFO; qty reduces per picked batch.
+- Creating a return adds qty back to the selected batch.
+- /alerts shows Expiring Soon/Expired batches; CSV export works.
