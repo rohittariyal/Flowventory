@@ -59,7 +59,7 @@ export default function ProductDetailPage() {
   };
 
   const getStatusBadgeColor = (status: string) => {
-    switch (status.toLowerCase()) {
+    switch ((status || "").toLowerCase()) {
       case "active":
         return "bg-green-500/20 text-green-400 border-green-500/30";
       case "low stock":

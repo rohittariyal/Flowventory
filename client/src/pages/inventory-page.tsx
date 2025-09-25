@@ -60,11 +60,11 @@ function InventoryPage() {
     
     const query = searchQuery.toLowerCase().trim();
     return products.filter(product => 
-      product.sku.toLowerCase().includes(query) ||
-      product.name.toLowerCase().includes(query) ||
-      product.category.toLowerCase().includes(query) ||
-      product.supplier.toLowerCase().includes(query) ||
-      product.channels.some(channel => channel.toLowerCase().includes(query))
+      (product.sku || "").toLowerCase().includes(query) ||
+      (product.name || "").toLowerCase().includes(query) ||
+      (product.category || "").toLowerCase().includes(query) ||
+      (product.supplier || "").toLowerCase().includes(query) ||
+      (product.channels || []).some(channel => (channel || "").toLowerCase().includes(query))
     );
   }, [searchQuery, products]);
 
@@ -301,7 +301,7 @@ function InventoryPage() {
                     </TableCell>
                     <TableCell>
                       <div className="flex gap-1 flex-wrap">
-                        {product.channels.map((channel) => (
+                        {(product.channels || []).map((channel) => (
                           <Badge key={channel} variant="outline" className="text-xs">
                             {channel}
                           </Badge>
@@ -315,8 +315,8 @@ function InventoryPage() {
                       {product.reorderPoint}
                     </TableCell>
                     <TableCell className="text-right">
-                      <Badge variant={getDaysCoverBadge(product.daysCover)}>
-                        {product.daysCover.toFixed(1)} days
+                      <Badge variant={getDaysCoverBadge(product.daysCover || 0)}>
+                        {(product.daysCover || 0).toFixed(1)} days
                       </Badge>
                     </TableCell>
                     <TableCell>
