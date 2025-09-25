@@ -30,6 +30,7 @@ import { initializeSeedData } from "@/data/seedInvoiceData";
 import { initializeSessionData, initializeProductNotesData } from "@/data/seedSessionData";
 import { initializeProductData } from "@/data/seedProductData";
 import { initializeAnalyticsData } from "@/utils/analytics";
+import { initializeTaxationData } from "@/utils/taxation";
 
 function Router() {
   return (
@@ -67,6 +68,7 @@ function App() {
   initializeProductNotesData();
   initializeProductData();
   initializeAnalyticsData();
+  initializeTaxationData();
   
   return (
     <QueryClientProvider client={queryClient}>
