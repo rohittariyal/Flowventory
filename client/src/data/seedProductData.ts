@@ -20,6 +20,44 @@ export interface Product {
   daysCover: number;
   hasLinkedTask?: boolean;
   latestEventId?: string;
+  // Batch tracking properties
+  isBatchTracked?: boolean;
+  shelfLifeDays?: number;
+}
+
+// Batch inventory data model
+export interface BatchInventory {
+  id: string;
+  productId: string;
+  locationId: string;
+  batchNo: string;
+  mfgDate?: string;
+  expiryDate?: string;
+  qty: number;
+}
+
+// Batch events data model
+export interface BatchEvent {
+  id: string;
+  timestamp: string;
+  type: "RECEIPT" | "TRANSFER" | "SALE" | "RETURN" | "ADJUST";
+  productId: string;
+  locationId: string;
+  batchNo: string;
+  qty: number;
+  refType?: "PO" | "ORDER" | "RMA" | "MANUAL";
+  refId?: string;
+  note?: string;
+}
+
+// Batch status types
+export type BatchStatus = "OK" | "EXPIRING_SOON" | "EXPIRED";
+
+// FIFO pick result
+export interface FifoPick {
+  batchNo: string;
+  qty: number;
+  expiryDate?: string;
 }
 
 export const PRODUCT_DATA: Product[] = [
