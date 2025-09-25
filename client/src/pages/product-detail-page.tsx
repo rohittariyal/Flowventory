@@ -6,6 +6,7 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { ArrowLeft, Package } from "lucide-react";
 import { NotesTab } from "@/components/product/NotesTab";
 import { BatchesTab } from "@/components/product/BatchesTab";
+import { TaxTab } from "@/components/product/TaxTab";
 import { getProductBySku, type Product } from "@/data/seedProductData";
 
 // Product interface imported from seedProductData
@@ -107,12 +108,15 @@ export default function ProductDetailPage() {
 
         {/* Product Details */}
         <Tabs defaultValue="details" className="w-full">
-          <TabsList className="grid w-full grid-cols-3 bg-zinc-900">
+          <TabsList className="grid w-full grid-cols-4 bg-zinc-900">
             <TabsTrigger value="details" className="data-[state=active]:bg-green-600">
               Details
             </TabsTrigger>
             <TabsTrigger value="batches" className="data-[state=active]:bg-green-600">
               Batches
+            </TabsTrigger>
+            <TabsTrigger value="tax" className="data-[state=active]:bg-green-600">
+              Tax
             </TabsTrigger>
             <TabsTrigger value="notes" className="data-[state=active]:bg-green-600">
               Notes
@@ -233,6 +237,13 @@ export default function ProductDetailPage() {
 
           <TabsContent value="batches" className="mt-6">
             <BatchesTab 
+              product={product} 
+              onProductUpdate={(updatedProduct) => setProduct(updatedProduct)} 
+            />
+          </TabsContent>
+
+          <TabsContent value="tax" className="mt-6">
+            <TaxTab 
               product={product} 
               onProductUpdate={(updatedProduct) => setProduct(updatedProduct)} 
             />

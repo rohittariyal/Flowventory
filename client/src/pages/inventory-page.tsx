@@ -271,6 +271,7 @@ function InventoryPage() {
                 <TableRow>
                   <TableHead className="min-w-[80px]">SKU</TableHead>
                   <TableHead className="min-w-[100px]">Channels</TableHead>
+                  <TableHead className="min-w-[80px]">Tax Category</TableHead>
                   <TableHead className="text-right min-w-[60px]">Stock</TableHead>
                   <TableHead className="text-right min-w-[80px]">Threshold</TableHead>
                   <TableHead className="text-right min-w-[90px]">Days Cover</TableHead>
@@ -281,7 +282,7 @@ function InventoryPage() {
               <TableBody>
                 {filteredInventory.length === 0 && searchQuery.trim() ? (
                   <TableRow>
-                    <TableCell colSpan={7} className="text-center py-8 text-muted-foreground">
+                    <TableCell colSpan={8} className="text-center py-8 text-muted-foreground">
                       No matches found for "{searchQuery}"
                     </TableCell>
                   </TableRow>
@@ -307,6 +308,22 @@ function InventoryPage() {
                           </Badge>
                         ))}
                       </div>
+                    </TableCell>
+                    <TableCell>
+                      {product.taxCategory ? (
+                        <Badge 
+                          variant={
+                            product.taxCategory === "standard" ? "default" :
+                            product.taxCategory === "reduced" ? "secondary" : "destructive"
+                          }
+                          className="text-xs"
+                          data-testid={`badge-tax-category-${product.sku}`}
+                        >
+                          {product.taxCategory}
+                        </Badge>
+                      ) : (
+                        <span className="text-xs text-gray-500">-</span>
+                      )}
                     </TableCell>
                     <TableCell className="text-right font-mono">
                       {product.stock}

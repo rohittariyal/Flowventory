@@ -23,6 +23,14 @@ export interface Product {
   // Batch tracking properties
   isBatchTracked?: boolean;
   shelfLifeDays?: number;
+  // Tax properties
+  regionId?: string;
+  taxCategory?: "standard" | "reduced" | "zero";
+  taxOverride?: {
+    id: string;
+    name: string;
+    rate: number;
+  };
 }
 
 // Batch inventory data model
@@ -81,7 +89,9 @@ export const PRODUCT_DATA: Product[] = [
     channels: ["Shopify", "Amazon"],
     daysCover: 2.0,
     hasLinkedTask: false,
-    latestEventId: "event-1"
+    latestEventId: "event-1",
+    regionId: "UK",
+    taxCategory: "standard"
   },
   {
     id: "prod-002", 
@@ -104,7 +114,9 @@ export const PRODUCT_DATA: Product[] = [
     daysCover: 8.3,
     hasLinkedTask: true,
     isBatchTracked: true,
-    shelfLifeDays: 90
+    shelfLifeDays: 90,
+    regionId: "US",
+    taxCategory: "standard"
   },
   {
     id: "prod-003",
@@ -126,7 +138,14 @@ export const PRODUCT_DATA: Product[] = [
     channels: ["Amazon", "eBay"],
     daysCover: 3.75,
     hasLinkedTask: false,
-    latestEventId: "event-2"
+    latestEventId: "event-2",
+    regionId: "UAE",
+    taxCategory: "zero",
+    taxOverride: {
+      id: "uae_zero_override",
+      name: "UAE VAT 0% (Zero)",
+      rate: 0
+    }
   },
   {
     id: "prod-004",
