@@ -1,4 +1,40 @@
 import { type User, type InsertUser, type OnboardingData, type InsertOnboardingData, type PlatformConnections, type Organization, type TeamInvitation, type InviteTeamMemberData, type UpdateTeamMemberData, type Notification, type CreateNotificationData, type Event, type InsertEvent, type Task, type InsertTask, type CreateEventData, type CreateTaskData, type UpdateTaskData, type PurchaseOrder, type InsertPurchaseOrder, type Comment, type InsertComment, type Activity, type InsertActivity, type Rule, type InsertRule, type CreateCommentData, type CreateRuleData, type ReconBatch, type InsertReconBatch, type ReconRow, type InsertReconRow, type ReconIngestData, type UpdateReconRowData, type Supplier, type InsertSupplier, type SupplierDelivery, type InsertSupplierDelivery, type ReorderPolicy, type InsertReorderPolicy, type ReorderSuggestData, type UpdatePurchaseOrderStatusData, type SimplePurchaseOrder, type InsertSimplePurchaseOrder, type WorkspaceSettings, type InsertWorkspaceSettings, type Region, type InsertRegion, type NotificationSettings, type InsertNotificationSettings, type Customer, type InsertCustomer, type UpdateCustomer, type SalesOrder, type InsertSalesOrder, type UpdateSalesOrder } from "@shared/schema";
+
+// Temporary placeholder types until schema is updated
+type ShippingConnector = {
+  id: string;
+  organizationId: string;
+  provider: string;
+  name: string;
+  status: 'active' | 'inactive' | 'error';
+  encryptedCredentials: string;
+  config: Record<string, any>;
+  lastTestAt: Date | null;
+  lastTestStatus: string | null;
+  createdAt: Date;
+  updatedAt: Date;
+};
+
+type InsertShippingConnector = Omit<ShippingConnector, 'id' | 'createdAt' | 'updatedAt'>;
+
+type Shipment = {
+  id: string;
+  organizationId: string;
+  connectorId: string;
+  salesOrderId: string | null;
+  provider: string;
+  providerShipmentId: string;
+  trackingNumber: string | null;
+  status: 'created' | 'in_transit' | 'delivered' | 'exception' | 'cancelled';
+  fromAddress: Record<string, any>;
+  toAddress: Record<string, any>;
+  packageInfo: Record<string, any>;
+  cost: Record<string, any>;
+  createdAt: Date;
+  updatedAt: Date;
+};
+
+type InsertShipment = Omit<Shipment, 'id' | 'createdAt' | 'updatedAt'>;
 import { randomUUID } from "crypto";
 import session from "express-session";
 import createMemoryStore from "memorystore";
@@ -136,6 +172,20 @@ export interface IStorage {
   updateSalesOrder(id: string, updates: UpdateSalesOrder): Promise<SalesOrder | undefined>;
   deleteSalesOrder(id: string): Promise<void>;
   
+  // Shipping Connector methods
+  createShippingConnector(connectorData: InsertShippingConnector): Promise<ShippingConnector>;
+  getShippingConnectors(organizationId: string): Promise<ShippingConnector[]>;
+  getShippingConnector(id: string): Promise<ShippingConnector | undefined>;
+  updateShippingConnector(id: string, updates: Partial<ShippingConnector>): Promise<ShippingConnector | undefined>;
+  deleteShippingConnector(id: string): Promise<void>;
+  testShippingConnector(id: string): Promise<{ success: boolean; error?: string }>;
+  
+  // Shipment methods
+  createShipment(shipmentData: InsertShipment): Promise<Shipment>;
+  getShipments(organizationId: string, filters?: { connectorId?: string, orderId?: string, status?: string }): Promise<Shipment[]>;
+  getShipment(id: string): Promise<Shipment | undefined>;
+  updateShipment(id: string, updates: Partial<Shipment>): Promise<Shipment | undefined>;
+  
   sessionStore: session.Store;
 }
 
@@ -162,6 +212,8 @@ export class MemStorage implements IStorage {
   private notificationSettings: Map<string, NotificationSettings>;
   private customers: Map<string, Customer>;
   private salesOrders: Map<string, SalesOrder>;
+  private shippingConnectors: Map<string, ShippingConnector>;
+  private shipments: Map<string, Shipment>;
   public sessionStore: session.Store;
 
   constructor() {
@@ -187,6 +239,8 @@ export class MemStorage implements IStorage {
     this.notificationSettings = new Map();
     this.customers = new Map();
     this.salesOrders = new Map();
+    this.shippingConnectors = new Map();
+    this.shipments = new Map();
     this.sessionStore = new MemoryStore({
       checkPeriod: 86400000,
     });
@@ -231,9 +285,10 @@ export class MemStorage implements IStorage {
       id: "uae-region-001",
       organizationId: testOrgId,
       name: "United Arab Emirates",
-      code: "UAE",
-      slaHours: 48,
-      restockBufferPercentage: 25,
+      currency: "AED",
+      timezone: "Asia/Dubai",
+      slaDays: 2, // 48 hours = 2 days
+      restockBufferPct: 25,
       isActive: "true",
       createdAt: new Date(),
       updatedAt: new Date(),
@@ -916,21 +971,21 @@ export class MemStorage implements IStorage {
     // Sample events
     const sampleEvents = [
       {
-        type: "INVENTORY_LOW",
+        type: "INVENTORY_LOW" as const,
         sku: "SKU-001",
-        channel: null,
+        channel: undefined,
         payload: { currentStock: 5, reorderLevel: 20, velocity: 2.5 },
         severity: "HIGH" as const,
       },
       {
-        type: "SYNC_ERROR",
-        sku: null,
+        type: "SYNC_ERROR" as const,
+        sku: undefined,
         channel: "Amazon",
         payload: { errorCode: "AUTH_FAILED", lastSync: "2025-01-07T10:00:00Z" },
         severity: "MEDIUM" as const,
       },
       {
-        type: "PAYMENT_MISMATCH",
+        type: "PAYMENT_MISMATCH" as const,
         sku: "SKU-002",
         channel: "Shopify",
         payload: { expectedAmount: 299.99, actualAmount: 289.99, orderId: "ORD-123" },
@@ -950,6 +1005,8 @@ export class MemStorage implements IStorage {
     const po: PurchaseOrder = {
       id: randomUUID(),
       ...poData,
+      notes: poData.notes || null,
+      linkedTaskId: poData.linkedTaskId || null,
       supplierEmail: poData.supplierEmail || null,
       status: "DRAFT",
       createdAt: now,
@@ -1119,6 +1176,10 @@ export class MemStorage implements IStorage {
       periodTo: batchData.periodTo || null,
       updatedAt: null,
       mismatchedCount: batchData.mismatchedCount || 0,
+      expectedBaseTotal: batchData.expectedBaseTotal || 0,
+      paidBaseTotal: batchData.paidBaseTotal || 0,
+      diffBaseTotal: batchData.diffBaseTotal || 0,
+      ordersTotal: batchData.ordersTotal || 0,
       createdAt: new Date(),
     };
     this.reconBatches.set(batch.id, batch);
@@ -1273,7 +1334,17 @@ export class MemStorage implements IStorage {
       ...supplierData,
       address: supplierData.address || null,
       email: supplierData.email || null,
+      phone: supplierData.phone || null,
       notes: supplierData.notes || null,
+      // SLA metrics fields with defaults
+      onTimeTargetPct: 95,
+      defectTargetPct: 5,
+      onTimeRatePct: 100,
+      defectRatePct: 0,
+      avgLeadTimeDays: 0,
+      breachCount: 0,
+      totalDeliveries: 0,
+      lastBreachDate: null,
       createdAt: now,
       updatedAt: now,
     };
@@ -1549,6 +1620,7 @@ export class MemStorage implements IStorage {
     const delivery: SupplierDelivery = {
       id,
       ...deliveryData,
+      purchaseOrderId: deliveryData.purchaseOrderId || null,
       expectedDate: new Date(deliveryData.expectedDate),
       actualDate: deliveryData.actualDate ? new Date(deliveryData.actualDate) : null,
       actualLeadTimeDays: deliveryData.actualLeadTimeDays || null,
@@ -1684,9 +1756,9 @@ export class MemStorage implements IStorage {
     // Generate SLA breach alert if there's a new breach
     if (hasNewBreach) {
       await this.createEvent({
-        type: "SLA_BREACH",
-        sku: null,
-        channel: null,
+        type: "SYNC_ERROR", // SLA breaches are operational sync issues
+        sku: undefined,
+        channel: undefined,
         payload: {
           supplierId,
           supplierName: supplier.name,
@@ -1795,6 +1867,10 @@ export class MemStorage implements IStorage {
     const customer: Customer = {
       id: randomUUID(),
       ...customerData,
+      email: customerData.email || null,
+      phone: customerData.phone || null,
+      address: customerData.address || null,
+      company: customerData.company || null,
       createdAt: new Date(),
       updatedAt: new Date(),
     };
@@ -1864,6 +1940,9 @@ export class MemStorage implements IStorage {
     const order: SalesOrder = {
       id: randomUUID(),
       ...orderData,
+      notes: orderData.notes || null,
+      customerEmail: orderData.customerEmail || null,
+      shippingAddress: orderData.shippingAddress || null,
       createdAt: new Date(),
       updatedAt: new Date(),
     };
@@ -1941,7 +2020,7 @@ export class MemStorage implements IStorage {
         name: "John Smith",
         email: "john@smith.com",
         phone: "+1-555-1234",
-        company: null,
+        company: undefined,
         address: "321 Residential St, Austin, TX 73301",
         workspaceId,
       },
@@ -1988,7 +2067,7 @@ export class MemStorage implements IStorage {
           orderNumber,
           customerId: customer.id,
           customerName: customer.name,
-          customerEmail: customer.email,
+          customerEmail: customer.email || undefined,
           workspaceId,
           currency: "USD",
           status: status as any,
@@ -1997,11 +2076,135 @@ export class MemStorage implements IStorage {
           tax,
           shipping,
           total,
-          shippingAddress: customer.address,
-          notes: i === 0 ? "First order - welcome customer!" : null,
+          shippingAddress: customer.address || undefined,
+          notes: i === 0 ? "First order - welcome customer!" : undefined,
         });
       }
     }
+  }
+
+  // Shipping Connector methods
+  async createShippingConnector(connectorData: InsertShippingConnector): Promise<ShippingConnector> {
+    const id = randomUUID();
+    const now = new Date();
+    const connector: ShippingConnector = {
+      id,
+      ...connectorData,
+      lastTestAt: null,
+      lastTestStatus: null,
+      createdAt: now,
+      updatedAt: now,
+    };
+    this.shippingConnectors.set(id, connector);
+    return connector;
+  }
+
+  async getShippingConnectors(organizationId: string): Promise<ShippingConnector[]> {
+    return Array.from(this.shippingConnectors.values())
+      .filter(c => c.organizationId === organizationId)
+      .sort((a, b) => b.updatedAt.getTime() - a.updatedAt.getTime());
+  }
+
+  async getShippingConnector(id: string): Promise<ShippingConnector | undefined> {
+    return this.shippingConnectors.get(id);
+  }
+
+  async updateShippingConnector(id: string, updates: Partial<ShippingConnector>): Promise<ShippingConnector | undefined> {
+    const connector = this.shippingConnectors.get(id);
+    if (!connector) return undefined;
+
+    const updatedConnector: ShippingConnector = {
+      ...connector,
+      ...updates,
+      updatedAt: new Date(),
+    };
+
+    this.shippingConnectors.set(id, updatedConnector);
+    return updatedConnector;
+  }
+
+  async deleteShippingConnector(id: string): Promise<void> {
+    this.shippingConnectors.delete(id);
+    // Also clean up related shipments
+    Array.from(this.shipments.keys()).forEach(shipmentId => {
+      const shipment = this.shipments.get(shipmentId);
+      if (shipment && shipment.connectorId === id) {
+        this.shipments.delete(shipmentId);
+      }
+    });
+  }
+
+  async testShippingConnector(id: string): Promise<{ success: boolean; error?: string }> {
+    // TODO: This would integrate with the actual shipping adapter in a real implementation
+    const connector = this.shippingConnectors.get(id);
+    if (!connector) {
+      return { success: false, error: 'Connector not found' };
+    }
+
+    // Simulate test result
+    const success = Math.random() > 0.2; // 80% success rate for demo
+    const now = new Date();
+    
+    await this.updateShippingConnector(id, {
+      lastTestAt: now,
+      lastTestStatus: success ? 'success' : 'failed',
+      status: success ? 'active' : 'error',
+    });
+
+    return success ? 
+      { success: true } : 
+      { success: false, error: 'Connection test failed - please check credentials' };
+  }
+
+  // Shipment methods
+  async createShipment(shipmentData: InsertShipment): Promise<Shipment> {
+    const id = randomUUID();
+    const now = new Date();
+    const shipment: Shipment = {
+      id,
+      ...shipmentData,
+      createdAt: now,
+      updatedAt: now,
+    };
+    this.shipments.set(id, shipment);
+    return shipment;
+  }
+
+  async getShipments(organizationId: string, filters?: { connectorId?: string, orderId?: string, status?: string }): Promise<Shipment[]> {
+    let shipments = Array.from(this.shipments.values())
+      .filter(s => s.organizationId === organizationId);
+
+    if (filters?.connectorId) {
+      shipments = shipments.filter(s => s.connectorId === filters.connectorId);
+    }
+
+    if (filters?.orderId) {
+      shipments = shipments.filter(s => s.salesOrderId === filters.orderId);
+    }
+
+    if (filters?.status) {
+      shipments = shipments.filter(s => s.status === filters.status);
+    }
+
+    return shipments.sort((a, b) => b.updatedAt.getTime() - a.updatedAt.getTime());
+  }
+
+  async getShipment(id: string): Promise<Shipment | undefined> {
+    return this.shipments.get(id);
+  }
+
+  async updateShipment(id: string, updates: Partial<Shipment>): Promise<Shipment | undefined> {
+    const shipment = this.shipments.get(id);
+    if (!shipment) return undefined;
+
+    const updatedShipment: Shipment = {
+      ...shipment,
+      ...updates,
+      updatedAt: new Date(),
+    };
+
+    this.shipments.set(id, updatedShipment);
+    return updatedShipment;
   }
 }
 

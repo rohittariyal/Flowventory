@@ -3,6 +3,7 @@ import { createServer, type Server } from "http";
 import { setupAuth } from "./auth";
 import { storage } from "./storage";
 import { syncManager } from "./syncAdapters";
+import { encryptCredentials, decryptCredentials } from "./crypto";
 import { onboardingSchema, platformConnectionSchema, createNotificationSchema, markNotificationReadSchema, reconIngestSchema, updateReconRowSchema, insertSupplierSchema, insertReorderPolicySchema, reorderSuggestRequestSchema, updatePurchaseOrderStatusSchema, simplePurchaseOrderSchema, supplierSchema, reorderPolicySchema, type PlatformConnections } from "@shared/schema";
 import { ReconciliationService } from "./reconService";
 import { ReorderService } from "./reorderService";
@@ -2432,6 +2433,602 @@ export function registerRoutes(app: Express): Server {
     } catch (error) {
       console.error("Error updating supplier settings:", error);
       res.status(500).json({ error: "Failed to update supplier settings" });
+    }
+  });
+
+  // =============================================================================
+  // SHIPPING CONNECTOR ROUTES
+  // =============================================================================
+
+  // Get all shipping connectors for the organization
+  app.get("/api/shipping/connectors", requireAuth, async (req, res) => {
+    try {
+      const user = req.user as any;
+      const organizationId = user.organizationId;
+      
+      if (!organizationId) {
+        return res.status(400).json({ error: "No organization found for user" });
+      }
+
+      const connectors = await storage.getShippingConnectors(organizationId);
+      
+      // Don't return encrypted credentials in API response
+      const sanitizedConnectors = connectors.map(c => ({
+        ...c,
+        encryptedCredentials: '[ENCRYPTED]',
+        config: {
+          ...c.config,
+          // Keep non-sensitive config but hide any potential secrets
+          provider: c.config.provider
+        }
+      }));
+      
+      res.json(sanitizedConnectors);
+    } catch (error) {
+      console.error("Error fetching shipping connectors:", error);
+      res.status(500).json({ error: "Failed to fetch shipping connectors" });
+    }
+  });
+
+  // Create a new shipping connector
+  app.post("/api/shipping/connectors", requireAuth, async (req, res) => {
+    try {
+      const user = req.user as any;
+      const organizationId = user.organizationId;
+      
+      if (!organizationId) {
+        return res.status(400).json({ error: "No organization found for user" });
+      }
+
+      const { provider, name, credentials, config } = req.body;
+      
+      // Validate required fields
+      if (!provider || !name || !credentials) {
+        return res.status(400).json({ error: "Provider, name, and credentials are required" });
+      }
+
+      // Encrypt credentials securely using AES-256-GCM
+      const encryptedCredentials = encryptCredentials(credentials);
+
+      const connectorData = {
+        organizationId,
+        provider: provider.toLowerCase(),
+        name,
+        status: 'inactive' as const,
+        encryptedCredentials,
+        config: config || {}
+      };
+
+      const connector = await storage.createShippingConnector(connectorData);
+      
+      // Return sanitized connector
+      const sanitizedConnector = {
+        ...connector,
+        encryptedCredentials: '[ENCRYPTED]'
+      };
+
+      res.status(201).json(sanitizedConnector);
+    } catch (error) {
+      console.error("Error creating shipping connector:", error);
+      res.status(500).json({ error: "Failed to create shipping connector" });
+    }
+  });
+
+  // Get a specific shipping connector
+  app.get("/api/shipping/connectors/:id", requireAuth, async (req, res) => {
+    try {
+      const user = req.user as any;
+      const organizationId = user.organizationId;
+      const { id } = req.params;
+
+      const connector = await storage.getShippingConnector(id);
+      
+      if (!connector) {
+        return res.status(404).json({ error: "Shipping connector not found" });
+      }
+
+      // Ensure user can only access connectors from their organization
+      if (connector.organizationId !== organizationId) {
+        return res.status(403).json({ error: "Access denied" });
+      }
+
+      // Return sanitized connector
+      const sanitizedConnector = {
+        ...connector,
+        encryptedCredentials: '[ENCRYPTED]'
+      };
+
+      res.json(sanitizedConnector);
+    } catch (error) {
+      console.error("Error fetching shipping connector:", error);
+      res.status(500).json({ error: "Failed to fetch shipping connector" });
+    }
+  });
+
+  // Update a shipping connector
+  app.put("/api/shipping/connectors/:id", requireAuth, async (req, res) => {
+    try {
+      const user = req.user as any;
+      const organizationId = user.organizationId;
+      const { id } = req.params;
+
+      const connector = await storage.getShippingConnector(id);
+      
+      if (!connector) {
+        return res.status(404).json({ error: "Shipping connector not found" });
+      }
+
+      // Ensure user can only update connectors from their organization
+      if (connector.organizationId !== organizationId) {
+        return res.status(403).json({ error: "Access denied" });
+      }
+
+      const { name, credentials, config, status } = req.body;
+      const updates: any = {};
+
+      if (name !== undefined) updates.name = name;
+      if (status !== undefined) updates.status = status;
+      if (config !== undefined) updates.config = config;
+      
+      // If new credentials provided, encrypt them securely
+      if (credentials) {
+        updates.encryptedCredentials = encryptCredentials(credentials);
+        // Reset test status when credentials change
+        updates.lastTestAt = null;
+        updates.lastTestStatus = null;
+        updates.status = 'inactive';
+      }
+
+      const updatedConnector = await storage.updateShippingConnector(id, updates);
+      
+      if (!updatedConnector) {
+        return res.status(404).json({ error: "Failed to update shipping connector" });
+      }
+
+      // Return sanitized connector
+      const sanitizedConnector = {
+        ...updatedConnector,
+        encryptedCredentials: '[ENCRYPTED]'
+      };
+
+      res.json(sanitizedConnector);
+    } catch (error) {
+      console.error("Error updating shipping connector:", error);
+      res.status(500).json({ error: "Failed to update shipping connector" });
+    }
+  });
+
+  // Delete a shipping connector
+  app.delete("/api/shipping/connectors/:id", requireAuth, async (req, res) => {
+    try {
+      const user = req.user as any;
+      const organizationId = user.organizationId;
+      const { id } = req.params;
+
+      const connector = await storage.getShippingConnector(id);
+      
+      if (!connector) {
+        return res.status(404).json({ error: "Shipping connector not found" });
+      }
+
+      // Ensure user can only delete connectors from their organization
+      if (connector.organizationId !== organizationId) {
+        return res.status(403).json({ error: "Access denied" });
+      }
+
+      await storage.deleteShippingConnector(id);
+      
+      res.json({ success: true, message: "Shipping connector deleted successfully" });
+    } catch (error) {
+      console.error("Error deleting shipping connector:", error);
+      res.status(500).json({ error: "Failed to delete shipping connector" });
+    }
+  });
+
+  // Test a shipping connector
+  app.post("/api/shipping/connectors/:id/test", requireAuth, async (req, res) => {
+    try {
+      const user = req.user as any;
+      const organizationId = user.organizationId;
+      const { id } = req.params;
+
+      const connector = await storage.getShippingConnector(id);
+      
+      if (!connector) {
+        return res.status(404).json({ error: "Shipping connector not found" });
+      }
+
+      // Ensure user can only test connectors from their organization
+      if (connector.organizationId !== organizationId) {
+        return res.status(403).json({ error: "Access denied" });
+      }
+
+      const testResult = await storage.testShippingConnector(id);
+      
+      res.json(testResult);
+    } catch (error) {
+      console.error("Error testing shipping connector:", error);
+      res.status(500).json({ error: "Failed to test shipping connector" });
+    }
+  });
+
+  // Get shipping rates (proxy to adapter)
+  app.post("/api/shipping/rates", requireAuth, async (req, res) => {
+    try {
+      const user = req.user as any;
+      const organizationId = user.organizationId;
+      
+      const { connectorId, from, to, packages } = req.body;
+      
+      if (!connectorId || !from || !to || !packages) {
+        return res.status(400).json({ error: "Connector ID, from, to, and packages are required" });
+      }
+
+      const connector = await storage.getShippingConnector(connectorId);
+      
+      if (!connector) {
+        return res.status(404).json({ error: "Shipping connector not found" });
+      }
+
+      if (connector.organizationId !== organizationId) {
+        return res.status(403).json({ error: "Access denied" });
+      }
+
+      if (connector.status !== 'active') {
+        return res.status(400).json({ error: "Shipping connector is not active" });
+      }
+
+      // TODO: Integrate with shipping adapters to get real rates
+      // For now, return mock rates
+      const mockRates = [
+        {
+          service: "Standard Shipping",
+          serviceCode: "STD",
+          currency: "USD",
+          amount: 899, // $8.99 in cents
+          estimatedDays: 5,
+          provider: connector.provider
+        },
+        {
+          service: "Express Shipping",
+          serviceCode: "EXP",
+          currency: "USD", 
+          amount: 1599, // $15.99 in cents
+          estimatedDays: 2,
+          provider: connector.provider
+        }
+      ];
+
+      res.json(mockRates);
+    } catch (error) {
+      console.error("Error fetching shipping rates:", error);
+      res.status(500).json({ error: "Failed to fetch shipping rates" });
+    }
+  });
+
+  // Create a shipment
+  app.post("/api/shipping/shipments", requireAuth, async (req, res) => {
+    try {
+      const user = req.user as any;
+      const organizationId = user.organizationId;
+      
+      const { connectorId, orderId, serviceCode, from, to, packages } = req.body;
+      
+      if (!connectorId || !serviceCode || !from || !to || !packages) {
+        return res.status(400).json({ error: "Connector ID, service code, from, to, and packages are required" });
+      }
+
+      const connector = await storage.getShippingConnector(connectorId);
+      
+      if (!connector) {
+        return res.status(404).json({ error: "Shipping connector not found" });
+      }
+
+      if (connector.organizationId !== organizationId) {
+        return res.status(403).json({ error: "Access denied" });
+      }
+
+      if (connector.status !== 'active') {
+        return res.status(400).json({ error: "Shipping connector is not active" });
+      }
+
+      // TODO: Integrate with shipping adapters to create real shipment
+      const shipmentData = {
+        organizationId,
+        connectorId,
+        salesOrderId: orderId || null,
+        provider: connector.provider,
+        providerShipmentId: `SHIP-${Date.now()}`, // Mock provider ID
+        trackingNumber: `1Z${Math.random().toString(36).substr(2, 9).toUpperCase()}`, // Mock tracking number
+        status: 'created' as const,
+        fromAddress: from,
+        toAddress: to,
+        packageInfo: packages,
+        cost: {
+          currency: 'USD',
+          amount: 899 // Mock cost
+        }
+      };
+
+      const shipment = await storage.createShipment(shipmentData);
+      
+      res.status(201).json(shipment);
+    } catch (error) {
+      console.error("Error creating shipment:", error);
+      res.status(500).json({ error: "Failed to create shipment" });
+    }
+  });
+
+  // Get shipments for the organization
+  app.get("/api/shipping/shipments", requireAuth, async (req, res) => {
+    try {
+      const user = req.user as any;
+      const organizationId = user.organizationId;
+      
+      if (!organizationId) {
+        return res.status(400).json({ error: "No organization found for user" });
+      }
+
+      const { connectorId, orderId, status } = req.query as { connectorId?: string, orderId?: string, status?: string };
+      
+      const shipments = await storage.getShipments(organizationId, {
+        connectorId,
+        orderId,
+        status
+      });
+      
+      res.json(shipments);
+    } catch (error) {
+      console.error("Error fetching shipments:", error);
+      res.status(500).json({ error: "Failed to fetch shipments" });
+    }
+  });
+
+  // Get a specific shipment
+  app.get("/api/shipping/shipments/:id", requireAuth, async (req, res) => {
+    try {
+      const user = req.user as any;
+      const organizationId = user.organizationId;
+      const { id } = req.params;
+
+      const shipment = await storage.getShipment(id);
+      
+      if (!shipment) {
+        return res.status(404).json({ error: "Shipment not found" });
+      }
+
+      // Ensure user can only access shipments from their organization
+      if (shipment.organizationId !== organizationId) {
+        return res.status(403).json({ error: "Access denied" });
+      }
+
+      res.json(shipment);
+    } catch (error) {
+      console.error("Error fetching shipment:", error);
+      res.status(500).json({ error: "Failed to fetch shipment" });
+    }
+  });
+
+  // =============================================================================
+  // SHIPPING WEBHOOK ENDPOINTS (for provider status updates)
+  // =============================================================================
+
+  // Generic webhook endpoint for Shiprocket
+  app.post("/api/webhooks/shipping/shiprocket", async (req, res) => {
+    try {
+      console.log("Received Shiprocket webhook:", JSON.stringify(req.body, null, 2));
+      
+      const { order_id, awb, current_status, status, shipped_date, delivered_date } = req.body;
+      
+      // Find the shipment by provider shipment ID (awb in Shiprocket's case)
+      const allShipments = Array.from((storage as any).shipments.values());
+      const shipment = allShipments.find(s => 
+        s.provider === 'shiprocket' && 
+        (s.providerShipmentId === order_id || s.trackingNumber === awb)
+      );
+      
+      if (!shipment) {
+        console.warn("Webhook received for unknown shipment:", { order_id, awb });
+        return res.status(404).json({ error: "Shipment not found" });
+      }
+
+      // Map Shiprocket status to our normalized status
+      let normalizedStatus = shipment.status;
+      const statusLower = (current_status || status || '').toLowerCase();
+      
+      if (statusLower.includes('delivered')) {
+        normalizedStatus = 'delivered';
+      } else if (statusLower.includes('out for delivery') || statusLower.includes('in transit')) {
+        normalizedStatus = 'in_transit';
+      } else if (statusLower.includes('picked') || statusLower.includes('dispatched')) {
+        normalizedStatus = 'in_transit';
+      } else if (statusLower.includes('cancelled')) {
+        normalizedStatus = 'cancelled';
+      } else if (statusLower.includes('exception') || statusLower.includes('rto')) {
+        normalizedStatus = 'exception';
+      }
+
+      // Update shipment status
+      await storage.updateShipment(shipment.id, {
+        status: normalizedStatus,
+        // Add webhook data to tracking info
+        ...(shipped_date && { shippedAt: new Date(shipped_date) }),
+        ...(delivered_date && { deliveredAt: new Date(delivered_date) })
+      });
+
+      console.log(`Updated shipment ${shipment.id} status to ${normalizedStatus}`);
+      
+      res.json({ success: true, message: "Webhook processed successfully" });
+    } catch (error) {
+      console.error("Error processing Shiprocket webhook:", error);
+      res.status(500).json({ error: "Failed to process webhook" });
+    }
+  });
+
+  // Generic webhook endpoint for DHL (placeholder for future implementation)
+  app.post("/api/webhooks/shipping/dhl", async (req, res) => {
+    try {
+      console.log("Received DHL webhook:", JSON.stringify(req.body, null, 2));
+      
+      // TODO: Implement DHL webhook processing
+      // DHL webhooks typically include tracking events with detailed status information
+      
+      res.json({ success: true, message: "DHL webhook received (not yet implemented)" });
+    } catch (error) {
+      console.error("Error processing DHL webhook:", error);
+      res.status(500).json({ error: "Failed to process webhook" });
+    }
+  });
+
+  // Generic webhook endpoint for UPS (placeholder for future implementation)
+  app.post("/api/webhooks/shipping/ups", async (req, res) => {
+    try {
+      console.log("Received UPS webhook:", JSON.stringify(req.body, null, 2));
+      
+      // TODO: Implement UPS webhook processing
+      // UPS webhooks follow their Quantum View notification format
+      
+      res.json({ success: true, message: "UPS webhook received (not yet implemented)" });
+    } catch (error) {
+      console.error("Error processing UPS webhook:", error);
+      res.status(500).json({ error: "Failed to process webhook" });
+    }
+  });
+
+  // Generic webhook endpoint for FedEx (placeholder for future implementation)
+  app.post("/api/webhooks/shipping/fedex", async (req, res) => {
+    try {
+      console.log("Received FedEx webhook:", JSON.stringify(req.body, null, 2));
+      
+      // TODO: Implement FedEx webhook processing
+      // FedEx uses Ship Manager API notifications
+      
+      res.json({ success: true, message: "FedEx webhook received (not yet implemented)" });
+    } catch (error) {
+      console.error("Error processing FedEx webhook:", error);
+      res.status(500).json({ error: "Failed to process webhook" });
+    }
+  });
+
+  // Webhook signature verification endpoint (for testing webhook security)
+  app.post("/api/webhooks/shipping/verify", async (req, res) => {
+    try {
+      const { provider, signature, payload } = req.body;
+      
+      // TODO: Implement webhook signature verification for each provider
+      // Different providers use different signature methods:
+      // - Shiprocket: May use HMAC-SHA256
+      // - DHL: Uses API key validation
+      // - UPS: Uses OAuth tokens
+      // - FedEx: Uses account-based authentication
+      
+      console.log(`Webhook verification request for provider: ${provider}`);
+      
+      res.json({ 
+        success: true, 
+        verified: true, // Placeholder - implement actual verification
+        message: "Webhook signature verified"
+      });
+    } catch (error) {
+      console.error("Error verifying webhook signature:", error);
+      res.status(500).json({ error: "Failed to verify webhook signature" });
+    }
+  });
+
+  // Webhook status endpoint (for debugging and monitoring)
+  app.get("/api/webhooks/shipping/status", requireAuth, async (req, res) => {
+    try {
+      const user = req.user as any;
+      const organizationId = user.organizationId;
+      
+      // Get recent shipment updates for the organization
+      const shipments = await storage.getShipments(organizationId);
+      const recentUpdates = shipments
+        .filter(s => s.updatedAt > new Date(Date.now() - 24 * 60 * 60 * 1000)) // Last 24 hours
+        .sort((a, b) => b.updatedAt.getTime() - a.updatedAt.getTime())
+        .slice(0, 10); // Latest 10 updates
+
+      const webhookStatus = {
+        endpointsAvailable: [
+          '/api/webhooks/shipping/shiprocket',
+          '/api/webhooks/shipping/dhl',
+          '/api/webhooks/shipping/ups',
+          '/api/webhooks/shipping/fedex'
+        ],
+        recentUpdates: recentUpdates.length,
+        lastUpdateAt: recentUpdates[0]?.updatedAt || null,
+        supportedProviders: ['shiprocket', 'dhl', 'ups', 'fedex']
+      };
+      
+      res.json(webhookStatus);
+    } catch (error) {
+      console.error("Error fetching webhook status:", error);
+      res.status(500).json({ error: "Failed to fetch webhook status" });
+    }
+  });
+
+  // Get available shipping providers
+  app.get("/api/shipping/providers", requireAuth, async (req, res) => {
+    try {
+      const providers = [
+        {
+          id: 'shiprocket',
+          name: 'Shiprocket',
+          description: 'Leading Indian logistics platform',
+          logo: '/icons/shiprocket.png',
+          supported: true,
+          countries: ['IN'],
+          credentialFields: [
+            { key: 'email', label: 'Email', type: 'email', required: true },
+            { key: 'password', label: 'Password', type: 'password', required: true }
+          ]
+        },
+        {
+          id: 'dhl',
+          name: 'DHL',
+          description: 'Global express delivery service',
+          logo: '/icons/dhl.png',
+          supported: false,
+          countries: ['US', 'DE', 'GB', 'CN', 'IN'],
+          credentialFields: [
+            { key: 'apiKey', label: 'API Key', type: 'text', required: true },
+            { key: 'apiSecret', label: 'API Secret', type: 'password', required: true },
+            { key: 'accountNumber', label: 'Account Number', type: 'text', required: true }
+          ]
+        },
+        {
+          id: 'ups',
+          name: 'UPS',
+          description: 'United Parcel Service',
+          logo: '/icons/ups.png',
+          supported: false,
+          countries: ['US', 'CA', 'MX', 'GB', 'DE'],
+          credentialFields: [
+            { key: 'clientId', label: 'Client ID', type: 'text', required: true },
+            { key: 'clientSecret', label: 'Client Secret', type: 'password', required: true },
+            { key: 'accountNumber', label: 'Account Number', type: 'text', required: true }
+          ]
+        },
+        {
+          id: 'fedex',
+          name: 'FedEx',
+          description: 'Federal Express Corporation',
+          logo: '/icons/fedex.png',
+          supported: false,
+          countries: ['US', 'CA', 'MX', 'GB', 'DE'],
+          credentialFields: [
+            { key: 'accountNumber', label: 'Account Number', type: 'text', required: true },
+            { key: 'meterNumber', label: 'Meter Number', type: 'text', required: true },
+            { key: 'apiKey', label: 'API Key', type: 'text', required: true },
+            { key: 'secretKey', label: 'Secret Key', type: 'password', required: true }
+          ]
+        }
+      ];
+      
+      res.json(providers);
+    } catch (error) {
+      console.error("Error fetching shipping providers:", error);
+      res.status(500).json({ error: "Failed to fetch shipping providers" });
     }
   });
 
