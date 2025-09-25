@@ -81,7 +81,15 @@ export function setupAuth(app: Express) {
         console.error("Error adding test alerts on registration:", error);
       }
       
-      res.status(201).json(user);
+      // Ensure session is saved before responding
+      req.session.save((saveErr) => {
+        if (saveErr) {
+          console.error("Session save error:", saveErr);
+          return next(saveErr);
+        }
+        console.log("Session saved successfully for user:", user.id);
+        res.status(201).json(user);
+      });
     });
   });
 
