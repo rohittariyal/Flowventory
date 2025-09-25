@@ -4,10 +4,13 @@ import type {
   TaxRegion, 
   TaxRule, 
   TaxProduct, 
+  TaxCustomer,
   TaxOrder, 
   TaxInvoice, 
   OrderItem, 
-  OrderTotals 
+  OrderTotals,
+  PlaceOfSupply,
+  TaxBreakup
 } from "@shared/schema";
 
 // Currency formatting utility
@@ -56,41 +59,74 @@ export function initializeFinanceSettings(): void {
     const defaultSettings: FinanceSettings = {
       baseCurrency: "USD",
       displayLocale: "en-US",
+      businessState: "KA", // Default business state for India GST demo
       regions: [
-        {
-          id: "US",
-          name: "United States",
-          currency: "USD",
-          locale: "en-US",
-          taxRules: [
-            { id: "us_std", name: "Sales Tax 8%", rate: 0.08, category: "state" }
-          ]
-        },
+        // UK (VAT)
         {
           id: "UK",
           name: "United Kingdom",
           currency: "GBP",
           locale: "en-GB",
           taxRules: [
-            { id: "uk_vat", name: "VAT 20%", rate: 0.20, category: "standard" }
+            { id: "uk_std", name: "VAT 20% (Standard)", rate: 0.20, category: "standard" },
+            { id: "uk_red", name: "VAT 5% (Reduced)", rate: 0.05, category: "reduced" },
+            { id: "uk_zero", name: "VAT 0% (Zero)", rate: 0, category: "zero" }
           ]
         },
+
+        // UAE (VAT)
         {
           id: "UAE",
           name: "United Arab Emirates",
           currency: "AED",
           locale: "en-AE",
           taxRules: [
-            { id: "ae_vat", name: "VAT 5%", rate: 0.05, category: "standard" }
+            { id: "ae_std", name: "VAT 5% (Standard)", rate: 0.05, category: "standard" },
+            { id: "ae_zero", name: "VAT 0% (Zero)", rate: 0, category: "zero" }
           ]
         },
+
+        // Singapore (GST)
         {
           id: "SG",
           name: "Singapore",
           currency: "SGD",
           locale: "en-SG",
           taxRules: [
-            { id: "sg_gst", name: "GST 9%", rate: 0.09, category: "standard" }
+            { id: "sg_std", name: "GST 9% (Standard)", rate: 0.09, category: "standard" },
+            { id: "sg_zero", name: "GST 0% (Zero)", rate: 0, category: "zero" }
+          ]
+        },
+
+        // India (GST, simplified)
+        {
+          id: "IN",
+          name: "India",
+          currency: "INR",
+          locale: "en-IN",
+          taxRules: [
+            { id: "in_gst_18", name: "GST 18% (Std)", rate: 0.18, category: "standard" },
+            { id: "in_gst_12", name: "GST 12% (Reduced)", rate: 0.12, category: "reduced" },
+            { id: "in_gst_0", name: "GST 0% (Zero/Exempt)", rate: 0, category: "zero" }
+          ],
+          states: ["KA", "MH", "DL", "TN", "GJ", "UP", "WB", "RJ"]
+        },
+
+        // US (Sales Tax, simplified per-state)
+        {
+          id: "US",
+          name: "United States",
+          currency: "USD",
+          locale: "en-US",
+          taxRules: [
+            { id: "us_std", name: "Default Sales Tax", rate: 0.08, category: "state" }
+          ],
+          states: ["CA", "NY", "TX", "FL"],
+          stateRates: [
+            { code: "CA", rate: 0.085 },
+            { code: "NY", rate: 0.08875 },
+            { code: "TX", rate: 0.0825 },
+            { code: "FL", rate: 0.07 }
           ]
         }
       ]
@@ -252,6 +288,89 @@ export function saveTaxInvoices(invoices: TaxInvoice[]): void {
   localStorage.setItem(key, JSON.stringify(invoices));
 }
 
+// Customer management functions
+export function initializeCustomersForTax(): void {
+  const key = "flowventory:customers";
+  const existing = localStorage.getItem(key);
+  
+  if (!existing) {
+    const defaultCustomers: TaxCustomer[] = [
+      {
+        id: "cust_uk_1",
+        name: "British Electronics Ltd",
+        email: "orders@britishelectronics.co.uk",
+        regionId: "UK",
+        country: "United Kingdom",
+        gstinOrVatNo: "GB123456789"
+      },
+      {
+        id: "cust_uae_1", 
+        name: "Emirates Trading LLC",
+        email: "procurement@emiratestrading.ae",
+        regionId: "UAE",
+        country: "United Arab Emirates",
+        gstinOrVatNo: "100123456700003"
+      },
+      {
+        id: "cust_sg_1",
+        name: "Singapore Tech Pte Ltd",
+        email: "orders@sgtech.com.sg", 
+        regionId: "SG",
+        country: "Singapore",
+        gstinOrVatNo: "200012345M"
+      },
+      {
+        id: "cust_in_ka_1",
+        name: "Karnataka Software Solutions",
+        email: "billing@karnatakasoft.in",
+        regionId: "IN", 
+        country: "India",
+        state: "KA",
+        gstinOrVatNo: "29ABCDE1234F1Z5"
+      },
+      {
+        id: "cust_in_mh_1",
+        name: "Mumbai Manufacturing Co",
+        email: "accounts@mumbaimfg.in",
+        regionId: "IN",
+        country: "India", 
+        state: "MH",
+        gstinOrVatNo: "27ABCDE1234F1Z5"
+      },
+      {
+        id: "cust_us_ca_1",
+        name: "California Corp",
+        email: "purchasing@californiacorp.com",
+        regionId: "US",
+        country: "United States",
+        state: "CA"
+      },
+      {
+        id: "cust_us_ny_1",
+        name: "New York Enterprises",
+        email: "orders@nyenterprises.com", 
+        regionId: "US",
+        country: "United States",
+        state: "NY"
+      }
+    ];
+    localStorage.setItem(key, JSON.stringify(defaultCustomers));
+  }
+}
+
+// Utility to get customers
+export function getTaxCustomers(): TaxCustomer[] {
+  const key = "flowventory:customers";
+  const data = localStorage.getItem(key);
+  return data ? JSON.parse(data) : [];
+}
+
+// Utility to save customers
+export function saveTaxCustomers(customers: TaxCustomer[]): void {
+  const key = "flowventory:customers";
+  localStorage.setItem(key, JSON.stringify(customers));
+}
+
 // Add a new tax rule to a region
 export function addTaxRuleToRegion(regionId: string, taxRule: TaxRule): void {
   const settings = getFinanceSettings();
@@ -287,8 +406,134 @@ export function getEffectiveTaxRate(productId: string, regionId: string, selecte
     if (taxRule) return taxRule.rate;
   }
 
-  // Default to first tax rule in region
-  return region.taxRules[0]?.rate || 0;
+  // Use product tax category to find matching rule
+  if (product?.taxCategory) {
+    const taxRule = region.taxRules.find(rule => rule.category === product.taxCategory);
+    if (taxRule) return taxRule.rate;
+  }
+
+  // Default to standard rate in region
+  const standardRule = region.taxRules.find(rule => rule.category === "standard");
+  return standardRule?.rate || 0;
+}
+
+// Advanced tax calculation for different regions with place of supply
+export function calculateRegionTax(
+  regionId: string,
+  customerState: string | undefined,
+  businessState: string | undefined,
+  lineItems: OrderItem[],
+  productTaxCategories: Record<string, string> = {}
+): { 
+  totals: OrderTotals; 
+  taxBreakup?: TaxBreakup;
+  lineItemTaxDetails: Array<{
+    productId: string;
+    taxRate: number;
+    taxAmount: number;
+    taxBreakup?: TaxBreakup;
+  }>;
+} {
+  const settings = getFinanceSettings();
+  if (!settings) {
+    return { 
+      totals: { sub: 0, tax: 0, grand: 0, currency: "USD" },
+      lineItemTaxDetails: []
+    };
+  }
+
+  const region = settings.regions.find(r => r.id === regionId);
+  if (!region) {
+    return { 
+      totals: { sub: 0, tax: 0, grand: 0, currency: "USD" },
+      lineItemTaxDetails: []
+    };
+  }
+
+  let subtotal = 0;
+  let totalTax = 0;
+  let totalCGST = 0;
+  let totalSGST = 0; 
+  let totalIGST = 0;
+  const lineItemTaxDetails: Array<{
+    productId: string;
+    taxRate: number;
+    taxAmount: number;
+    taxBreakup?: TaxBreakup;
+  }> = [];
+
+  lineItems.forEach(item => {
+    const lineSubtotal = item.qty * item.unitPrice;
+    subtotal += lineSubtotal;
+
+    // Get tax rate for this line item
+    let taxRate = 0;
+    let lineTaxBreakup: TaxBreakup | undefined;
+
+    if (regionId === "IN" && businessState && customerState) {
+      // India GST logic
+      const productCategory = productTaxCategories[item.productId] || "standard";
+      const gstRule = region.taxRules.find(rule => rule.category === productCategory);
+      
+      if (gstRule) {
+        taxRate = gstRule.rate;
+        
+        if (businessState === customerState) {
+          // Same state: CGST + SGST
+          const cgstRate = taxRate / 2;
+          const sgstRate = taxRate / 2;
+          const cgstAmount = lineSubtotal * cgstRate;
+          const sgstAmount = lineSubtotal * sgstRate;
+          
+          totalCGST += cgstAmount;
+          totalSGST += sgstAmount;
+          lineTaxBreakup = { cgst: cgstAmount, sgst: sgstAmount };
+        } else {
+          // Different state: IGST
+          const igstAmount = lineSubtotal * taxRate;
+          totalIGST += igstAmount;
+          lineTaxBreakup = { igst: igstAmount };
+        }
+      }
+    } else if (regionId === "US" && customerState && region.stateRates) {
+      // US state-specific tax
+      const stateRate = region.stateRates.find(sr => sr.code === customerState);
+      taxRate = stateRate ? stateRate.rate : (region.taxRules[0]?.rate || 0);
+    } else {
+      // Standard regional tax (UK, UAE, SG)
+      const productCategory = productTaxCategories[item.productId] || "standard";
+      const taxRule = region.taxRules.find(rule => rule.category === productCategory);
+      taxRate = taxRule?.rate || 0;
+    }
+
+    const lineTax = lineSubtotal * taxRate;
+    totalTax += lineTax;
+
+    lineItemTaxDetails.push({
+      productId: item.productId,
+      taxRate,
+      taxAmount: lineTax,
+      taxBreakup: lineTaxBreakup
+    });
+  });
+
+  const totals: OrderTotals = {
+    sub: subtotal,
+    tax: totalTax,
+    grand: subtotal + totalTax,
+    currency: region.currency
+  };
+
+  let taxBreakup: TaxBreakup | undefined;
+  if (regionId === "IN" && (totalCGST > 0 || totalSGST > 0 || totalIGST > 0)) {
+    taxBreakup = {
+      cgst: totalCGST > 0 ? totalCGST : undefined,
+      sgst: totalSGST > 0 ? totalSGST : undefined,
+      igst: totalIGST > 0 ? totalIGST : undefined
+    };
+  }
+
+  return { totals, taxBreakup, lineItemTaxDetails };
 }
 
 // Generate compliance report data
@@ -380,5 +625,6 @@ export function exportComplianceReportCSV(data: ComplianceReportRow[]): void {
 export function initializeTaxationData(): void {
   initializeFinanceSettings();
   initializeProductsForTax();
+  initializeCustomersForTax();
   initializeOrdersForTax();
 }
