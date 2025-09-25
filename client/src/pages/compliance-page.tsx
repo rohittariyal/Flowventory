@@ -13,7 +13,10 @@ import {
   getFinanceSettings, 
   generateComplianceReport, 
   exportComplianceReportCSV,
-  currencyFormat 
+  currencyFormat,
+  initializeFinanceSettings,
+  initializeProductsForTax,
+  initializeOrdersForTax
 } from "@/utils/taxation";
 
 export default function CompliancePage() {
@@ -29,6 +32,11 @@ export default function CompliancePage() {
   const { toast } = useToast();
 
   useEffect(() => {
+    // Initialize sample data if not present
+    initializeFinanceSettings();
+    initializeProductsForTax();
+    initializeOrdersForTax();
+    
     const financeSettings = getFinanceSettings();
     setSettings(financeSettings);
     generateReport();

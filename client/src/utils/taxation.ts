@@ -330,16 +330,19 @@ export function generateComplianceReport(
       const region = settings.regions.find(r => r.id === item.regionId);
       const taxRule = region?.taxRules.find(rule => rule.id === item.taxRuleId);
       
+      // Handle cases where totals might be undefined
+      const totals = item.totals || { sub: 0, tax: 0, grand: 0, currency: 'USD' };
+      
       return {
         docNo: item.number,
         date: new Date(item.createdAt).toLocaleDateString(),
         customerSupplier: item.customerName || "Unknown",
         region: region?.name || item.regionId,
-        subtotal: item.totals.sub,
-        tax: item.totals.tax,
-        grand: item.totals.grand,
+        subtotal: totals.sub,
+        tax: totals.tax,
+        grand: totals.grand,
         taxRule: taxRule?.name || "Unknown",
-        currency: item.totals.currency
+        currency: totals.currency
       };
     });
 }
