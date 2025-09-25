@@ -527,6 +527,103 @@ export type InsertRule = typeof rules.$inferInsert;
 export type CreateCommentData = z.infer<typeof createCommentSchema>;
 export type CreateRuleData = z.infer<typeof createRuleSchema>;
 
+// Taxation & Compliance schemas for localStorage
+export const taxRuleSchema = z.object({
+  id: z.string(),
+  name: z.string(),
+  rate: z.number().min(0).max(1), // 0.0 to 1.0 (0% to 100%)
+  scope: z.enum(["all", "category", "sku"]),
+});
+
+export const regionSchema = z.object({
+  id: z.string(),
+  name: z.string(),
+  currency: z.enum(["USD", "GBP", "EUR", "AED", "SGD", "INR"]),
+  locale: z.string(),
+  taxRules: z.array(taxRuleSchema),
+});
+
+export const financeSettingsSchema = z.object({
+  baseCurrency: z.enum(["USD", "GBP", "EUR", "AED", "SGD", "INR"]),
+  displayLocale: z.string(),
+  regions: z.array(regionSchema),
+});
+
+export const taxOverrideSchema = z.object({
+  id: z.string(),
+  name: z.string(),
+  rate: z.number().min(0).max(1),
+});
+
+export const productSchema = z.object({
+  id: z.string(),
+  sku: z.string(),
+  name: z.string(),
+  regionId: z.string(),
+  price: z.number(),
+  taxOverride: taxOverrideSchema.optional(),
+});
+
+export const orderTotalsSchema = z.object({
+  sub: z.number(),
+  tax: z.number(),
+  grand: z.number(),
+  currency: z.string(),
+});
+
+export const orderItemSchema = z.object({
+  productId: z.string(),
+  name: z.string(),
+  qty: z.number(),
+  unitPrice: z.number(),
+  effectiveTaxRate: z.number().optional(), // computed field
+});
+
+export const orderSchema = z.object({
+  id: z.string(),
+  number: z.string(),
+  regionId: z.string(),
+  customerId: z.string().optional(),
+  customerName: z.string().optional(),
+  createdAt: z.string(),
+  items: z.array(orderItemSchema),
+  taxRuleId: z.string().optional(),
+  totals: orderTotalsSchema,
+});
+
+export const invoiceSchema = z.object({
+  id: z.string(),
+  number: z.string(),
+  regionId: z.string(),
+  customerId: z.string().optional(),
+  customerName: z.string().optional(),
+  createdAt: z.string(),
+  items: z.array(orderItemSchema),
+  taxRuleId: z.string().optional(),
+  totals: orderTotalsSchema,
+});
+
+// Insert schemas for forms
+export const insertTaxRuleSchema = taxRuleSchema.omit({ id: true });
+export const insertRegionSchema = regionSchema.omit({ id: true });
+export const insertOrderSchema = orderSchema.omit({ id: true, number: true, createdAt: true });
+export const insertInvoiceSchema = invoiceSchema.omit({ id: true, number: true, createdAt: true });
+
+// Types
+export type TaxRule = z.infer<typeof taxRuleSchema>;
+export type Region = z.infer<typeof regionSchema>;
+export type FinanceSettings = z.infer<typeof financeSettingsSchema>;
+export type TaxOverride = z.infer<typeof taxOverrideSchema>;
+export type Product = z.infer<typeof productSchema>;
+export type OrderTotals = z.infer<typeof orderTotalsSchema>;
+export type OrderItem = z.infer<typeof orderItemSchema>;
+export type Order = z.infer<typeof orderSchema>;
+export type Invoice = z.infer<typeof invoiceSchema>;
+export type InsertTaxRule = z.infer<typeof insertTaxRuleSchema>;
+export type InsertRegion = z.infer<typeof insertRegionSchema>;
+export type InsertOrder = z.infer<typeof insertOrderSchema>;
+export type InsertInvoice = z.infer<typeof insertInvoiceSchema>;
+
 // Reconciliation Schema
 export const reconBatches = pgTable("recon_batches", {
   id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),

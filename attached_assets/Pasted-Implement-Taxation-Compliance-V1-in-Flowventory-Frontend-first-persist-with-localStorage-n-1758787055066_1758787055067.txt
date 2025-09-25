@@ -1,0 +1,95 @@
+Implement “Taxation & Compliance (V1)” in Flowventory. 
+Frontend-first, persist with localStorage; no server required.
+
+GOALS
+1) Workspace-level finance settings for tax & currency.
+2) Correct tax calculation on Orders/Invoices/POs.
+3) Region tax rules + per-SKU override.
+4) Compliance reports (download CSV) per region and date range.
+
+DATA (localStorage)
+- "flowventory:settings:finance": {
+    baseCurrency: "USD",
+    displayLocale: "en-US",
+    regions: [
+      { id:"US", name:"United States", currency:"USD", locale:"en-US",
+        taxRules:[ { id:"us_std", name:"Sales Tax 8%", rate:0.08, scope:"all" } ] },
+      { id:"UK", name:"United Kingdom", currency:"GBP", locale:"en-GB",
+        taxRules:[ { id:"uk_vat", name:"VAT 20%", rate:0.20, scope:"all" } ] },
+      { id:"UAE", name:"United Arab Emirates", currency:"AED", locale:"en-AE",
+        taxRules:[ { id:"ae_vat", name:"VAT 5%", rate:0.05, scope:"all" } ] },
+      { id:"SG", name:"Singapore", currency:"SGD", locale:"en-SG",
+        taxRules:[ { id:"sg_gst", name:"GST 9%", rate:0.09, scope:"all" } ] }
+    ]
+  }
+
+- "flowventory:products": [
+    { id, sku, name, regionId:"UK", price: 12.5,
+      taxOverride?: { id:"zero", name:"Zero-rated", rate:0 } }
+  ]
+
+- "flowventory:orders": [
+    { id, number, regionId:"UK", customerId, createdAt,
+      items:[ { productId, name, qty, unitPrice } ],
+      // computed & stored on save:
+      taxRuleId?: "uk_vat",
+      totals:{ sub:number, tax:number, grand:number, currency:"GBP" }
+    }
+  ]
+
+- "flowventory:invoices": (already exists) 
+  // add tax fields similarly if not present
+
+UTILS
+- currencyFormat(amount, currency, locale) -> Intl.NumberFormat
+- calcTotals(lineItems, regionRuleRate, overridesPerLine[]):
+  sub = Σ qty*unitPrice
+  tax = Σ qty*unitPrice*(overrideRate ?? regionRuleRate)
+  grand = sub + tax
+  return { sub, tax, grand }
+
+ROUTES
+1) /settings/finance  -> Finance & Tax settings tab
+   - Base currency, display locale
+   - Regions table (Region, Currency, Locale, Tax Rules)
+   - “Add Tax Rule” modal: name, rate (0..1), scope: all | category | sku (store scope for future)
+
+2) /orders/new and /orders/:id
+   - Region selector (defaults from customer or “US”)
+   - Tax rule dropdown auto-filled from region taxRules (default first)
+   - For each line item:
+       - show effective tax rate (either product.taxOverride or selected region rule)
+   - Totals box: Subtotal, Tax, Grand Total (formatted in region currency)
+
+3) /compliance  -> Compliance Reports (new page)
+   - Filters: Region, Date Range (start/end), Doc Type (Orders | Invoices), Export CSV
+   - Table columns:
+       - Doc No, Date, Customer/Supplier, Region, Subtotal, Tax, Grand, Tax Rule
+   - “Export CSV” creates downloadable CSV from current filter.
+
+BEHAVIOR
+- Product taxOverride (if set) overrides region rule for that line only.
+- Changing region in an order switches currency, locale, default tax rule, and recomputes totals.
+- Persist settings to "flowventory:settings:finance".
+- Seed defaults on first load if key absent.
+
+VALIDATION
+- Tax rate: 0 ≤ rate ≤ 1 (e.g., 0.2 = 20%)
+- Totals recompute live on qty/unitPrice/taxRule change.
+- CSV export must include header row + totals per row.
+
+SEED (for demo)
+- Ensure 4 regions exist (US/UK/UAE/SG).
+- Seed 4 products (one per region), one with taxOverride=0 for zero-rated demo.
+- Seed 2 orders across different regions to make /compliance non-empty.
+
+UI
+- Tailwind “neon SaaS” cards, rounded-2xl, subtle borders.
+- Totals card shows small “≈ in Base Currency” line (optional; use 1:1 if FX not implemented here).
+- Tooltips on tax fields: “Using <rule name> (<rate*100>%). Override via product or select another rule.”
+
+ACCEPTANCE (Frontend)
+- /settings/finance: add/edit region tax rules; persist and reload correctly.
+- /orders/new: select region → tax rule auto-applies; totals reflect correct tax.
+- Change a product to zero-rated → order line uses 0% tax while others use region rate.
+- /compliance: filter by UK (or any region) and export CSV → file opens with correct rows and values.
