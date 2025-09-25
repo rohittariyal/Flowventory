@@ -20,8 +20,15 @@ import {
   DialogTitle,
   DialogTrigger,
 } from "@/components/ui/dialog";
-import { FileText, Plus, Trash2 } from "lucide-react";
-import { currencyFormat, calcInvoiceTotals, LineItem } from "@/utils/currency";
+import { FileText, Plus, Trash2, MapPin, Calculator } from "lucide-react";
+import { 
+  currencyFormat, 
+  getFinanceSettings, 
+  getTaxCustomers, 
+  calculateRegionTax,
+  initializeTaxationData
+} from "@/utils/taxation";
+import type { TaxCustomer, OrderItem, TaxBreakup } from "@shared/schema";
 import { generateInvoiceNumber } from "@/helpers/invoiceNumber";
 import { useToast } from "@/hooks/use-toast";
 import { useLocation } from "wouter";
@@ -38,26 +45,29 @@ interface Order {
   regionId?: string;
 }
 
-interface Customer {
-  id: string;
-  name: string;
-  email: string;
-}
-
-interface Region {
+// Updated interfaces for comprehensive taxation
+interface TaxRegion {
   id: string;
   name: string;
   currency: string;
   locale: string;
-  taxRules: { name: string; rate: number }[];
+  taxRules: { id: string; name: string; rate: number; category: string }[];
+  states?: string[];
+  stateRates?: { code: string; rate: number }[];
 }
 
-interface Product {
+interface TaxProduct {
   id: string;
   sku: string;
   name: string;
   price: number;
-  taxOverride?: number;
+  regionId?: string;
+  taxCategory?: "standard" | "reduced" | "zero";
+  taxOverride?: {
+    id: string;
+    name: string;
+    rate: number;
+  };
 }
 
 interface GenerateInvoiceModalProps {
@@ -74,74 +84,86 @@ export function GenerateInvoiceModal({ order, trigger }: GenerateInvoiceModalPro
   const [, setLocation] = useLocation();
   const { toast } = useToast();
   
-  const [customer, setCustomer] = useState<Customer | null>(null);
-  const [region, setRegion] = useState<Region | null>(null);
-  const [products, setProducts] = useState<Product[]>([]);
+  const [customer, setCustomer] = useState<TaxCustomer | null>(null);
+  const [region, setRegion] = useState<TaxRegion | null>(null);
+  const [products, setProducts] = useState<TaxProduct[]>([]);
+  const [availableRegions, setAvailableRegions] = useState<TaxRegion[]>([]);
+  const [settings, setSettings] = useState<any>(null);
   
   const [formData, setFormData] = useState({
     issueDate: new Date().toISOString().split('T')[0],
     dueDate: new Date(Date.now() + 30 * 24 * 60 * 60 * 1000).toISOString().split('T')[0], // +30 days
     currency: 'USD',
     locale: 'en-US',
+    regionId: '',
+    placeOfSupply: '',
+    businessState: '',
+    customerState: '',
     notes: ''
   });
   
-  const [lineItems, setLineItems] = useState<LineItem[]>([]);
+  const [lineItems, setLineItems] = useState<OrderItem[]>([]);
+  const [taxBreakdown, setTaxBreakdown] = useState<TaxBreakup | null>(null);
 
   useEffect(() => {
     if (!open) return;
 
+    // Initialize comprehensive taxation data
+    initializeTaxationData();
+
+    // Load finance settings
+    const financeSettings = getFinanceSettings();
+    if (!financeSettings) return;
+    
+    setSettings(financeSettings);
+    setAvailableRegions(financeSettings.regions || []);
+
     // Load customer
-    const customers = JSON.parse(localStorage.getItem(CUSTOMERS_KEY) || '[]');
-    const foundCustomer = customers.find((c: Customer) => c.id === order.customerId);
+    const customers = getTaxCustomers();
+    const foundCustomer = customers.find((c: TaxCustomer) => c.id === order.customerId);
     setCustomer(foundCustomer || null);
 
-    // Load products
-    const storedProducts = JSON.parse(localStorage.getItem(PRODUCTS_KEY) || '[]');
+    // Load products from storage
+    const storedProducts = JSON.parse(localStorage.getItem('flowventory:products') || '[]');
     setProducts(storedProducts);
 
-    // Load region and settings
-    const settings = JSON.parse(localStorage.getItem('flowventory:settings') || '{}');
-    const regions = settings.finance?.regions || [];
-    const foundRegion = regions.find((r: Region) => r.id === order.regionId);
+    // Find region
+    const foundRegion = financeSettings.regions?.find((r: TaxRegion) => r.id === order.regionId);
     
     if (foundRegion) {
       setRegion(foundRegion);
       setFormData(prev => ({
         ...prev,
         currency: foundRegion.currency,
-        locale: foundRegion.locale
+        locale: foundRegion.locale,
+        regionId: foundRegion.id,
+        businessState: financeSettings.businessState || '',
+        customerState: foundCustomer?.state || ''
       }));
     } else {
       // Use base currency if no region
-      const baseCurrency = settings.finance?.baseCurrency || 'USD';
-      const displayLocale = settings.finance?.displayLocale || 'en-US';
       setFormData(prev => ({
         ...prev,
-        currency: baseCurrency,
-        locale: displayLocale
+        currency: financeSettings.baseCurrency || 'USD',
+        locale: financeSettings.displayLocale || 'en-US',
+        businessState: financeSettings.businessState || ''
       }));
     }
 
-    // Convert order items to line items
-    const defaultTaxRate = foundRegion?.taxRules?.[0]?.rate || 0;
-    const convertedLineItems: LineItem[] = order.items.map(item => {
-      const product = storedProducts.find((p: Product) => p.id === item.skuId || p.sku === item.skuId);
-      const taxRate = product?.taxOverride !== undefined ? product.taxOverride : defaultTaxRate;
-      
+    // Convert order items to line items using new schema
+    const convertedLineItems: OrderItem[] = order.items.map(item => {
       return {
-        skuId: item.skuId,
+        productId: item.skuId,
         name: item.name,
         qty: item.quantity,
-        unitPrice: item.price,
-        taxRate: (taxRate || 0) / 100 // Convert percentage to decimal
+        unitPrice: item.price
       };
     });
     
     setLineItems(convertedLineItems);
   }, [open, order]);
 
-  const updateLineItem = (index: number, field: keyof LineItem, value: any) => {
+  const updateLineItem = (index: number, field: keyof OrderItem, value: any) => {
     setLineItems(prev => prev.map((item, i) => 
       i === index ? { ...item, [field]: value } : item
     ));
@@ -152,23 +174,40 @@ export function GenerateInvoiceModal({ order, trigger }: GenerateInvoiceModalPro
   };
 
   const addLineItem = () => {
-    const defaultTaxRate = region?.taxRules?.[0]?.rate || 0;
     setLineItems(prev => [...prev, {
-      skuId: '',
+      productId: '',
       name: '',
       qty: 1,
-      unitPrice: 0,
-      taxRate: defaultTaxRate / 100
+      unitPrice: 0
     }]);
   };
 
-  const getAvailableTaxRates = () => {
-    const rates = region?.taxRules || [];
-    return [
-      ...rates.map(rule => ({ name: rule.name, rate: rule.rate / 100 })),
-      { name: 'Custom', rate: 0 }
-    ];
+  // Calculate totals using the new comprehensive taxation system
+  const calculateTotals = () => {
+    if (!formData.regionId || lineItems.length === 0) {
+      return { subtotal: 0, tax: 0, grand: 0, taxBreakdown: null };
+    }
+
+    const result = calculateRegionTax(
+      formData.regionId,
+      formData.customerState,
+      formData.businessState,
+      lineItems
+    );
+
+    return {
+      subtotal: result.totals.sub,
+      tax: result.totals.tax,
+      grand: result.totals.grand,
+      taxBreakdown: result.taxBreakup
+    };
   };
+
+  // Update tax breakdown when form data or line items change
+  useEffect(() => {
+    const totals = calculateTotals();
+    setTaxBreakdown(totals.taxBreakdown || null);
+  }, [formData.regionId, formData.customerState, formData.businessState, lineItems]);
 
   const generateInvoice = () => {
     // Validation
@@ -217,33 +256,39 @@ export function GenerateInvoiceModal({ order, trigger }: GenerateInvoiceModalPro
         });
         return;
       }
-      if (item.taxRate < 0 || item.taxRate > 1) {
-        toast({
-          title: "Error",
-          description: "Tax rates must be between 0% and 100%.",
-          variant: "destructive",
-        });
-        return;
-      }
     }
 
-    // Calculate totals
-    const totals = calcInvoiceTotals(lineItems);
+    if (!formData.regionId) {
+      toast({
+        title: "Error",
+        description: "Please select a tax region.",
+        variant: "destructive",
+      });
+      return;
+    }
 
-    // Create invoice
+    // Calculate totals using new taxation system
+    const totals = calculateTotals();
+
+    // Create invoice with comprehensive tax data
     const newInvoice = {
       id: Date.now().toString(),
       number: generateInvoiceNumber(),
       orderId: order.id,
       customerId: customer.id,
+      regionId: formData.regionId,
       issueDate: formData.issueDate,
       dueDate: formData.dueDate,
       currency: formData.currency,
       locale: formData.locale,
+      placeOfSupply: formData.placeOfSupply,
+      customerState: formData.customerState,
+      businessState: formData.businessState,
       lineItems,
       subtotal: totals.subtotal,
-      taxTotal: totals.taxTotal,
-      grandTotal: totals.grandTotal,
+      taxTotal: totals.tax,
+      grandTotal: totals.grand,
+      taxBreakdown: totals.taxBreakdown,
       payments: [],
       status: 'UNPAID' as const,
       notes: formData.notes
@@ -263,7 +308,7 @@ export function GenerateInvoiceModal({ order, trigger }: GenerateInvoiceModalPro
     setLocation(`/invoices/${newInvoice.id}`);
   };
 
-  const totals = calcInvoiceTotals(lineItems);
+  const totals = calculateTotals();
 
   return (
     <Dialog open={open} onOpenChange={setOpen}>
@@ -366,7 +411,6 @@ export function GenerateInvoiceModal({ order, trigger }: GenerateInvoiceModalPro
                     <TableHead>Item</TableHead>
                     <TableHead>Qty</TableHead>
                     <TableHead>Unit Price</TableHead>
-                    <TableHead>Tax Rate</TableHead>
                     <TableHead>Line Total</TableHead>
                     <TableHead></TableHead>
                   </TableRow>
@@ -401,23 +445,6 @@ export function GenerateInvoiceModal({ order, trigger }: GenerateInvoiceModalPro
                         />
                       </TableCell>
                       <TableCell>
-                        <Select
-                          value={item.taxRate.toString()}
-                          onValueChange={(value) => updateLineItem(index, 'taxRate', parseFloat(value))}
-                        >
-                          <SelectTrigger className="w-32">
-                            <SelectValue />
-                          </SelectTrigger>
-                          <SelectContent>
-                            {getAvailableTaxRates().map((rate, rateIndex) => (
-                              <SelectItem key={rateIndex} value={rate.rate.toString()}>
-                                {rate.name} ({(rate.rate * 100).toFixed(1)}%)
-                              </SelectItem>
-                            ))}
-                          </SelectContent>
-                        </Select>
-                      </TableCell>
-                      <TableCell>
                         {currencyFormat(item.qty * item.unitPrice, formData.currency, formData.locale)}
                       </TableCell>
                       <TableCell>
@@ -442,11 +469,11 @@ export function GenerateInvoiceModal({ order, trigger }: GenerateInvoiceModalPro
                 </div>
                 <div className="flex justify-between">
                   <span>Tax:</span>
-                  <span>{currencyFormat(totals.taxTotal, formData.currency, formData.locale)}</span>
+                  <span>{currencyFormat(totals.tax, formData.currency, formData.locale)}</span>
                 </div>
                 <div className="flex justify-between text-lg font-bold border-t pt-2">
                   <span>Total:</span>
-                  <span>{currencyFormat(totals.grandTotal, formData.currency, formData.locale)}</span>
+                  <span>{currencyFormat(totals.grand, formData.currency, formData.locale)}</span>
                 </div>
               </div>
             </CardContent>
