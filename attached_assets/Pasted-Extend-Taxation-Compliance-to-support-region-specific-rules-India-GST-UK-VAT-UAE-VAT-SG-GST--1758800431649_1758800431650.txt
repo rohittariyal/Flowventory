@@ -1,0 +1,94 @@
+Extend “Taxation & Compliance” to support region-specific rules (India GST, UK VAT, UAE VAT, SG GST, US Sales Tax). Frontend-first; persist to localStorage; keep server connectors optional.
+ 
+DATA (extend existing localStorage)
+- "flowventory:settings:finance":
+   {
+     baseCurrency, displayLocale,
+     regions: [
+       // UK (VAT)
+       { id:"UK", name:"United Kingdom", currency:"GBP", locale:"en-GB",
+         taxRules:[ { id:"uk_std", name:"VAT 20% (Standard)", rate:0.20, category:"standard" },
+                    { id:"uk_red", name:"VAT 5% (Reduced)", rate:0.05, category:"reduced" },
+                    { id:"uk_zero", name:"VAT 0% (Zero)", rate:0, category:"zero" } ] },
+ 
+       // UAE (VAT)
+       { id:"UAE", name:"United Arab Emirates", currency:"AED", locale:"en-AE",
+         taxRules:[ { id:"ae_std", name:"VAT 5% (Standard)", rate:0.05, category:"standard" },
+                    { id:"ae_zero", name:"VAT 0% (Zero)", rate:0, category:"zero" } ] },
+ 
+       // Singapore (GST)
+       { id:"SG", name:"Singapore", currency:"SGD", locale:"en-SG",
+         taxRules:[ { id:"sg_std", name:"GST 9% (Standard)", rate:0.09, category:"standard" },
+                    { id:"sg_zero", name:"GST 0% (Zero)", rate:0, category:"zero" } ] },
+ 
+       // India (GST, simplified)
+       { id:"IN", name:"India", currency:"INR", locale:"en-IN",
+         // choose IGST vs CGST+SGST at invoice time based on intra/inter-state
+         taxRules:[
+           { id:"in_gst_18", name:"GST 18% (Std)", rate:0.18, category:"standard" },
+           { id:"in_gst_12", name:"GST 12% (Reduced)", rate:0.12, category:"reduced" },
+           { id:"in_gst_0",  name:"GST 0% (Zero/Exempt)", rate:0, category:"zero" }
+         ],
+         states: ["KA","MH","DL","TN","GJ","UP","WB","RJ"] },
+ 
+       // US (Sales Tax, simplified per-state)
+       { id:"US", name:"United States", currency:"USD", locale:"en-US",
+         taxRules:[ { id:"us_std", name:"Default Sales Tax", rate:0.08, category:"state" } ],
+         states: [
+           { code:"CA", rate:0.085 }, { code:"NY", rate:0.08875 },
+           { code:"TX", rate:0.0825 }, { code:"FL", rate:0.07 }
+         ] }
+     ]
+   }
+ 
+- "flowventory:customers": add optional fields:
+  { id, name, regionId, country, state?, gstinOrVatNo? }
+ 
+- "flowventory:invoices": extend:
+  { placeOfSupply?: { country, state? }, taxBreakup?: { cgst?:number, sgst?:number, igst?:number }, ... }
+ 
+UI/LOGIC
+1) Settings → Finance
+   - Allow editing region rule tables (rates/categories); for IN/US also allow per-state rate editing.
+ 
+2) Product
+   - Optional per-SKU tax category selector (use region’s categories: standard/reduced/zero). This picks the rule for that line.
+ 
+3) Invoice/Order creation
+   - Select Region & Place of Supply (for IN/US: choose State)
+   - TAX CALC:
+     - UK/UAE/SG: apply selected category rule rate per line (override by SKU category if set).
+     - INDIA:
+       - If customer.state == your business.state → split the line tax into CGST = rate/2 and SGST = rate/2.
+       - Else (inter-state) → IGST = full rate.
+       - Store taxBreakup on the invoice.
+     - USA:
+       - Use customer.state rate if present; else default us_std.
+   - Totals box shows sub, tax, grand; for IN shows CGST/SGST/IGST lines.
+   - Print view shows region-appropriate labels (VAT/GST/Sales Tax).
+ 
+4) Compliance page (/compliance)
+   - Add region-specific exports:
+     - UK: VAT summary (net, tax, gross by tax category)
+     - UAE/SG: VAT/GST summary by category
+     - IN: GSTR-1 style summary (mock): B2B outward supplies by tax rate + CGST/SGST/IGST totals
+     - US: Sales Tax by state
+   - CSV export per region + date range with columns suited to that region.
+ 
+5) Validations
+   - Tax rate between 0..1
+   - India: must select both your business state (settings) and customer state to compute CGST/SGST vs IGST.
+   - US: if customer.state missing, warn and fall back to default us_std.
+   - Per-SKU tax category overrides region default.
+ 
+SEED
+- Add one customer per region; include Indian/US customers with states.
+- Seed two invoices per region to make reports non-empty.
+ 
+ACCEPTANCE (Frontend)
+- Create an invoice in UK with “Reduced 5%” → totals reflect 5% VAT.
+- Create an invoice in UAE with 0% (zero-rated) → tax lines show 0.
+- Create an invoice in India with same state (e.g., your biz = KA, customer = KA) → CGST/SGST split equally.
+- Create another with different state (KA → MH) → IGST only.
+- Create an invoice in the US with customer state NY → rate = 8.875%; report shows NY row.
+- /compliance exports correct CSV per region with proper columns.
