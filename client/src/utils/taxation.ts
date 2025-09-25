@@ -63,7 +63,7 @@ export function initializeFinanceSettings(): void {
           currency: "USD",
           locale: "en-US",
           taxRules: [
-            { id: "us_std", name: "Sales Tax 8%", rate: 0.08, scope: "all" }
+            { id: "us_std", name: "Sales Tax 8%", rate: 0.08, category: "state" }
           ]
         },
         {
@@ -72,7 +72,7 @@ export function initializeFinanceSettings(): void {
           currency: "GBP",
           locale: "en-GB",
           taxRules: [
-            { id: "uk_vat", name: "VAT 20%", rate: 0.20, scope: "all" }
+            { id: "uk_vat", name: "VAT 20%", rate: 0.20, category: "standard" }
           ]
         },
         {
@@ -81,7 +81,7 @@ export function initializeFinanceSettings(): void {
           currency: "AED",
           locale: "en-AE",
           taxRules: [
-            { id: "ae_vat", name: "VAT 5%", rate: 0.05, scope: "all" }
+            { id: "ae_vat", name: "VAT 5%", rate: 0.05, category: "standard" }
           ]
         },
         {
@@ -90,7 +90,7 @@ export function initializeFinanceSettings(): void {
           currency: "SGD",
           locale: "en-SG",
           taxRules: [
-            { id: "sg_gst", name: "GST 9%", rate: 0.09, scope: "all" }
+            { id: "sg_gst", name: "GST 9%", rate: 0.09, category: "standard" }
           ]
         }
       ]

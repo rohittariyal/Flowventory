@@ -532,7 +532,12 @@ export const taxRuleSchema = z.object({
   id: z.string(),
   name: z.string(),
   rate: z.number().min(0).max(1), // 0.0 to 1.0 (0% to 100%)
-  scope: z.enum(["all", "category", "sku"]),
+  category: z.enum(["standard", "reduced", "zero", "state"]), // Updated from scope to category
+});
+
+export const stateRateSchema = z.object({
+  code: z.string(), // State code like "CA", "NY", "KA", "MH"
+  rate: z.number().min(0).max(1),
 });
 
 export const taxRegionSchema = z.object({
@@ -541,11 +546,14 @@ export const taxRegionSchema = z.object({
   currency: z.enum(["USD", "GBP", "EUR", "AED", "SGD", "INR"]),
   locale: z.string(),
   taxRules: z.array(taxRuleSchema),
+  states: z.array(z.string()).optional(), // For India and US - state codes
+  stateRates: z.array(stateRateSchema).optional(), // For US state-specific rates
 });
 
 export const financeSettingsSchema = z.object({
   baseCurrency: z.enum(["USD", "GBP", "EUR", "AED", "SGD", "INR"]),
   displayLocale: z.string(),
+  businessState: z.string().optional(), // For India GST calculations
   regions: z.array(taxRegionSchema),
 });
 
@@ -561,7 +569,32 @@ export const productSchema = z.object({
   name: z.string(),
   regionId: z.string(),
   price: z.number(),
+  taxCategory: z.enum(["standard", "reduced", "zero"]).optional(), // Per-SKU tax category
   taxOverride: taxOverrideSchema.optional(),
+});
+
+// Customer schema with region and state support
+export const customerSchema = z.object({
+  id: z.string(),
+  name: z.string(),
+  email: z.string().email(),
+  regionId: z.string(),
+  country: z.string(),
+  state: z.string().optional(), // For India/US states
+  gstinOrVatNo: z.string().optional(), // GST/VAT registration number
+});
+
+// Place of supply for tax calculations
+export const placeOfSupplySchema = z.object({
+  country: z.string(),
+  state: z.string().optional(),
+});
+
+// Tax breakdown for India GST (CGST/SGST/IGST)
+export const taxBreakupSchema = z.object({
+  cgst: z.number().optional(), // Central GST
+  sgst: z.number().optional(), // State GST  
+  igst: z.number().optional(), // Integrated GST
 });
 
 export const orderTotalsSchema = z.object({
@@ -600,6 +633,8 @@ export const invoiceSchema = z.object({
   createdAt: z.string(),
   items: z.array(orderItemSchema),
   taxRuleId: z.string().optional(),
+  placeOfSupply: placeOfSupplySchema.optional(), // For region-specific tax calculations
+  taxBreakup: taxBreakupSchema.optional(), // For India GST breakdowns
   totals: orderTotalsSchema,
 });
 
@@ -611,10 +646,14 @@ export const insertInvoiceSchema = invoiceSchema.omit({ id: true, number: true, 
 
 // Types
 export type TaxRule = z.infer<typeof taxRuleSchema>;
+export type StateRate = z.infer<typeof stateRateSchema>;
 export type TaxRegion = z.infer<typeof taxRegionSchema>;
 export type FinanceSettings = z.infer<typeof financeSettingsSchema>;
 export type TaxOverride = z.infer<typeof taxOverrideSchema>;
 export type TaxProduct = z.infer<typeof productSchema>;
+export type TaxCustomer = z.infer<typeof customerSchema>;
+export type PlaceOfSupply = z.infer<typeof placeOfSupplySchema>;
+export type TaxBreakup = z.infer<typeof taxBreakupSchema>;
 export type OrderTotals = z.infer<typeof orderTotalsSchema>;
 export type OrderItem = z.infer<typeof orderItemSchema>;
 export type TaxOrder = z.infer<typeof orderSchema>;
