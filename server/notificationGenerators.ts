@@ -1,38 +1,146 @@
 import { storage } from "./storage";
 import type { CreateNotificationData } from "@shared/schema";
+import { getAllProducts } from "../client/src/data/seedProductData";
+import { getForecastForHorizon, calcSuggestion } from "../client/src/utils/forecasting";
+import { getSalesOrders } from "../client/src/utils/forecastStorage";
 
 export class NotificationGenerators {
   private static organizationId = "sample-org-123"; // In real app, this would be dynamic
 
-  // Check for low inventory and generate alerts
+  // Check for low inventory and generate alerts with forecast insights
   static async checkInventoryLevels() {
     try {
-      // Simulate inventory check logic
-      const lowStockProducts = [
-        { sku: "SKU-001", name: "Wireless Headphones", currentStock: 2, reorderLevel: 10 },
-        { sku: "SKU-007", name: "Phone Case", currentStock: 1, reorderLevel: 15 },
-        { sku: "SKU-012", name: "Charging Cable", currentStock: 3, reorderLevel: 20 },
-      ];
+      const products = getAllProducts();
+      const salesOrders = getSalesOrders();
+      
+      const lowStockProducts = [];
+      const predictedStockouts = [];
+      const reorderSuggestions = [];
 
+      for (const product of products) {
+        const currentStock = product.stock || 0;
+        
+        // Get forecast data for this product
+        const forecastData = getForecastForHorizon(
+          salesOrders,
+          product.id,
+          undefined, // All locations
+          "30",
+          "moving_avg"
+        );
+
+        // Calculate reorder suggestion
+        const suggestion = calcSuggestion({
+          onHand: currentStock,
+          safetyStock: 50,
+          avgDaily: forecastData.avgDaily,
+          leadTimeDays: 14,
+          reorderQty: 100
+        });
+
+        const daysLeft = forecastData.avgDaily > 0 ? Math.floor(currentStock / forecastData.avgDaily) : 999;
+        
+        // Traditional low stock check
+        if (daysLeft < 7) {
+          lowStockProducts.push({
+            sku: product.sku,
+            name: product.name,
+            currentStock,
+            daysLeft,
+            avgDailySales: forecastData.avgDaily
+          });
+        }
+
+        // Forecast-based stockout prediction (within 14 days)
+        if (daysLeft < 14 && daysLeft > 0) {
+          predictedStockouts.push({
+            sku: product.sku,
+            name: product.name,
+            currentStock,
+            daysLeft,
+            predictedStockoutDate: new Date(Date.now() + daysLeft * 24 * 60 * 60 * 1000),
+            forecastDemand: forecastData.daily.slice(0, 14).reduce((sum, day) => sum + day.qty, 0)
+          });
+        }
+
+        // Reorder suggestions
+        if (suggestion.suggestedQty > 0) {
+          reorderSuggestions.push({
+            sku: product.sku,
+            name: product.name,
+            currentStock,
+            suggestedQty: suggestion.suggestedQty,
+            nextReorderDate: suggestion.nextReorderDate,
+            avgDailySales: forecastData.avgDaily
+          });
+        }
+      }
+
+      // Generate traditional low stock alerts
       if (lowStockProducts.length > 0) {
         const notification: CreateNotificationData = {
           type: "inventory_low",
-          title: "Low Inventory Alert",
-          message: `${lowStockProducts.length} products are below reorder level`,
+          title: "Critical Low Inventory Alert",
+          message: `${lowStockProducts.length} products are critically low (< 7 days stock)`,
           icon: "AlertTriangle",
-          priority: "high",
+          priority: "critical",
           metadata: {
             productCount: lowStockProducts.length,
             products: lowStockProducts.map(p => p.sku),
             details: lowStockProducts,
+            forecastBased: true
           },
         };
 
         await storage.createNotification(this.organizationId, notification);
-        console.log(`Generated low inventory alert for ${lowStockProducts.length} products`);
+        console.log(`Generated forecast-enhanced low inventory alert for ${lowStockProducts.length} products`);
       }
+
+      // Generate predicted stockout alerts
+      if (predictedStockouts.length > 0) {
+        const notification: CreateNotificationData = {
+          type: "predicted_stockout",
+          title: "Predicted Stockout Alert",
+          message: `${predictedStockouts.length} products predicted to stock out within 14 days`,
+          icon: "TrendingDown",
+          priority: "high",
+          metadata: {
+            productCount: predictedStockouts.length,
+            products: predictedStockouts.map(p => p.sku),
+            details: predictedStockouts,
+            forecastHorizon: "14 days"
+          },
+        };
+
+        await storage.createNotification(this.organizationId, notification);
+        console.log(`Generated predicted stockout alert for ${predictedStockouts.length} products`);
+      }
+
+      // Generate reorder recommendation alerts
+      if (reorderSuggestions.length > 0) {
+        const totalSuggestedUnits = reorderSuggestions.reduce((sum, item) => sum + item.suggestedQty, 0);
+        
+        const notification: CreateNotificationData = {
+          type: "reorder_recommendation",
+          title: "AI Reorder Recommendations",
+          message: `${reorderSuggestions.length} products recommended for reorder (${totalSuggestedUnits} total units)`,
+          icon: "ShoppingCart",
+          priority: "medium",
+          metadata: {
+            productCount: reorderSuggestions.length,
+            totalUnits: totalSuggestedUnits,
+            products: reorderSuggestions.map(p => p.sku),
+            details: reorderSuggestions,
+            aiGenerated: true
+          },
+        };
+
+        await storage.createNotification(this.organizationId, notification);
+        console.log(`Generated AI reorder recommendations for ${reorderSuggestions.length} products (${totalSuggestedUnits} units)`);
+      }
+
     } catch (error) {
-      console.error("Error checking inventory levels:", error);
+      console.error("Error checking inventory levels with forecast data:", error);
     }
   }
 

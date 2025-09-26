@@ -314,7 +314,7 @@ export const updateTeamMemberSchema = z.object({
 
 // Notification schemas
 export const createNotificationSchema = z.object({
-  type: z.enum(["inventory_low", "api_connection_failed", "no_upload", "team_update", "system"]),
+  type: z.enum(["inventory_low", "predicted_stockout", "reorder_recommendation", "api_connection_failed", "no_upload", "team_update", "system"]),
   title: z.string().min(1, "Title is required"),
   message: z.string().min(1, "Message is required"),
   icon: z.string().min(1, "Icon is required"),
