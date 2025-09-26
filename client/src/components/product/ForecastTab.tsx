@@ -5,6 +5,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Badge } from "@/components/ui/badge";
 import { Separator } from "@/components/ui/separator";
 import { TrendingUp, Package, Calendar, AlertTriangle, MapPin, BarChart3, ShoppingCart } from "lucide-react";
+import { CreatePOModal } from "@/components/CreatePOModal";
 import type { Product } from "@/data/seedProductData";
 import type { 
   ForecastHorizon, 
@@ -40,6 +41,7 @@ export function ForecastTab({ product, onProductUpdate }: ForecastTabProps) {
   const [forecastData, setForecastData] = useState<ForecastData | null>(null);
   const [demandSuggestion, setDemandSuggestion] = useState<DemandSuggestion | null>(null);
   const [loading, setLoading] = useState(false);
+  const [createPOModalOpen, setCreatePOModalOpen] = useState(false);
 
   // Get available locations
   const locations = getLocations();
@@ -176,9 +178,25 @@ export function ForecastTab({ product, onProductUpdate }: ForecastTabProps) {
   };
 
   const handleCreatePO = () => {
-    // TODO: Integration with existing PO creation flow
-    console.log("Create PO with suggested quantity:", demandSuggestion?.suggestedQty);
-    // This would open the existing PO modal with pre-filled data
+    if (!demandSuggestion || !forecastData) return;
+    
+    // Open the Create PO modal with forecast data pre-filled
+    setCreatePOModalOpen(true);
+  };
+
+  const prepareForecastData = () => {
+    if (!demandSuggestion || !forecastData) return undefined;
+    
+    return {
+      sku: product.sku,
+      productName: product.name,
+      suggestedQty: demandSuggestion.suggestedQty,
+      avgDailySales: demandSuggestion.avgDaily,
+      daysLeft: Math.floor(demandSuggestion.coverDays),
+      forecastDemand: forecastData.result.totalDemand,
+      nextReorderDate: demandSuggestion.nextReorderDate,
+      currentStock: demandSuggestion.onHand
+    };
   };
 
   const chartData = useMemo(() => {
@@ -462,6 +480,17 @@ export function ForecastTab({ product, onProductUpdate }: ForecastTabProps) {
           <p className="text-zinc-400 mt-2">Computing forecast...</p>
         </div>
       )}
+
+      {/* Create PO Modal */}
+      <CreatePOModal
+        isOpen={createPOModalOpen}
+        onClose={() => setCreatePOModalOpen(false)}
+        forecastData={prepareForecastData()}
+        onSuccess={() => {
+          // Optionally refresh forecast data or show success message
+          console.log("PO created successfully from forecast suggestion");
+        }}
+      />
     </div>
   );
 }

@@ -7,6 +7,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Badge } from "@/components/ui/badge";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { ArrowLeft, TrendingUp, AlertTriangle, Package, ShoppingCart, Filter, FileText } from "lucide-react";
+import { CreatePOModal } from "@/components/CreatePOModal";
 import { getAllProducts } from "@/data/seedProductData";
 import { getForecastForHorizon, calcSuggestion } from "@/utils/forecasting";
 import { getSalesOrders } from "@/utils/forecastStorage";
@@ -32,6 +33,8 @@ export default function ForecastsPage() {
   const [selectedLocation, setSelectedLocation] = useState("all");
   const [selectedHorizon, setSelectedHorizon] = useState("30");
   const [riskFilter, setRiskFilter] = useState("all");
+  const [createPOModalOpen, setCreatePOModalOpen] = useState(false);
+  const [selectedForecastItem, setSelectedForecastItem] = useState<ForecastSummary | null>(null);
 
   // Get all products and generate forecast summaries
   const forecastSummaries = useMemo(() => {
@@ -128,6 +131,23 @@ export default function ForecastsPage() {
     const itemsWithSuggestions = filteredSummaries.filter(s => s.suggestedQty > 0);
     console.log("Creating bulk POs for", itemsWithSuggestions.length, "items");
     // This would integrate with the existing PO creation flow
+  };
+
+  const handleCreateIndividualPO = (summary: ForecastSummary) => {
+    setSelectedForecastItem(summary);
+    setCreatePOModalOpen(true);
+  };
+
+  const prepareForecastDataForPO = (summary: ForecastSummary) => {
+    return {
+      sku: summary.sku,
+      productName: summary.name,
+      suggestedQty: summary.suggestedQty,
+      avgDailySales: summary.avgDailySales,
+      daysLeft: summary.daysLeft,
+      forecastDemand: summary.forecastDemand30,
+      currentStock: summary.currentStock
+    };
   };
 
   const getRiskBadgeColor = (risk: string) => {
@@ -360,7 +380,7 @@ export default function ForecastsPage() {
                           <Button 
                             size="sm"
                             className="bg-green-600 hover:bg-green-700 text-white"
-                            onClick={() => console.log("Create PO for", summary.sku)}
+                            onClick={() => handleCreateIndividualPO(summary)}
                             data-testid={`button-create-po-${index}`}
                           >
                             Create PO
@@ -381,6 +401,20 @@ export default function ForecastsPage() {
           </div>
         </CardContent>
       </Card>
+
+      {/* Create PO Modal */}
+      <CreatePOModal
+        isOpen={createPOModalOpen}
+        onClose={() => {
+          setCreatePOModalOpen(false);
+          setSelectedForecastItem(null);
+        }}
+        forecastData={selectedForecastItem ? prepareForecastDataForPO(selectedForecastItem) : undefined}
+        onSuccess={() => {
+          console.log("PO created successfully from forecast suggestion");
+          // Optionally refresh forecast data
+        }}
+      />
     </div>
   );
 }
