@@ -25,6 +25,7 @@ import UsersPage from "@/pages/users-page";
 import InvoicesPage from "@/pages/invoices-page";
 import InvoiceDetailPage from "@/pages/invoice-detail-page";
 import ProductDetailPage from "@/pages/product-detail-page";
+import ForecastsPage from "@/pages/forecasts-page";
 import FinanceSettingsPage from "@/pages/finance-settings-page";
 import LocationsSettingsPage from "@/pages/locations-settings-page";
 import ShippingSettingsPage from "@/pages/shipping-settings-page";
@@ -47,6 +48,7 @@ function Router() {
       <ProtectedRoute path="/action-center" component={ActionCenterPage} />
       <ProtectedRoute path="/inventory" component={InventoryPage} />
       <ProtectedRoute path="/products" component={InventoryPage} />
+      <ProtectedRoute path="/forecast" component={ForecastsPage} />
       <ProtectedRoute path="/orders" component={PurchaseOrdersPage} />
       <ProtectedRoute path="/purchase-orders" component={PurchaseOrdersPage} />
       <ProtectedRoute path="/recon" component={ReconciliationPage} />
