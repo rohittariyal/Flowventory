@@ -26,6 +26,7 @@ import InvoicesPage from "@/pages/invoices-page";
 import InvoiceDetailPage from "@/pages/invoice-detail-page";
 import ProductDetailPage from "@/pages/product-detail-page";
 import FinanceSettingsPage from "@/pages/finance-settings-page";
+import LocationsSettingsPage from "@/pages/locations-settings-page";
 import ShippingSettingsPage from "@/pages/shipping-settings-page";
 import CompliancePage from "@/pages/compliance-page";
 import { ProtectedRoute } from "./lib/protected-route";
@@ -34,6 +35,7 @@ import { initializeSessionData, initializeProductNotesData } from "@/data/seedSe
 import { initializeProductData, initializeBatchInventoryData, initializeBatchEventsData } from "@/data/seedProductData";
 import { initializeAnalyticsData } from "@/utils/analytics";
 import { initializeTaxationData } from "@/utils/taxation";
+import { initializeWarehouseData } from "@/utils/warehouse";
 
 function Router() {
   return (
@@ -59,6 +61,7 @@ function Router() {
       <ProtectedRoute path="/products/:id" component={ProductDetailPage} />
       <ProtectedRoute path="/workspace/users" component={UsersPage} />
       <ProtectedRoute path="/settings/finance" component={FinanceSettingsPage} />
+      <ProtectedRoute path="/settings/locations" component={LocationsSettingsPage} />
       <ProtectedRoute path="/settings/shipping" component={ShippingSettingsPage} />
       <ProtectedRoute path="/compliance" component={CompliancePage} />
       <Route path="/auth" component={AuthPage} />
@@ -77,6 +80,7 @@ function App() {
   initializeBatchEventsData();
   initializeAnalyticsData();
   initializeTaxationData();
+  initializeWarehouseData();
   
   return (
     <QueryClientProvider client={queryClient}>
