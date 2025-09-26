@@ -1,0 +1,102 @@
+Implement “Multi-Warehouse & Multi-Region Stock Control (V1)” in Flowventory.
+Frontend-only for now, persist via localStorage. Integrate with existing Inventory, Orders, Alerts, and Shipping flows.
+
+GOALS
+1) Support multiple warehouses/locations across regions (US/UK/UAE/SG/IN).
+2) Track stock per-location (not a single global qty).
+3) Enable stock Transfers between locations with audit trail.
+4) Per-location reorder thresholds + low/out-of-stock badges.
+5) Location-aware pick/pack (orders, shipments) and valuation/reporting.
+
+DATA (localStorage keys)
+- "flowventory:locations": [
+    { id:"LOC_UK_LON", name:"London DC", regionId:"UK", type:"warehouse", isDefault:true },
+    { id:"LOC_UAE_DXB", name:"Dubai DC",  regionId:"UAE", type:"warehouse" },
+    { id:"LOC_US_NY",  name:"NY Hub",     regionId:"US", type:"warehouse" }
+  ]
+
+- "flowventory:inventory":  // per-location inventory records
+  // replace/extend existing shape to be location-aware
+  [
+    { id, productId, locationId, onHand, onOrder, reorderPoint, safetyStock, reorderQty }
+  ]
+
+- "flowventory:moves":  // audit trail for all stock movements
+  [
+    { id, ts, type:"RECEIPT"|"ADJUST"|"TRANSFER"|"PICK"|"RETURN",
+      productId, fromLocationId?:string, toLocationId?:string,
+      qty:number, refType?:"PO"|"ORDER"|"RMA"|"MANUAL", refId?:string, note?:string }
+  ]
+
+- (optional) "flowventory:settings:inventory":
+    { combineLocations?: false }   // if true, list pages can show totals with a breakdown tooltip
+
+UTILS
+- getOrCreateInv(productId, locationId)
+- applyMove(move) -> mutates onHand for the affected location(s) + pushes into moves
+- lowStockStatus({onHand, reorderPoint, safetyStock}) -> "OUT" | "LOW" | "OK"
+- totalAcrossLocations(productId) -> sum onHand
+
+ROUTES & UI
+1) Settings → Locations  (/settings/locations)
+   - Table: Name, Region, Type, Default?, Actions (Edit/Delete)
+   - “Add Location” modal: name, regionId (UK/UAE/US/SG/IN), type (warehouse/store), isDefault
+   - Guard: at least one location must exist; prevent delete if it would leave 0
+
+2) Inventory List (/inventory)
+   - New “Location” filter (dropdown: All, per location)
+   - If “All”: show total onHand per product + a small “breakdown” button
+     - Clicking opens a drawer that lists per-location rows with onHand, reorderPoint, safetyStock, status chip
+   - Inline per-location thresholds editor (reorderPoint/reorderQty/safetyStock) via modal
+
+3) Product Detail → “Locations” tab
+   - Table with per-location stock & thresholds; “Adjust”, “Receive”, “Transfer” actions
+   - “Receive” modal: location, qty(+), note (refType PO/refId optional)
+   - “Adjust” modal: location, qty(±), reason
+   - “Transfer” modal:
+       fields: fromLocation, toLocation, qty, note
+       validations: qty > 0; from != to; onHand(from) >= qty
+       applyMove creates two records: out from source (TRANSFER), in to target (TRANSFER)
+
+4) Orders / Picking
+   - When adding items to an order or creating shipment:
+     - If location is chosen at order level: pick from that location
+     - If not chosen: open a picker to select source location for each line; default to default location
+   - Deduct onHand from chosen location via applyMove({type:"PICK"})
+
+5) Alerts integration
+   - Low/Out-of-stock badges compute against per-location thresholds
+   - In “All locations” view, if any location is OUT -> product shows OUT; else if any LOW -> LOW
+   - Clicking badge opens the per-location breakdown
+
+6) Reporting (light)
+   - Add “Stock by Location” report (/reports/locations):
+     - Columns: Product, Location, OnHand, ReorderPoint, SafetyStock, Status
+     - Export CSV
+   - Add “Transfer Log” report (/reports/transfers):
+     - Filters: date range, product, from/to location
+     - Export CSV
+
+SEED
+- Seed 3 locations as above
+- For 6–8 products, create per-location inventory rows with varied onHand/thresholds so that some show OUT/LOW
+- Seed 3 transfers & 2 receipts into moves to populate logs
+
+VALIDATION
+- Adjust can be positive or negative; disallow resulting negative onHand (unless explicitly allowNegative flag is set—default false)
+- Transfer qty must not exceed onHand at source
+- Threshold fields must be >= 0
+- Prevent deleting a location if it has inventory (require zeroing or moving stock first)
+
+STYLING
+- Keep neon SaaS style: rounded-2xl cards, subtle borders, status chips:
+  - OUT (red), LOW (amber), OK (gray/green)
+- Drawer for breakdown; modals for actions; toast confirmations
+
+ACCEPTANCE (Frontend)
+- Create a new location → appears in filter and product Locations tab
+- Receive stock into a specific location → onHand increases only there; move logged
+- Transfer stock from Location A to B → A decreases, B increases, transfer logged (two move entries ok)
+- Orders/shipments picking reduces onHand at the chosen location
+- Inventory list “All” shows totals; breakdown shows correct per-location rows with status chips
+- Reports export CSV with correct rows

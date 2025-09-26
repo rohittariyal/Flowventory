@@ -1316,3 +1316,165 @@ export type Shipment = typeof shipments.$inferSelect;
 export type CreateShipment = z.infer<typeof createShipmentSchema>;
 export type GetRates = z.infer<typeof getRatesSchema>;
 export type ShippingRate = typeof shippingRates.$inferSelect;
+
+// Multi-Warehouse & Multi-Region Stock Control Interfaces
+
+// Location/Warehouse management
+export interface Location {
+  id: string;
+  name: string;
+  regionId: "UK" | "UAE" | "US" | "SG" | "IN";
+  type: "warehouse" | "store" | "fulfillment_center";
+  isDefault: boolean;
+  address?: {
+    street: string;
+    city: string;
+    state?: string;
+    postalCode: string;
+    country: string;
+  };
+  isActive: boolean;
+  createdAt: string;
+  updatedAt: string;
+}
+
+// Location-aware inventory (replaces global stock tracking)
+export interface LocationInventory {
+  id: string;
+  productId: string;
+  locationId: string;
+  onHand: number;
+  onOrder: number;
+  reorderPoint: number;
+  safetyStock: number;
+  reorderQty: number;
+  cost?: number; // optional cost tracking per location
+  updatedAt: string;
+}
+
+// Stock movement audit trail
+export interface StockMove {
+  id: string;
+  timestamp: string;
+  type: "RECEIPT" | "ADJUST" | "TRANSFER" | "PICK" | "RETURN";
+  productId: string;
+  fromLocationId?: string; // null for receipts, adjustments
+  toLocationId?: string;   // null for picks, returns
+  qty: number; // positive for inbound, negative for outbound
+  refType?: "PO" | "ORDER" | "RMA" | "MANUAL" | "TRANSFER";
+  refId?: string;
+  note?: string;
+  userId?: string; // who performed the move
+  cost?: number; // optional cost tracking
+}
+
+// Stock status enum
+export type StockStatus = "OUT" | "LOW" | "OK";
+
+// Transfer request/validation
+export interface TransferRequest {
+  fromLocationId: string;
+  toLocationId: string;
+  productId: string;
+  qty: number;
+  note?: string;
+}
+
+// Multi-location inventory settings
+export interface InventorySettings {
+  combineLocations: boolean; // if true, show totals with breakdown
+  allowNegativeStock: boolean;
+  defaultLocationId?: string;
+}
+
+// Location filter for inventory views
+export type LocationFilter = "ALL" | string; // "ALL" or specific locationId
+
+// Stock breakdown for multi-location view
+export interface LocationStockBreakdown {
+  locationId: string;
+  locationName: string;
+  onHand: number;
+  reorderPoint: number;
+  safetyStock: number;
+  status: StockStatus;
+}
+
+// Product with location-aware inventory summary
+export interface ProductInventorySummary {
+  productId: string;
+  totalOnHand: number;
+  locations: LocationStockBreakdown[];
+  overallStatus: StockStatus; // worst status across all locations
+}
+
+// Zod schemas for validation
+export const locationSchema = z.object({
+  id: z.string(),
+  name: z.string().min(1, "Location name is required"),
+  regionId: z.enum(["UK", "UAE", "US", "SG", "IN"]),
+  type: z.enum(["warehouse", "store", "fulfillment_center"]),
+  isDefault: z.boolean(),
+  address: z.object({
+    street: z.string(),
+    city: z.string(),
+    state: z.string().optional(),
+    postalCode: z.string(),
+    country: z.string(),
+  }).optional(),
+  isActive: z.boolean(),
+  createdAt: z.string(),
+  updatedAt: z.string(),
+});
+
+export const locationInventorySchema = z.object({
+  id: z.string(),
+  productId: z.string(),
+  locationId: z.string(),
+  onHand: z.number().min(0),
+  onOrder: z.number().min(0),
+  reorderPoint: z.number().min(0),
+  safetyStock: z.number().min(0),
+  reorderQty: z.number().min(0),
+  cost: z.number().min(0).optional(),
+  updatedAt: z.string(),
+});
+
+export const stockMoveSchema = z.object({
+  id: z.string(),
+  timestamp: z.string(),
+  type: z.enum(["RECEIPT", "ADJUST", "TRANSFER", "PICK", "RETURN"]),
+  productId: z.string(),
+  fromLocationId: z.string().optional(),
+  toLocationId: z.string().optional(),
+  qty: z.number(),
+  refType: z.enum(["PO", "ORDER", "RMA", "MANUAL", "TRANSFER"]).optional(),
+  refId: z.string().optional(),
+  note: z.string().optional(),
+  userId: z.string().optional(),
+  cost: z.number().optional(),
+});
+
+export const transferRequestSchema = z.object({
+  fromLocationId: z.string(),
+  toLocationId: z.string(),
+  productId: z.string(),
+  qty: z.number().min(1, "Transfer quantity must be greater than 0"),
+  note: z.string().optional(),
+}).refine((data) => data.fromLocationId !== data.toLocationId, {
+  message: "Source and destination locations must be different",
+  path: ["toLocationId"],
+});
+
+export const inventorySettingsSchema = z.object({
+  combineLocations: z.boolean(),
+  allowNegativeStock: z.boolean(),
+  defaultLocationId: z.string().optional(),
+});
+
+// Type exports
+export type InsertLocation = z.infer<typeof locationSchema>;
+export type InsertLocationInventory = z.infer<typeof locationInventorySchema>;
+export type InsertStockMove = z.infer<typeof stockMoveSchema>;
+export type InsertTransferRequest = z.infer<typeof transferRequestSchema>;
+export type InsertInventorySettings = z.infer<typeof inventorySettingsSchema>;
