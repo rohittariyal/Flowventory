@@ -544,3 +544,32 @@ export function getAllProducts(): Product[] {
   // Fallback to hardcoded data
   return PRODUCT_DATA;
 }
+
+// Update product stock
+export function updateProductStock(sku: string, newStock: number): boolean {
+  try {
+    let products: Product[] = getAllProducts();
+    const productIndex = products.findIndex(p => p.sku === sku || p.id === sku);
+    
+    if (productIndex === -1) {
+      console.error(`Product with SKU ${sku} not found`);
+      return false;
+    }
+    
+    // Update the product stock
+    products[productIndex] = {
+      ...products[productIndex],
+      stock: newStock,
+      available: Math.max(0, newStock - (products[productIndex].reserved || 0)),
+    };
+    
+    // Save back to localStorage
+    localStorage.setItem("flowventory:products", JSON.stringify(products));
+    
+    console.log(`Updated product ${sku} stock to ${newStock}`);
+    return true;
+  } catch (error) {
+    console.error("Error updating product stock:", error);
+    return false;
+  }
+}

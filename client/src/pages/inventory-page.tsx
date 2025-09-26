@@ -9,13 +9,22 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { AlertTriangle, Package, Plus, FileText, CheckCircle, Search, Layers, Clock, ChevronRight } from "lucide-react";
+import { AlertTriangle, Package, Plus, FileText, CheckCircle, Search, Layers, Clock, ChevronRight, MapPin, Warehouse, Building2 } from "lucide-react";
 import { Link } from "wouter";
 import { apiRequest } from "@/lib/queryClient";
 import { useToast } from "@/hooks/use-toast";
-import { getAllProducts, type Product } from "@/data/seedProductData";
+import { getAllProducts, updateProductStock, type Product } from "@/data/seedProductData";
 import { getBatchesByProduct, initializeBatchStorage } from "@/lib/batchStorage";
 import { statusFor, getBatchSummary, fifoPick } from "@/lib/batchUtils";
+import type { Location, LocationFilter, LocationStockBreakdown, ProductInventorySummary, InventorySettings } from "@shared/schema";
+import {
+  getLocations,
+  getInventorySettings,
+  getProductInventorySummary,
+  getLocationInventory,
+  getDefaultLocation,
+  applyMove
+} from "@/utils/warehouse";
 interface BatchDrawerData {
   product: Product;
   batches: any[];
@@ -34,6 +43,14 @@ function InventoryPage() {
   const { toast } = useToast();
   const queryClient = useQueryClient();
   const [products, setProducts] = useState<Product[]>([]);
+  const [locations, setLocations] = useState<Location[]>([]);
+  const [inventorySettings, setInventorySettings] = useState<InventorySettings>({
+    combineLocations: false,
+    allowNegativeStock: false,
+    defaultLocationId: undefined,
+  });
+  const [productSummaries, setProductSummaries] = useState<ProductInventorySummary[]>([]);
+  const [selectedLocationFilter, setSelectedLocationFilter] = useState<LocationFilter>("ALL");
   const [selectedSku, setSelectedSku] = useState<string>("");
   const [poModalOpen, setPoModalOpen] = useState(false);
   const [batchDrawerOpen, setBatchDrawerOpen] = useState(false);
@@ -47,26 +64,162 @@ function InventoryPage() {
   // Feature 2: Search and filter
   const [searchQuery, setSearchQuery] = useState("");
 
+  // Refresh data function
+  const refreshInventoryData = () => {
+    const allProducts = getAllProducts();
+    const allLocations = getLocations();
+    const settings = getInventorySettings();
+    
+    // Generate summaries for all products
+    const allSummaries = allProducts.map(product => 
+      getProductInventorySummary(product.id)
+    );
+    
+    setProducts(allProducts);
+    setLocations(allLocations);
+    setInventorySettings(settings);
+    setProductSummaries(allSummaries);
+  };
+
   // Initialize storage and load products
   useEffect(() => {
     initializeBatchStorage();
-    const allProducts = getAllProducts();
-    setProducts(allProducts);
+    refreshInventoryData();
+    
+    // Listen for storage changes to refresh data
+    const handleStorageChange = (e: StorageEvent) => {
+      if (e.key && (
+        e.key.includes('flowventory:locations') || 
+        e.key.includes('flowventory:inventory') ||
+        e.key.includes('flowventory:inventory-settings')
+      )) {
+        refreshInventoryData();
+      }
+    };
+    
+    window.addEventListener('storage', handleStorageChange);
+    return () => window.removeEventListener('storage', handleStorageChange);
   }, []);
   
-  // Filter inventory data based on search query
+  // Filter inventory data based on search query and location
   const filteredInventory = useMemo(() => {
-    if (!searchQuery.trim()) return products;
+    let filtered = products;
     
-    const query = searchQuery.toLowerCase().trim();
-    return products.filter(product => 
-      (product.sku || "").toLowerCase().includes(query) ||
-      (product.name || "").toLowerCase().includes(query) ||
-      (product.category || "").toLowerCase().includes(query) ||
-      (product.supplier || "").toLowerCase().includes(query) ||
-      (product.channels || []).some(channel => (channel || "").toLowerCase().includes(query))
-    );
-  }, [searchQuery, products]);
+    // Apply location filter first
+    if (selectedLocationFilter !== "ALL") {
+      filtered = filtered.filter(product => {
+        const summary = productSummaries.find(s => s.productId === product.id);
+        if (!summary) return false;
+        
+        // Check if the product has inventory at the selected location
+        return summary.locations.some(location => 
+          location.locationId === selectedLocationFilter && location.onHand > 0
+        );
+      });
+    }
+    
+    // Apply search filter
+    if (searchQuery.trim()) {
+      const query = searchQuery.toLowerCase().trim();
+      filtered = filtered.filter(product => 
+        (product.sku || "").toLowerCase().includes(query) ||
+        (product.name || "").toLowerCase().includes(query) ||
+        (product.category || "").toLowerCase().includes(query) ||
+        (product.supplier || "").toLowerCase().includes(query) ||
+        (product.channels || []).some(channel => (channel || "").toLowerCase().includes(query))
+      );
+    }
+
+    return filtered;
+  }, [searchQuery, products, selectedLocationFilter, productSummaries]);
+
+  // Calculate dynamic days cover based on current stock and velocity
+  const calculateDaysCover = (currentStock: number, product: Product): number => {
+    if (currentStock <= 0) return 0;
+    
+    // Try to get velocity from various product fields
+    let dailyVelocity = 0;
+    let method = "none";
+    
+    // Option 1: Use product velocity field if available
+    if (product.velocity && product.velocity > 0) {
+      dailyVelocity = product.velocity;
+      method = "velocity";
+    }
+    // Option 2: Calculate from original days cover and stock
+    else if (product.daysCover && product.daysCover > 0 && product.stock && product.stock > 0) {
+      dailyVelocity = product.stock / product.daysCover;
+      method = "daysCover";
+    }
+    // Option 3: Use daysLeft and stock to calculate velocity
+    else if (product.daysLeft && product.daysLeft > 0 && product.stock && product.stock > 0) {
+      dailyVelocity = product.stock / product.daysLeft;
+      method = "daysLeft";
+    }
+    // Option 4: Fallback - assume reasonable velocity based on stock level
+    else {
+      // For products without velocity data, assume 2 units per day for reasonable days cover
+      dailyVelocity = 2;
+      method = "fallback";
+    }
+    
+    // Calculate days cover: stock / daily_velocity
+    const result = dailyVelocity > 0 ? Math.round((currentStock / dailyVelocity) * 10) / 10 : 0;
+    
+    // Debug logging for first few products
+    if (["WIDGET-001", "GADGET-002", "TOOL-003"].includes(product.sku)) {
+      console.log(`[Days Cover Debug] ${product.sku}:`, {
+        currentStock,
+        velocity: product.velocity,
+        daysCover: product.daysCover,
+        daysLeft: product.daysLeft,
+        stock: product.stock,
+        dailyVelocity,
+        method,
+        result
+      });
+    }
+    
+    return result;
+  };
+
+  // Get inventory data for a product (location-aware)
+  const getProductInventoryData = (product: Product) => {
+    const summary = productSummaries.find(s => s.productId === product.id);
+    if (!summary) {
+      // Fallback to original product data
+      const currentStock = product.stock || 0;
+      return {
+        totalStock: currentStock,
+        reorderPoint: product.reorderPoint || 0,
+        daysCover: calculateDaysCover(currentStock, product),
+        locations: [],
+        overallStatus: currentStock <= (product.reorderPoint || 0) ? 'LOW' : 'OK' as const,
+      };
+    }
+
+    // If a specific location is selected, use that location's data for status
+    if (selectedLocationFilter !== "ALL") {
+      const locationData = summary.locations.find(l => l.locationId === selectedLocationFilter);
+      if (locationData) {
+        return {
+          totalStock: locationData.onHand, // Use location-specific stock for actions
+          reorderPoint: locationData.reorderPoint,
+          daysCover: calculateDaysCover(locationData.onHand, product),
+          locations: [locationData], // Only show selected location
+          overallStatus: locationData.status, // Use location-specific status
+        };
+      }
+    }
+
+    return {
+      totalStock: product.stock || 0, // Use original product stock, not warehouse total
+      reorderPoint: summary.locations[0]?.reorderPoint || 0,
+      daysCover: calculateDaysCover(product.stock || 0, product), // Use original stock for days cover too
+      locations: summary.locations,
+      overallStatus: summary.overallStatus,
+    };
+  };
 
   // Batch handling functions
   const handleOpenBatchDrawer = (product: Product) => {
@@ -144,6 +297,9 @@ function InventoryPage() {
         description: "Successfully created task for inventory alert",
       });
       queryClient.invalidateQueries({ queryKey: ["/api/tasks"] });
+      
+      // Refresh inventory data after task creation
+      refreshInventoryData();
     },
     onError: (error) => {
       toast({
@@ -180,8 +336,45 @@ function InventoryPage() {
         description: "Purchase order created successfully",
       });
       console.log("[PO] Frontend: Created PO", result.id, result.sku, result.qty, result.supplierName);
+      
+      // Simulate receiving the inventory at the default location and update product data
+      try {
+        const defaultLocation = getDefaultLocation();
+        if (defaultLocation) {
+          const product = products.find(p => p.sku === result.sku);
+          if (product) {
+            // 1. Apply warehouse move
+            applyMove({
+              type: "RECEIPT",
+              productId: product.id,
+              toLocationId: defaultLocation.id,
+              qty: result.qty,
+              refType: "PO",
+              refId: result.id,
+              note: `Received from PO: ${result.supplierName}`,
+            });
+            
+            // 2. Update original product stock data
+            const newStock = (product.stock || 0) + result.qty;
+            updateProductStock(result.sku, newStock);
+            
+            // 3. Refresh the UI to show updated data
+            refreshInventoryData();
+            
+            console.log(`[PO] Simulated inventory receipt: ${result.qty} units of ${result.sku} to ${defaultLocation.name}`);
+            console.log(`[PO] Updated original product stock from ${product.stock} to ${newStock}`);
+            console.log(`[PO] Refreshed inventory data to update UI`);
+          }
+        }
+      } catch (error) {
+        console.error("[PO] Failed to update inventory:", error);
+      }
+      
       setPoModalOpen(false);
       setPoForm({ supplier: "", quantity: "20", notes: "" });
+      
+      // Refresh inventory data after purchase order creation
+      refreshInventoryData();
     },
     onError: (error) => {
       console.error("Error creating purchase order:", error);
@@ -193,10 +386,15 @@ function InventoryPage() {
     }
   });
 
-  // Feature 3: Low-stock highlight with accessibility
+  // Feature 3: Low-stock highlight with accessibility (location-aware)
   const getRowClassName = (product: Product) => {
-    const isLowStock = product.stock <= product.reorderPoint;
-    if (isLowStock) {
+    const inventoryData = getProductInventoryData(product);
+    
+    // Check if any location has critical stock levels
+    const hasCriticalStock = inventoryData.overallStatus === "OUT" || 
+      inventoryData.locations.some(l => l.status === "OUT" || l.status === "LOW");
+    
+    if (hasCriticalStock || inventoryData.overallStatus === "LOW") {
       return "bg-red-50 dark:bg-red-950/20 border-l-4 border-l-red-500 dark:border-l-red-400";
     }
     if (product.daysCover <= 2) return "bg-red-50 dark:bg-red-950/20 border-red-200 dark:border-red-800";
@@ -252,17 +450,59 @@ function InventoryPage() {
           </div>
         </CardHeader>
         <CardContent className="px-3 sm:px-6">
-          {/* Feature 2: Search input */}
-          <div className="mb-4">
-            <div className="relative">
-              <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-muted-foreground h-4 w-4" />
-              <Input
-                placeholder="Search SKU / Supplier / Category"
-                value={searchQuery}
-                onChange={(e) => setSearchQuery(e.target.value)}
-                className="pl-10"
-              />
+          {/* Search and Filter Controls */}
+          <div className="mb-4 space-y-4">
+            <div className="flex flex-col sm:flex-row gap-4">
+              <div className="relative flex-1">
+                <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-muted-foreground h-4 w-4" />
+                <Input
+                  placeholder="Search SKU / Supplier / Category"
+                  value={searchQuery}
+                  onChange={(e) => setSearchQuery(e.target.value)}
+                  className="pl-10"
+                  data-testid="input-search-inventory"
+                />
+              </div>
+              <div className="w-full sm:w-48">
+                <Select
+                  value={selectedLocationFilter}
+                  onValueChange={(value) => setSelectedLocationFilter(value as LocationFilter)}
+                >
+                  <SelectTrigger data-testid="select-location-filter">
+                    <SelectValue placeholder="Filter by location" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="ALL">
+                      <div className="flex items-center gap-2">
+                        <MapPin className="h-4 w-4" />
+                        All Locations
+                      </div>
+                    </SelectItem>
+                    {locations.map((location) => (
+                      <SelectItem key={location.id} value={location.id}>
+                        <div className="flex items-center gap-2">
+                          {location.type === "warehouse" && <Warehouse className="h-4 w-4" />}
+                          {location.type === "store" && <Building2 className="h-4 w-4" />}
+                          {location.type === "fulfillment_center" && <Package className="h-4 w-4" />}
+                          <span>{location.name}</span>
+                          <Badge variant="outline" className="text-xs">
+                            {location.regionId}
+                          </Badge>
+                        </div>
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
             </div>
+            
+            {/* Location-aware display mode toggle */}
+            {inventorySettings.combineLocations && selectedLocationFilter === "ALL" && (
+              <div className="flex items-center gap-2 text-sm text-muted-foreground">
+                <MapPin className="h-4 w-4" />
+                <span>Combined view: Showing totals with location breakdown on hover</span>
+              </div>
+            )}
           </div>
 
           <div className="rounded-md border overflow-x-auto">
@@ -272,7 +512,9 @@ function InventoryPage() {
                   <TableHead className="min-w-[80px]">SKU</TableHead>
                   <TableHead className="min-w-[100px]">Channels</TableHead>
                   <TableHead className="min-w-[80px]">Tax Category</TableHead>
-                  <TableHead className="text-right min-w-[60px]">Stock</TableHead>
+                  <TableHead className="text-right min-w-[80px]">
+                    {selectedLocationFilter === "ALL" && inventorySettings.combineLocations ? "Total Stock" : "Stock"}
+                  </TableHead>
                   <TableHead className="text-right min-w-[80px]">Threshold</TableHead>
                   <TableHead className="text-right min-w-[90px]">Days Cover</TableHead>
                   <TableHead className="min-w-[100px]">Batch Status</TableHead>
@@ -325,11 +567,106 @@ function InventoryPage() {
                         <span className="text-xs text-gray-500">-</span>
                       )}
                     </TableCell>
-                    <TableCell className="text-right font-mono">
-                      {product.stock}
+                    <TableCell className="text-right">
+                      {(() => {
+                        const inventoryData = getProductInventoryData(product);
+                        
+                        if (selectedLocationFilter === "ALL") {
+                          if (inventorySettings.combineLocations) {
+                            // Show total with location breakdown on hover
+                            return (
+                              <div className="font-mono cursor-help" title={inventoryData.locations.map(l => `${l.locationName}: ${l.onHand}`).join('\n')}>
+                                <span data-testid={`text-total-stock-${product.sku}`}>
+                                  {inventoryData.totalStock}
+                                </span>
+                                {inventoryData.locations.length > 1 && (
+                                  <div className="text-xs text-muted-foreground mt-1">
+                                    <MapPin className="h-3 w-3 inline mr-1" />
+                                    {inventoryData.locations.length} locations
+                                  </div>
+                                )}
+                              </div>
+                            );
+                          } else {
+                            // Show breakdown for each location
+                            return (
+                              <div className="space-y-1">
+                                {inventoryData.locations.map((location, index) => (
+                                  <div key={location.locationId} className="text-xs">
+                                    <div className="flex items-center justify-between">
+                                      <span className="text-muted-foreground truncate max-w-[60px]" title={location.locationName}>
+                                        {location.locationName}
+                                      </span>
+                                      <span className="font-mono" data-testid={`text-location-stock-${product.sku}-${location.locationId}`}>
+                                        {location.onHand}
+                                      </span>
+                                    </div>
+                                    {index < inventoryData.locations.length - 1 && (
+                                      <div className="border-t border-muted my-1" />
+                                    )}
+                                  </div>
+                                ))}
+                                {inventoryData.locations.length > 0 && (
+                                  <div className="border-t border-muted-foreground/30 pt-1 mt-2">
+                                    <div className="flex items-center justify-between font-semibold">
+                                      <span className="text-xs">Total</span>
+                                      <span className="font-mono text-sm" data-testid={`text-total-stock-${product.sku}`}>
+                                        {inventoryData.totalStock}
+                                      </span>
+                                    </div>
+                                  </div>
+                                )}
+                              </div>
+                            );
+                          }
+                        } else {
+                          // Show specific location stock
+                          const locationStock = inventoryData.locations.find(l => l.locationId === selectedLocationFilter);
+                          return (
+                            <span className="font-mono" data-testid={`text-location-stock-${product.sku}-${selectedLocationFilter}`}>
+                              {locationStock?.onHand || 0}
+                            </span>
+                          );
+                        }
+                      })()}
                     </TableCell>
-                    <TableCell className="text-right font-mono">
-                      {product.reorderPoint}
+                    <TableCell className="text-right">
+                      {(() => {
+                        const inventoryData = getProductInventoryData(product);
+                        
+                        if (selectedLocationFilter === "ALL") {
+                          if (inventorySettings.combineLocations) {
+                            // Show average reorder point
+                            const avgReorderPoint = inventoryData.locations.length > 0 
+                              ? Math.round(inventoryData.locations.reduce((sum, l) => sum + l.reorderPoint, 0) / inventoryData.locations.length)
+                              : inventoryData.reorderPoint;
+                            return <span className="font-mono">{avgReorderPoint}</span>;
+                          } else {
+                            // Show per-location reorder points
+                            return (
+                              <div className="space-y-1">
+                                {inventoryData.locations.map((location, index) => (
+                                  <div key={location.locationId} className="text-xs">
+                                    <div className="flex items-center justify-between">
+                                      <span className="text-muted-foreground truncate max-w-[60px]" title={location.locationName}>
+                                        {location.locationName}
+                                      </span>
+                                      <span className="font-mono">{location.reorderPoint}</span>
+                                    </div>
+                                    {index < inventoryData.locations.length - 1 && (
+                                      <div className="border-t border-muted my-1" />
+                                    )}
+                                  </div>
+                                ))}
+                              </div>
+                            );
+                          }
+                        } else {
+                          // Show specific location reorder point
+                          const locationData = inventoryData.locations.find(l => l.locationId === selectedLocationFilter);
+                          return <span className="font-mono">{locationData?.reorderPoint || inventoryData.reorderPoint}</span>;
+                        }
+                      })()}
                     </TableCell>
                     <TableCell className="text-right">
                       <Badge variant={getDaysCoverBadge(product.daysCover || 0)}>
@@ -340,46 +677,70 @@ function InventoryPage() {
                       {getBatchStatusBadge(product)}
                     </TableCell>
                     <TableCell>
-                      <div className="flex flex-col sm:flex-row gap-1 sm:gap-2">
-                        {product.stock <= 5 && (
-                          <Button
-                            variant="outline"
-                            size="sm"
-                            onClick={() => handleSuggestReorder(product.sku)}
-                            className="text-xs w-full sm:w-auto"
-                          >
-                            <Package className="h-3 w-3 sm:mr-1" />
-                            <span className="hidden sm:inline ml-1">Suggest Reorder</span>
-                          </Button>
-                        )}
-                        {product.stock <= product.reorderPoint && (
-                          <>
-                            {!product.hasLinkedTask && product.latestEventId ? (
+                      {(() => {
+                        const inventoryData = getProductInventoryData(product);
+                        const needsReorder = inventoryData.overallStatus === "LOW" || inventoryData.overallStatus === "OUT" ||
+                          inventoryData.totalStock <= 5;
+                        const belowThreshold = inventoryData.overallStatus === "LOW" || inventoryData.overallStatus === "OUT";
+                        
+                        return (
+                          <div className="flex flex-col sm:flex-row gap-1 sm:gap-2">
+                            {needsReorder && (
                               <Button
                                 variant="outline"
                                 size="sm"
-                                onClick={() => handleCreateTask(product.latestEventId!)}
-                                disabled={createTaskMutation.isPending}
+                                onClick={() => handleSuggestReorder(product.sku)}
                                 className="text-xs w-full sm:w-auto"
+                                data-testid={`button-suggest-reorder-${product.sku}`}
                               >
-                                <AlertTriangle className="h-3 w-3 sm:mr-1" />
-                                <span className="hidden sm:inline ml-1">Create Task</span>
+                                <Package className="h-3 w-3 sm:mr-1" />
+                                <span className="hidden sm:inline ml-1">Suggest Reorder</span>
                               </Button>
-                            ) : product.hasLinkedTask ? (
+                            )}
+                            {belowThreshold && (
+                              <>
+                                {!product.hasLinkedTask && product.latestEventId ? (
+                                  <Button
+                                    variant="outline"
+                                    size="sm"
+                                    onClick={() => handleCreateTask(product.latestEventId!)}
+                                    disabled={createTaskMutation.isPending}
+                                    className="text-xs w-full sm:w-auto"
+                                    data-testid={`button-create-task-${product.sku}`}
+                                  >
+                                    <AlertTriangle className="h-3 w-3 sm:mr-1" />
+                                    <span className="hidden sm:inline ml-1">Create Task</span>
+                                  </Button>
+                                ) : product.hasLinkedTask ? (
+                                  <Button
+                                    variant="outline"
+                                    size="sm"
+                                    className="text-xs w-full sm:w-auto"
+                                    disabled
+                                    data-testid={`button-open-task-${product.sku}`}
+                                  >
+                                    <CheckCircle className="h-3 w-3 sm:mr-1" />
+                                    <span className="hidden sm:inline ml-1">Open Task</span>
+                                  </Button>
+                                ) : null}
+                              </>
+                            )}
+                            
+                            {/* Add location-specific transfer action when viewing all locations */}
+                            {selectedLocationFilter === "ALL" && inventoryData.locations.length > 1 && (
                               <Button
-                                variant="outline"
+                                variant="ghost"
                                 size="sm"
                                 className="text-xs w-full sm:w-auto"
-                                disabled
+                                data-testid={`button-transfer-${product.sku}`}
                               >
-                                <CheckCircle className="h-3 w-3 sm:mr-1" />
-                                <span className="hidden sm:inline ml-1">Open Task</span>
+                                <ChevronRight className="h-3 w-3 sm:mr-1" />
+                                <span className="hidden sm:inline ml-1">Transfer</span>
                               </Button>
-                            ) : null}
-                          </>
-                        )}
-
-                      </div>
+                            )}
+                          </div>
+                        );
+                      })()}
                     </TableCell>
                   </TableRow>
                   ))
