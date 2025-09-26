@@ -1,5 +1,6 @@
 import { useState, useEffect } from "react";
 import { useRoute, useLocation } from "wouter";
+import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
@@ -29,10 +30,17 @@ import {
   ArrowLeft,
   Calendar,
   User,
-  DollarSign
+  DollarSign,
+  CreditCard,
+  ExternalLink,
+  RefreshCw,
+  Clock,
+  CheckCircle,
+  AlertCircle
 } from "lucide-react";
 import { currencyFormat, fx } from "@/utils/currency";
 import { useToast } from "@/hooks/use-toast";
+import { apiRequest } from "@/lib/queryClient";
 
 interface Invoice {
   id: string;
@@ -68,18 +76,91 @@ interface Customer {
 const INVOICES_KEY = "flowventory:invoices";
 const CUSTOMERS_KEY = "flowventory:customers";
 
+interface PaymentConnector {
+  id: string;
+  provider: string;
+  name: string;
+  status: string;
+}
+
 export default function InvoiceDetailPage() {
   const [match, params] = useRoute("/invoices/:id");
   const [, setLocation] = useLocation();
   const { toast } = useToast();
+  const queryClient = useQueryClient();
   
   const [invoice, setInvoice] = useState<Invoice | null>(null);
   const [customer, setCustomer] = useState<Customer | null>(null);
   const [isAddingPayment, setIsAddingPayment] = useState(false);
+  const [isCreatingPaymentLink, setIsCreatingPaymentLink] = useState(false);
+  const [selectedPaymentConnector, setSelectedPaymentConnector] = useState<string>("");
   const [paymentForm, setPaymentForm] = useState({
     date: new Date().toISOString().split('T')[0],
     amount: '',
     method: 'Cash'
+  });
+
+  // Fetch payment connectors
+  const { data: paymentConnectors = [], isLoading: connectorsLoading } = useQuery({
+    queryKey: ["/api/pay/connectors"],
+  });
+
+  // Create payment link mutation
+  const createPaymentLinkMutation = useMutation({
+    mutationFn: ({ connectorId, invoiceId }: { connectorId: string; invoiceId: string }) =>
+      apiRequest("POST", `/api/pay/${connectorId}/payment-link`, {
+        invoiceId,
+        successUrl: `${window.location.origin}/invoices/${invoiceId}?payment=success`,
+        cancelUrl: `${window.location.origin}/invoices/${invoiceId}?payment=cancelled`
+      }),
+    onSuccess: (result: any) => {
+      if (result.url) {
+        window.open(result.url, '_blank');
+        toast({
+          title: "Payment Link Created",
+          description: "Payment link opened in new tab. Customer can use this to pay the invoice.",
+        });
+      }
+    },
+    onError: (error: any) => {
+      toast({
+        title: "Error",
+        description: error.message || "Failed to create payment link",
+        variant: "destructive",
+      });
+    },
+  });
+
+  // Reconcile payment mutation
+  const reconcilePaymentMutation = useMutation({
+    mutationFn: (invoiceId: string) =>
+      apiRequest("POST", "/api/pay/reconcile", { invoiceId }),
+    onSuccess: (result: any) => {
+      // Update local invoice status based on reconciliation
+      if (invoice && result.status !== invoice.status) {
+        const updatedInvoice = { ...invoice, status: result.status.toUpperCase() };
+        setInvoice(updatedInvoice);
+        
+        // Update localStorage
+        const invoices = JSON.parse(localStorage.getItem(INVOICES_KEY) || '[]');
+        const updatedInvoices = invoices.map((inv: Invoice) => 
+          inv.id === invoice.id ? updatedInvoice : inv
+        );
+        localStorage.setItem(INVOICES_KEY, JSON.stringify(updatedInvoices));
+
+        toast({
+          title: "Payment Status Updated",
+          description: `Invoice status updated to ${result.status}`,
+        });
+      }
+    },
+    onError: (error: any) => {
+      toast({
+        title: "Error",
+        description: error.message || "Failed to reconcile payment status",
+        variant: "destructive",
+      });
+    },
   });
 
   useEffect(() => {
@@ -196,6 +277,31 @@ export default function InvoiceDetailPage() {
       title: "Payment added",
       description: `Payment of ${currencyFormat(amount, invoice.currency, invoice.locale)} has been recorded.`,
     });
+  };
+
+  const handleCreatePaymentLink = () => {
+    if (!selectedPaymentConnector || !invoice) {
+      toast({
+        title: "Missing Selection",
+        description: "Please select a payment connector first.",
+        variant: "destructive",
+      });
+      return;
+    }
+
+    createPaymentLinkMutation.mutate({
+      connectorId: selectedPaymentConnector,
+      invoiceId: invoice.id
+    });
+  };
+
+  const handleReconcilePayment = () => {
+    if (!invoice) return;
+    reconcilePaymentMutation.mutate(invoice.id);
+  };
+
+  const getActiveConnectors = () => {
+    return (paymentConnectors as PaymentConnector[]).filter(c => c.status === 'active');
   };
 
   const downloadPDF = () => {
