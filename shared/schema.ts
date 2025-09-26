@@ -1472,9 +1472,123 @@ export const inventorySettingsSchema = z.object({
   defaultLocationId: z.string().optional(),
 });
 
+// Demand Forecasting interfaces
+export type ForecastMethod = "moving_avg" | "ewma";
+export type ForecastSeasonality = "none" | "weekly" | "monthly";
+export type ForecastHorizon = "30" | "60" | "90";
+
+export interface ForecastSettings {
+  defaultMethod: ForecastMethod;
+  ewmaAlpha: number; // for exponential weighted moving average
+  minHistoryDays: number; // minimum days of history required
+}
+
+export interface DailyForecast {
+  date: string; // ISO date string
+  qty: number;
+}
+
+export interface ForecastResult {
+  daily: DailyForecast[];
+  avgDaily: number;
+  peakDaily: number;
+}
+
+export interface ForecastData {
+  productId: string;
+  locationId?: string; // undefined means "all locations"
+  horizon: ForecastHorizon;
+  method: ForecastMethod;
+  ts: string; // timestamp when computed
+  result: ForecastResult;
+}
+
+export interface DemandSuggestion {
+  onHand: number;
+  safetyStock: number;
+  avgDaily: number;
+  leadTimeDays: number;
+  reorderQty?: number;
+  coverDays: number;
+  nextReorderDate: string;
+  suggestedQty: number;
+}
+
+export interface SalesOrderItem {
+  productId: string;
+  qty: number;
+  createdAt: string;
+  locationId?: string;
+}
+
+// Extend existing Product interface with forecasting fields
+export interface ProductWithForecast {
+  demandModel?: ForecastMethod;
+  seasonality?: ForecastSeasonality;
+  leadTimeDays?: number;
+}
+
+// Daily sales aggregation for forecasting
+export interface DailySales {
+  date: string;
+  qty: number;
+}
+
+// Forecast status types
+export type ForecastStatus = "healthy" | "action_needed" | "critical";
+
+// Zod schemas for validation
+export const forecastSettingsSchema = z.object({
+  defaultMethod: z.enum(["moving_avg", "ewma"]),
+  ewmaAlpha: z.number().min(0.1).max(0.9),
+  minHistoryDays: z.number().min(7).max(90),
+});
+
+export const dailyForecastSchema = z.object({
+  date: z.string(),
+  qty: z.number().min(0),
+});
+
+export const forecastResultSchema = z.object({
+  daily: z.array(dailyForecastSchema),
+  avgDaily: z.number().min(0),
+  peakDaily: z.number().min(0),
+});
+
+export const forecastDataSchema = z.object({
+  productId: z.string(),
+  locationId: z.string().optional(),
+  horizon: z.enum(["30", "60", "90"]),
+  method: z.enum(["moving_avg", "ewma"]),
+  ts: z.string(),
+  result: forecastResultSchema,
+});
+
+export const demandSuggestionSchema = z.object({
+  onHand: z.number().min(0),
+  safetyStock: z.number().min(0),
+  avgDaily: z.number().min(0),
+  leadTimeDays: z.number().min(1),
+  reorderQty: z.number().min(0).optional(),
+  coverDays: z.number(),
+  nextReorderDate: z.string(),
+  suggestedQty: z.number().min(0),
+});
+
+export const salesOrderItemSchema = z.object({
+  productId: z.string(),
+  qty: z.number().min(1),
+  createdAt: z.string(),
+  locationId: z.string().optional(),
+});
+
 // Type exports
 export type InsertLocation = z.infer<typeof locationSchema>;
 export type InsertLocationInventory = z.infer<typeof locationInventorySchema>;
 export type InsertStockMove = z.infer<typeof stockMoveSchema>;
 export type InsertTransferRequest = z.infer<typeof transferRequestSchema>;
 export type InsertInventorySettings = z.infer<typeof inventorySettingsSchema>;
+export type InsertForecastSettings = z.infer<typeof forecastSettingsSchema>;
+export type InsertForecastData = z.infer<typeof forecastDataSchema>;
+export type InsertDemandSuggestion = z.infer<typeof demandSuggestionSchema>;
+export type InsertSalesOrderItem = z.infer<typeof salesOrderItemSchema>;

@@ -1,0 +1,73 @@
+Implement “Demand Forecasting (V1) + Restock Autopilot” in Flowventory.
+Frontend-only for now; persist to localStorage; no external ML.
+
+GOALS
+1) Forecast next 30/60/90 days demand per SKU (overall & per-location).
+2) Show a Forecast tab on Product detail and a global Forecast page.
+3) Generate Suggested Reorder Qty & Next Reorder Date using lead time, safety stock, and current on-hand.
+4) One-click “Create PO” from suggestions.
+
+DATA (localStorage)
+- "flowventory:orders": ensure items have { productId, qty, createdAt, locationId? }
+- "flowventory:inventory": per-location stock: { productId, locationId, onHand, safetyStock, reorderPoint, reorderQty, leadTimeDays? }
+- "flowventory:products": add fields: { demandModel?: "moving_avg"|"ewma", seasonality?: "none"|"weekly"|"monthly" }
+- "flowventory:forecast": cache store (optional) [
+    { productId, locationId?:string, horizon:"30|60|90", method, ts, result:{ daily: [{date, qty}], avgDaily, peakDaily } }
+  ]
+- "flowventory:settings:forecast": { defaultMethod:"moving_avg", ewmaAlpha:0.35, minHistoryDays:30 }
+
+UTILS
+- groupDailySales(orders, {productId, locationId?}) -> map date -> qty
+- movingAvg(series, window=28) -> daily forecast = avg of last N days with zeros for missing days
+- ewma(series, alpha) -> exponential smoothing; last smoothed value as next-day forecast
+- seasonalityAdjust(series, pattern="weekly") -> scale factors per weekday (optional V1++)
+- calcSuggestion({ onHand, safetyStock, avgDaily, leadTimeDays, reorderQty? }):
+    daily = max(1, avgDaily)
+    coverDays = (onHand - safetyStock) / daily
+    nextReorderDate = today + max(0, floor(coverDays) - leadTimeDays) days
+    suggestedQty = max(reorderQty || 0, ceil((leadTimeDays + 14) * daily + safetyStock - onHand))
+    clamp suggestedQty >= 0
+- formatDate, startOfDay, endOfDay
+
+ROUTES & UI
+1) Product Detail → “Forecast” tab
+   - Controls: Location selector (All or specific), Horizon (30/60/90), Method (moving_avg default, ewma optional)
+   - KPI tiles: Avg Daily Demand, Peak Daily (last 60d), Lead Time, On-hand, Suggested Reorder Qty, Next Reorder Date
+   - Chart: simple line (daily actuals last 60–90 days) + line for predicted next horizon (use lightweight canvas or existing chart lib)
+   - Button: “Create PO” -> prefill supplier & qty with suggestedQty (opens existing PO flow)
+
+2) Global Forecasts Page (/forecast)
+   - Table view per SKU × Location (or “All”):
+     Columns: SKU, Location, On-hand, Safety Stock, Lead Time, Avg Daily, Suggested Qty, Next Reorder Date, Action
+   - Bulk actions: Create POs for selected rows, Export CSV
+   - Filters: location, low cover (<= X days), category (optional if exists)
+
+3) Inventory / Alerts integration
+   - In low/out stock chips tooltip, add: “Avg daily X, cover Y days, reorder by <date>”
+   - If suggestedQty > 0 and coverDays < leadTimeDays, add a ⚠️ indicator
+
+SEED
+- If orders are empty, generate 90 days of mock daily sales for 6 products with light randomness per location
+- Ensure at least one SKU shows suggestedQty > 0
+
+VALIDATION
+- Handle sparse history: if < minHistoryDays, fall back to 7-day average
+- Never produce negative suggestedQty; if onHand >> need, show 0
+- Lead time default = 7 if missing; expose editable leadTimeDays in product/location thresholds modal
+
+PERSISTENCE
+- Cache last computed forecasts in "flowventory:forecast" with ts; recompute when:
+  - horizon/method changes
+  - orders/inventory update
+  - location filter changes
+
+STYLING
+- Neon SaaS: rounded-2xl cards, subtle borders/shadows
+- Status chips: “Action Needed” (red/amber) when coverDays < leadTimeDays; “Healthy” (green/gray) otherwise
+
+ACCEPTANCE (Frontend)
+- Product → Forecast tab shows actuals + predicted line; KPI tiles populate
+- Changing method/horizon updates figures
+- Suggested Qty and Reorder Date look sensible (increase when onHand low; date sooner if leadTime high)
+- “Create PO” pre-fills supplier (if product has default supplier) and suggested qty
+- /forecast lists multiple SKUs; filters and Export CSV work
