@@ -25,7 +25,11 @@ import {
   getSalesOrders,
   getForecastFromCache,
   addForecastToCache,
-  getProductSalesHistory
+  getProductSalesHistory,
+  getOrRefreshForecast,
+  startAutoRefresh,
+  prewarmCache,
+  getCacheRefreshSettings
 } from "@/utils/forecastStorage";
 import { getLocations, getLocationInventory } from "@/utils/warehouse";
 
@@ -60,42 +64,44 @@ export function ForecastTab({ product, onProductUpdate }: ForecastTabProps) {
   const computeForecast = async () => {
     setLoading(true);
     try {
-      // Check cache first
       const locationId = selectedLocation === "all" ? undefined : selectedLocation;
-      const cached = getForecastFromCache(product.id, locationId, selectedHorizon, selectedMethod);
       
-      if (cached && !isForecastStale(cached.ts)) {
-        setForecastData(cached);
-        computeDemandSuggestion(cached);
-        setLoading(false);
-        return;
-      }
-
-      // Compute new forecast
-      const orders = getSalesOrders();
-      const result = getForecastForHorizon(
-        orders,
+      // Use enhanced caching with auto-refresh
+      const forecast = await getOrRefreshForecast(
         product.id,
         locationId,
         selectedHorizon,
         selectedMethod,
-        forecastSettings.minHistoryDays
+        async (productId, locId, horizon, method) => {
+          // Refresh callback - compute new forecast
+          const orders = getSalesOrders();
+          const result = getForecastForHorizon(
+            orders,
+            productId,
+            locId,
+            horizon,
+            method,
+            forecastSettings.minHistoryDays
+          );
+
+          // Create forecast data object
+          return {
+            productId,
+            locationId: locId,
+            horizon,
+            method,
+            ts: new Date().toISOString(),
+            result
+          };
+        }
       );
 
-      // Create forecast data object
-      const newForecast: ForecastData = {
-        productId: product.id,
-        locationId,
-        horizon: selectedHorizon,
-        method: selectedMethod,
-        ts: new Date().toISOString(),
-        result
-      };
-
-      // Cache the result
-      addForecastToCache(newForecast);
-      setForecastData(newForecast);
-      computeDemandSuggestion(newForecast);
+      if (forecast) {
+        setForecastData(forecast);
+        computeDemandSuggestion(forecast);
+      } else {
+        console.warn("No forecast data available");
+      }
     } catch (error) {
       console.error("Error computing forecast:", error);
     } finally {
@@ -147,12 +153,37 @@ export function ForecastTab({ product, onProductUpdate }: ForecastTabProps) {
     }
   };
 
-  const isForecastStale = (timestamp: string): boolean => {
-    const forecastTime = new Date(timestamp);
-    const now = new Date();
-    const ageHours = (now.getTime() - forecastTime.getTime()) / (1000 * 60 * 60);
-    return ageHours > 24; // Stale after 24 hours
-  };
+  // Initialize auto-refresh system on component mount
+  useEffect(() => {
+    const refreshCallback = async (productId: string, locationId: string | undefined, horizon: ForecastHorizon, method: ForecastMethod) => {
+      const orders = getSalesOrders();
+      const result = getForecastForHorizon(
+        orders,
+        productId,
+        locationId,
+        horizon,
+        method,
+        forecastSettings.minHistoryDays
+      );
+
+      return {
+        productId,
+        locationId,
+        horizon,
+        method,
+        ts: new Date().toISOString(),
+        result
+      };
+    };
+
+    // Start auto-refresh for this session
+    startAutoRefresh(refreshCallback);
+
+    // Cleanup on unmount
+    return () => {
+      // Auto-refresh will be cleaned up when the application unmounts
+    };
+  }, [forecastSettings.minHistoryDays]);
 
   const getForecastStatus = (): ForecastStatus => {
     if (!demandSuggestion) return "healthy";

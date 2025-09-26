@@ -1,4 +1,4 @@
-import { useState, useMemo } from "react";
+import { useState, useMemo, useEffect } from "react";
 import { Link, useLocation } from "wouter";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -10,7 +10,8 @@ import { ArrowLeft, TrendingUp, AlertTriangle, Package, ShoppingCart, Filter, Fi
 import { CreatePOModal } from "@/components/CreatePOModal";
 import { getAllProducts } from "@/data/seedProductData";
 import { getForecastForHorizon, calcSuggestion } from "@/utils/forecasting";
-import { getSalesOrders } from "@/utils/forecastStorage";
+import { getSalesOrders, getOrRefreshForecast, startAutoRefresh, prewarmCache } from "@/utils/forecastStorage";
+import type { ForecastHorizon, ForecastMethod } from "@shared/schema";
 
 interface ForecastSummary {
   productId: string;
@@ -35,71 +36,115 @@ export default function ForecastsPage() {
   const [riskFilter, setRiskFilter] = useState("all");
   const [createPOModalOpen, setCreatePOModalOpen] = useState(false);
   const [selectedForecastItem, setSelectedForecastItem] = useState<ForecastSummary | null>(null);
+  const [forecastSummaries, setForecastSummaries] = useState<ForecastSummary[]>([]);
+  const [loading, setLoading] = useState(true);
 
-  // Get all products and generate forecast summaries
-  const forecastSummaries = useMemo(() => {
-    const products = getAllProducts();
-    const summaries: ForecastSummary[] = [];
+  // Load forecast summaries with enhanced caching
+  useEffect(() => {
+    const loadForecastSummaries = async () => {
+      setLoading(true);
+      try {
+        const products = getAllProducts();
+        const summaries: ForecastSummary[] = [];
 
-    products.forEach(product => {
-      const locations = selectedLocation === "all" 
-        ? ["main"] // Simplified to main warehouse for now
-        : [selectedLocation];
+        // Create refresh callback for enhanced caching
+        const refreshCallback = async (productId: string, locationId: string | undefined, horizon: ForecastHorizon, method: ForecastMethod) => {
+          const orders = getSalesOrders();
+          const result = getForecastForHorizon(
+            orders,
+            productId,
+            locationId,
+            horizon,
+            method,
+            30 // Default min history days
+          );
 
-      locations.forEach(location => {
-        // Get stock for this location
-        const currentStock = product.stock || 0;
-        
-        // Generate forecast data
-        const allOrders = getSalesOrders();
-        const forecastData = getForecastForHorizon(
-          allOrders,
-          product.id,
-          location === "main" ? undefined : location,
-          "30",
-          "moving_avg"
-        );
-        
-        // Calculate metrics
-        const avgDailySales = forecastData.avgDaily;
-        const forecastDemand30 = forecastData.daily.reduce((sum: number, day: any) => sum + day.qty, 0);
-        const forecastDemand60 = forecastData.daily.slice(0, 60).reduce((sum: number, day: any) => sum + day.qty, 0);
-        const forecastDemand90 = forecastData.daily.slice(0, 90).reduce((sum: number, day: any) => sum + day.qty, 0);
-        
-        const daysLeft = avgDailySales > 0 ? Math.floor(currentStock / avgDailySales) : 999;
-        
-        // Determine risk level
-        let riskLevel: "low" | "medium" | "high" = "low";
-        if (daysLeft < 7) riskLevel = "high";
-        else if (daysLeft < 14) riskLevel = "medium";
+          return {
+            productId,
+            locationId,
+            horizon,
+            method,
+            ts: new Date().toISOString(),
+            result
+          };
+        };
 
-        // Calculate reorder suggestion
-        const suggestion = calcSuggestion({
-          onHand: currentStock,
-          safetyStock: 50, // Default safety stock
-          avgDaily: avgDailySales,
-          leadTimeDays: 14, // Default lead time
-          reorderQty: 100 // Default reorder quantity
-        });
+        // Process products in batches to avoid blocking UI
+        const batchSize = 5;
+        for (let i = 0; i < products.length; i += batchSize) {
+          const batch = products.slice(i, i + batchSize);
+          
+          await Promise.all(
+            batch.map(async (product) => {
+              const locations = selectedLocation === "all" 
+                ? ["main"] // Simplified to main warehouse for now
+                : [selectedLocation];
 
-        summaries.push({
-          productId: product.id,
-          sku: product.sku,
-          name: product.name,
-          location: location === "main" ? "Main Warehouse" : location,
-          currentStock,
-          forecastDemand30,
-          forecastDemand60,
-          forecastDemand90,
-          suggestedQty: suggestion.suggestedQty,
-          daysLeft,
-          riskLevel,
-          avgDailySales
-        });
-      });
-    });
+              for (const location of locations) {
+                // Get stock for this location
+                const currentStock = product.stock || 0;
+                
+                // Use enhanced caching to get forecast data
+                const forecastData = await getOrRefreshForecast(
+                  product.id,
+                  location === "main" ? undefined : location,
+                  "30",
+                  "moving_avg",
+                  refreshCallback
+                );
 
-    return summaries;
+                if (!forecastData) continue;
+                
+                // Calculate metrics
+                const avgDailySales = forecastData.result.avgDaily;
+                const forecastDemand30 = forecastData.result.daily.reduce((sum: number, day: any) => sum + day.qty, 0);
+                const forecastDemand60 = forecastData.result.daily.slice(0, 60).reduce((sum: number, day: any) => sum + day.qty, 0);
+                const forecastDemand90 = forecastData.result.daily.slice(0, 90).reduce((sum: number, day: any) => sum + day.qty, 0);
+                
+                const daysLeft = avgDailySales > 0 ? Math.floor(currentStock / avgDailySales) : 999;
+                
+                // Determine risk level
+                let riskLevel: "low" | "medium" | "high" = "low";
+                if (daysLeft < 7) riskLevel = "high";
+                else if (daysLeft < 14) riskLevel = "medium";
+
+                // Calculate reorder suggestion
+                const suggestion = calcSuggestion({
+                  onHand: currentStock,
+                  safetyStock: 50,
+                  avgDaily: avgDailySales,
+                  leadTimeDays: 14,
+                  reorderQty: 100
+                });
+
+                summaries.push({
+                  productId: product.id,
+                  sku: product.sku,
+                  name: product.name,
+                  location: location === "main" ? "Main Warehouse" : location,
+                  currentStock,
+                  forecastDemand30,
+                  forecastDemand60,
+                  forecastDemand90,
+                  suggestedQty: suggestion.suggestedQty,
+                  daysLeft,
+                  riskLevel,
+                  avgDailySales
+                });
+              }
+            })
+          );
+        }
+
+        setForecastSummaries(summaries);
+      } catch (error) {
+        console.error("Error loading forecast summaries:", error);
+      } finally {
+        setLoading(false);
+      }
+    };
+
+    loadForecastSummaries();
   }, [selectedLocation]);
 
   // Filter summaries based on search and filters
