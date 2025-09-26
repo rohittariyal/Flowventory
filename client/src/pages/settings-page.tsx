@@ -37,7 +37,7 @@ import {
 } from "@/components/ui/alert";
 import { useToast } from "@/hooks/use-toast";
 import { usePerms } from "@/hooks/use-perms";
-import { Trash2, Plus, Settings, Globe, MapPin, Bell, Mail, Eye, Send, AlertCircle, X, RotateCcw, Users, Shield, DollarSign, FileText, Truck } from "lucide-react";
+import { Trash2, Plus, Settings, Globe, MapPin, Bell, Mail, Eye, Send, AlertCircle, X, RotateCcw, Users, Shield, DollarSign, FileText, Truck, CreditCard } from "lucide-react";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { RolesPermissions } from "@/components/RolesPermissions";
 
@@ -464,6 +464,7 @@ export default function SettingsPage() {
     { id: "notifications", label: "Notifications", icon: Bell },
     { id: "returns", label: "Returns & RMA", icon: RotateCcw },
     { id: "finance", label: "Finance & Tax", icon: DollarSign },
+    { id: "payments", label: "Payments", icon: CreditCard },
     { id: "shipping", label: "Shipping", icon: Truck },
     ...(hasPermission('settings') ? [{ id: "roles", label: "Roles & Permissions", icon: Shield }] : []),
   ];
@@ -1276,6 +1277,83 @@ export default function SettingsPage() {
 
           {activeTab === "roles" && hasPermission('settings') && (
             <RolesPermissions />
+          )}
+
+          {activeTab === "payments" && (
+            <Card>
+              <CardHeader>
+                <CardTitle className="flex items-center space-x-2">
+                  <CreditCard className="h-5 w-5" />
+                  <span>Payment Integrations</span>
+                </CardTitle>
+                <CardDescription>
+                  Configure payment gateways and manage customer payment processing
+                </CardDescription>
+              </CardHeader>
+              <CardContent>
+                <div className="space-y-4">
+                  <p className="text-gray-600">
+                    Manage your payment integrations with providers like Stripe, Razorpay, and PayPal.
+                    Configure credentials, test connections, and process customer payments securely.
+                  </p>
+                  
+                  <div className="bg-blue-50 dark:bg-blue-950 p-4 rounded-lg">
+                    <div className="flex items-start space-x-3">
+                      <CreditCard className="h-5 w-5 text-blue-600 mt-0.5" />
+                      <div>
+                        <h4 className="font-medium text-blue-900 dark:text-blue-100">
+                          Advanced Payment Management
+                        </h4>
+                        <p className="text-sm text-blue-700 dark:text-blue-300 mt-1">
+                          Access the full payment settings page to configure gateway providers, test connections, 
+                          manage webhooks, and handle payment reconciliation for invoices.
+                        </p>
+                        <a
+                          href="/settings/payments"
+                          className="inline-flex items-center mt-3 px-4 py-2 bg-blue-600 text-white text-sm font-medium rounded-md hover:bg-blue-700 transition-colors"
+                          data-testid="link-payment-settings"
+                        >
+                          <CreditCard className="h-4 w-4 mr-2" />
+                          Open Payment Settings
+                        </a>
+                      </div>
+                    </div>
+                  </div>
+                  
+                  <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                    <div className="p-3 border rounded-lg">
+                      <div className="flex items-center space-x-2 mb-2">
+                        <Shield className="h-4 w-4 text-green-600" />
+                        <span className="text-sm font-medium">Gateway Management</span>
+                      </div>
+                      <p className="text-xs text-gray-600">
+                        Add and configure payment gateway credentials securely
+                      </p>
+                    </div>
+                    
+                    <div className="p-3 border rounded-lg">
+                      <div className="flex items-center space-x-2 mb-2">
+                        <Eye className="h-4 w-4 text-blue-600" />
+                        <span className="text-sm font-medium">Payment Tracking</span>
+                      </div>
+                      <p className="text-xs text-gray-600">
+                        Monitor payment status with real-time webhook updates
+                      </p>
+                    </div>
+                    
+                    <div className="p-3 border rounded-lg">
+                      <div className="flex items-center space-x-2 mb-2">
+                        <DollarSign className="h-4 w-4 text-purple-600" />
+                        <span className="text-sm font-medium">Invoice Integration</span>
+                      </div>
+                      <p className="text-xs text-gray-600">
+                        Automatic payment reconciliation and invoice status updates
+                      </p>
+                    </div>
+                  </div>
+                </div>
+              </CardContent>
+            </Card>
           )}
 
           {activeTab === "shipping" && (

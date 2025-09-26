@@ -29,6 +29,7 @@ import ForecastsPage from "@/pages/forecasts-page";
 import FinanceSettingsPage from "@/pages/finance-settings-page";
 import LocationsSettingsPage from "@/pages/locations-settings-page";
 import ShippingSettingsPage from "@/pages/shipping-settings-page";
+import PaymentSettingsPage from "@/pages/payment-settings-page";
 import CompliancePage from "@/pages/compliance-page";
 import { ProtectedRoute } from "./lib/protected-route";
 import { initializeSeedData } from "@/data/seedInvoiceData";
@@ -66,6 +67,7 @@ function Router() {
       <ProtectedRoute path="/settings/finance" component={FinanceSettingsPage} />
       <ProtectedRoute path="/settings/locations" component={LocationsSettingsPage} />
       <ProtectedRoute path="/settings/shipping" component={ShippingSettingsPage} />
+      <ProtectedRoute path="/settings/payments" component={PaymentSettingsPage} />
       <ProtectedRoute path="/compliance" component={CompliancePage} />
       <Route path="/auth" component={AuthPage} />
       <Route component={NotFound} />
