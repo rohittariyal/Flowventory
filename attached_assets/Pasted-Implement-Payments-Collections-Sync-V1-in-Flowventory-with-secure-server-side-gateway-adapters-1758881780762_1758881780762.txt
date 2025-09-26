@@ -1,0 +1,135 @@
+Implement “Payments & Collections Sync (V1)” in Flowventory with secure server-side gateway adapters.
+
+GOALS
+1) Take invoice payments via Stripe / Razorpay / PayPal (choose any 1–2 to wire now; keep adapter pattern).
+2) Generate hosted payment links from invoices.
+3) Reconcile successful payments back to invoice status (UNPAID → PARTIAL → PAID).
+4) Webhook listeners to update invoices asynchronously.
+5) Dunning/reminders (email) V1.
+
+ARCHITECTURE
+- Add a small Node/Express server (if not present) as a secure proxy.
+- Do NOT expose gateway secrets in the browser.
+- Adapter pattern like shipping: /server/adapters/payments/{stripe,razorpay,paypal}.js
+
+SERVER FOLDERS
+/server
+  index.js
+  adapters/
+    base.js
+    stripe.js
+    razorpay.js
+    paypal.js
+  db/
+    payments.json         // { id, invoiceId, gateway, amount, currency, status, raw, createdAt }
+    connectors.json       // { id, provider, encryptedCreds }
+  utils/
+    crypto.js             // AES-256-GCM helpers (SECRET_KEY in .env)
+  webhooks/
+    stripe.js
+    razorpay.js
+    paypal.js
+
+ENV (.env)
+PORT=4001
+SECRET_KEY=change_me
+STRIPE_BASE=https://api.stripe.com
+RAZORPAY_BASE=https://api.razorpay.com
+PAYPAL_BASE=https://api-m.sandbox.paypal.com
+# Secrets are stored via UI → encrypted in connectors.json (do not keep in .env for prod)
+
+SERVER ROUTES
+// connector CRUD (same pattern as shipping)
+POST   /api/pay/connectors              // {provider, name, credentials:{...}} → store encrypted
+GET    /api/pay/connectors
+DELETE /api/pay/connectors/:id
+
+// invoice → payment link & intents
+POST   /api/pay/:connectorId/payment-link   // { invoiceId } → returns { url }
+POST   /api/pay/:connectorId/intent         // { invoiceId, amount?, currency? } → returns { clientSecret|orderId|approvalUrl }
+POST   /api/pay/:connectorId/capture        // { paymentId|orderId } → returns normalized payment object
+
+// reconciliation
+POST   /api/pay/reconcile                   // { invoiceId } → recompute totals from payments.json; return new status
+
+// webhooks
+POST   /webhooks/stripe
+POST   /webhooks/razorpay
+POST   /webhooks/paypal
+// Each webhook parses provider payload, normalizes { invoiceId, amount, currency, status }, appends to payments.json, and triggers reconcile.
+
+NORMALIZED PAYMENT OBJECT
+{
+  id, gateway, invoiceId, amount, currency, fee?:number, status:"PENDING"|"SUCCEEDED"|"FAILED"|"REFUNDED",
+  txRef?:string, raw:any, createdAt
+}
+
+ADAPTER INTERFACE (server/adapters/base.js)
+class PaymentsAdapter {
+  constructor({ credentials }) {}
+  async createPaymentLink({ invoice }) {}       // returns { url }
+  async createIntent({ invoice, amount, currency }) {} // returns provider-specific handle
+  async capture({ intent }) {}                  // optional for gateways that need capture
+  async verifySignature(req) {}                 // for webhooks
+  normalizeWebhookEvent(payload) {}             // returns normalized payment object
+}
+module.exports = PaymentsAdapter;
+
+IMPLEMENT 1–2 ADAPTERS (PREFER STRIPE + RAZORPAY)
+- stripe.js:
+  - createPaymentLink → Stripe Payment Links or Checkout Session
+  - intent/capture via PaymentIntent
+  - webhook verifies signature (Stripe-Signature), maps event types to status
+- razorpay.js:
+  - createPaymentLink → Razorpay Payment Links API
+  - intent/capture via Orders + Payment capture
+  - webhook signature verification (X-Razorpay-Signature)
+
+CLIENT UI
+1) Settings → Payments (/settings/payments)
+   - List connectors (Stripe, Razorpay, PayPal) with status (Configured/Not Configured)
+   - “Add Connector” modal: dynamic fields per provider (publishable key is optional; secret stored server-side)
+   - “Test” button calls a tiny endpoint to validate credentials
+
+2) Invoices List & Detail
+   - On each **UNPAID/PARTIAL** invoice:
+     - Button: **“Send Payment Link”** → calls POST /api/pay/:id/payment-link, shows URL + “Copy” and optional “Open”
+     - Button: **“Record Manual Payment”** (keep existing)
+     - Button: **“Collect Online”** → opens a side panel:
+         * amount (defaults to due), currency (from invoice), connector selector
+         * “Create Checkout” → uses /intent → opens provider hosted page in new tab (or in-app if Stripe Checkout)
+   - Status chips auto-update after webhook or after calling /reconcile
+
+3) Timeline on Invoice Detail
+   - Add a “Payments” timeline with entries:
+     - Link created
+     - Payment succeeded/failed
+     - Refund (if added later)
+   - Show gateway, txRef, amount
+
+4) Dunning / Reminders (V1)
+   - Settings → Payments: toggle “Send reminder emails for overdue invoices”
+   - If ON, add a lightweight cron-ish client job: on app load, scan invoices in localStorage with dueDate < today and status != PAID:
+       * If no reminder sent in last 7 days, send using existing SMTP settings (if you already have notifications 1.5) or stub “Email sent” toast + mark lastReminderAt.
+   - Store reminders in "flowventory:invoices:reminders": [{invoiceId, ts}]
+
+DATA TOUCHPOINTS
+- Use existing "flowventory:invoices"
+- Add "flowventory:payments" on client only for caching last sync times (source of truth on server in /server/db/payments.json)
+
+VALIDATION
+- Cannot create link or intent if invoice total = 0 or status = PAID
+- Currency must match invoice currency (or convert explicitly V2)
+- Amount must be > 0 and ≤ outstanding
+- Graceful error toasts for AUTH_ERROR, NETWORK_ERROR, PROVIDER_ERROR
+
+STYLING
+- Keep neon SaaS: rounded-2xl cards, subtle borders, status chips: UNPAID (gray), PARTIAL (amber), PAID (emerald), FAILED (red)
+- Side panel for “Collect Online” with clear steps
+
+ACCEPTANCE (Frontend)
+- Configure a connector in Settings; Test shows success/failure
+- From invoice detail → “Send Payment Link” returns a URL; openable
+- “Collect Online” creates a checkout; after completing (or simulating), webhook (or manual capture) updates status to PAID
+- “Reconcile” endpoint recalculates invoice status based on payments.json
+- Overdue invoices trigger reminder (if toggle ON) with an entry logged

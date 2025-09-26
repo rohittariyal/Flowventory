@@ -5,6 +5,11 @@ import { storage } from "./storage";
 import { syncManager } from "./syncAdapters";
 import { encryptCredentials, decryptCredentials } from "./crypto";
 import { onboardingSchema, platformConnectionSchema, createNotificationSchema, markNotificationReadSchema, reconIngestSchema, updateReconRowSchema, insertSupplierSchema, insertReorderPolicySchema, reorderSuggestRequestSchema, updatePurchaseOrderStatusSchema, simplePurchaseOrderSchema, supplierSchema, reorderPolicySchema, type PlatformConnections } from "@shared/schema";
+import { PaymentAdapter } from "./adapters/payments/base";
+import { StripeAdapter } from "./adapters/payments/stripe";
+import { RazorpayAdapter } from "./adapters/payments/razorpay";
+import fs from "fs/promises";
+import path from "path";
 import { ReconciliationService } from "./reconService";
 import { ReorderService } from "./reorderService";
 import multer from "multer";
@@ -3029,6 +3034,465 @@ export function registerRoutes(app: Express): Server {
     } catch (error) {
       console.error("Error fetching shipping providers:", error);
       res.status(500).json({ error: "Failed to fetch shipping providers" });
+    }
+  });
+
+  // ===== PAYMENT ROUTES =====
+
+  const connectorsPath = path.join(process.cwd(), 'server', 'db', 'connectors.json');
+  const paymentsPath = path.join(process.cwd(), 'server', 'db', 'payments.json');
+
+  // Helper functions for payment management
+  async function loadConnectors() {
+    try {
+      const data = await fs.readFile(connectorsPath, 'utf-8');
+      return JSON.parse(data);
+    } catch (error) {
+      return [];
+    }
+  }
+
+  async function saveConnectors(connectors: any[]) {
+    await fs.writeFile(connectorsPath, JSON.stringify(connectors, null, 2));
+  }
+
+  async function loadPayments() {
+    try {
+      const data = await fs.readFile(paymentsPath, 'utf-8');
+      return JSON.parse(data);
+    } catch (error) {
+      return [];
+    }
+  }
+
+  async function savePayments(payments: any[]) {
+    await fs.writeFile(paymentsPath, JSON.stringify(payments, null, 2));
+  }
+
+  function createPaymentAdapter(provider: string, credentials: any): PaymentAdapter {
+    switch (provider) {
+      case 'stripe':
+        return new StripeAdapter(credentials);
+      case 'razorpay':
+        return new RazorpayAdapter(credentials);
+      default:
+        throw new Error(`Unsupported payment provider: ${provider}`);
+    }
+  }
+
+  // Payment Connector Routes
+  app.post("/api/pay/connectors", requireAuth, async (req, res) => {
+    try {
+      const { provider, name, credentials } = req.body;
+
+      if (!provider || !name || !credentials) {
+        return res.status(400).json({ error: "Provider, name, and credentials are required" });
+      }
+
+      // Test the connection before saving
+      const adapter = createPaymentAdapter(provider, credentials);
+      const testResult = await adapter.testConnection();
+      
+      if (!testResult.success) {
+        return res.status(400).json({ error: `Connection test failed: ${testResult.error}` });
+      }
+
+      const connectors = await loadConnectors();
+      const connectorId = `pay_${Date.now()}_${Math.random().toString(36).substring(2, 9)}`;
+      
+      const newConnector = {
+        id: connectorId,
+        provider,
+        name,
+        status: 'active',
+        encryptedCredentials: encryptCredentials(credentials),
+        createdAt: new Date().toISOString(),
+        lastTestAt: new Date().toISOString(),
+        lastTestStatus: 'success'
+      };
+
+      connectors.push(newConnector);
+      await saveConnectors(connectors);
+
+      res.status(201).json({
+        id: connectorId,
+        provider,
+        name,
+        status: 'active',
+        createdAt: newConnector.createdAt
+      });
+    } catch (error: any) {
+      console.error("Error creating payment connector:", error);
+      res.status(500).json({ error: error.message || "Failed to create payment connector" });
+    }
+  });
+
+  app.get("/api/pay/connectors", requireAuth, async (req, res) => {
+    try {
+      const connectors = await loadConnectors();
+      
+      // Return connectors without encrypted credentials
+      const sanitizedConnectors = connectors.map((connector: any) => ({
+        id: connector.id,
+        provider: connector.provider,
+        name: connector.name,
+        status: connector.status,
+        createdAt: connector.createdAt,
+        lastTestAt: connector.lastTestAt,
+        lastTestStatus: connector.lastTestStatus
+      }));
+
+      res.json(sanitizedConnectors);
+    } catch (error) {
+      console.error("Error fetching payment connectors:", error);
+      res.status(500).json({ error: "Failed to fetch payment connectors" });
+    }
+  });
+
+  app.delete("/api/pay/connectors/:id", requireAuth, async (req, res) => {
+    try {
+      const { id } = req.params;
+      const connectors = await loadConnectors();
+      
+      const filteredConnectors = connectors.filter((c: any) => c.id !== id);
+      
+      if (filteredConnectors.length === connectors.length) {
+        return res.status(404).json({ error: "Connector not found" });
+      }
+
+      await saveConnectors(filteredConnectors);
+      res.json({ message: "Connector deleted successfully" });
+    } catch (error) {
+      console.error("Error deleting payment connector:", error);
+      res.status(500).json({ error: "Failed to delete payment connector" });
+    }
+  });
+
+  // Test connector endpoint
+  app.post("/api/pay/connectors/:id/test", requireAuth, async (req, res) => {
+    try {
+      const { id } = req.params;
+      const connectors = await loadConnectors();
+      
+      const connector = connectors.find((c: any) => c.id === id);
+      if (!connector) {
+        return res.status(404).json({ error: "Connector not found" });
+      }
+
+      const credentials = decryptCredentials(connector.encryptedCredentials);
+      const adapter = createPaymentAdapter(connector.provider, credentials);
+      const testResult = await adapter.testConnection();
+
+      // Update connector test status
+      connector.lastTestAt = new Date().toISOString();
+      connector.lastTestStatus = testResult.success ? 'success' : 'failed';
+      await saveConnectors(connectors);
+
+      res.json(testResult);
+    } catch (error: any) {
+      console.error("Error testing payment connector:", error);
+      res.status(500).json({ error: error.message || "Failed to test payment connector" });
+    }
+  });
+
+  // Payment Link Routes
+  app.post("/api/pay/:connectorId/payment-link", requireAuth, async (req, res) => {
+    try {
+      const { connectorId } = req.params;
+      const { invoiceId, successUrl, cancelUrl } = req.body;
+
+      if (!invoiceId) {
+        return res.status(400).json({ error: "Invoice ID is required" });
+      }
+
+      const connectors = await loadConnectors();
+      const connector = connectors.find((c: any) => c.id === connectorId);
+      
+      if (!connector) {
+        return res.status(404).json({ error: "Payment connector not found" });
+      }
+
+      // Mock invoice data - in real implementation, fetch from invoice storage
+      const invoice = {
+        id: invoiceId,
+        amount: 10000, // $100.00 in cents
+        currency: 'USD',
+        status: 'unpaid' as const,
+        customerEmail: 'customer@example.com',
+        customerName: 'John Doe'
+      };
+
+      if (invoice.status === 'paid') {
+        return res.status(400).json({ error: "Invoice is already paid" });
+      }
+
+      const credentials = decryptCredentials(connector.encryptedCredentials);
+      const adapter = createPaymentAdapter(connector.provider, credentials);
+      
+      const paymentLink = await adapter.createPaymentLink({
+        invoice,
+        successUrl,
+        cancelUrl
+      });
+
+      res.json(paymentLink);
+    } catch (error: any) {
+      console.error("Error creating payment link:", error);
+      res.status(500).json({ error: error.message || "Failed to create payment link" });
+    }
+  });
+
+  // Payment Intent Routes
+  app.post("/api/pay/:connectorId/intent", requireAuth, async (req, res) => {
+    try {
+      const { connectorId } = req.params;
+      const { invoiceId, amount, currency } = req.body;
+
+      if (!invoiceId) {
+        return res.status(400).json({ error: "Invoice ID is required" });
+      }
+
+      const connectors = await loadConnectors();
+      const connector = connectors.find((c: any) => c.id === connectorId);
+      
+      if (!connector) {
+        return res.status(404).json({ error: "Payment connector not found" });
+      }
+
+      // Mock invoice data - in real implementation, fetch from invoice storage
+      const invoice = {
+        id: invoiceId,
+        amount: amount || 10000, // Default to $100.00 in cents
+        currency: currency || 'USD',
+        status: 'unpaid' as const,
+        customerEmail: 'customer@example.com',
+        customerName: 'John Doe'
+      };
+
+      if (invoice.status === 'paid') {
+        return res.status(400).json({ error: "Invoice is already paid" });
+      }
+
+      const credentials = decryptCredentials(connector.encryptedCredentials);
+      const adapter = createPaymentAdapter(connector.provider, credentials);
+      
+      const paymentIntent = await adapter.createPaymentIntent({
+        invoice,
+        amount,
+        currency
+      });
+
+      res.json(paymentIntent);
+    } catch (error: any) {
+      console.error("Error creating payment intent:", error);
+      res.status(500).json({ error: error.message || "Failed to create payment intent" });
+    }
+  });
+
+  // Payment Capture Routes
+  app.post("/api/pay/:connectorId/capture", requireAuth, async (req, res) => {
+    try {
+      const { connectorId } = req.params;
+      const { paymentId, amount } = req.body;
+
+      if (!paymentId) {
+        return res.status(400).json({ error: "Payment ID is required" });
+      }
+
+      const connectors = await loadConnectors();
+      const connector = connectors.find((c: any) => c.id === connectorId);
+      
+      if (!connector) {
+        return res.status(404).json({ error: "Payment connector not found" });
+      }
+
+      const credentials = decryptCredentials(connector.encryptedCredentials);
+      const adapter = createPaymentAdapter(connector.provider, credentials);
+      
+      const captureResult = await adapter.capturePayment({
+        paymentIntentId: paymentId,
+        amount
+      });
+
+      // Save payment to database
+      const payments = await loadPayments();
+      payments.push(captureResult);
+      await savePayments(payments);
+
+      res.json(captureResult);
+    } catch (error: any) {
+      console.error("Error capturing payment:", error);
+      res.status(500).json({ error: error.message || "Failed to capture payment" });
+    }
+  });
+
+  // Payment Reconciliation
+  app.post("/api/pay/reconcile", requireAuth, async (req, res) => {
+    try {
+      const { invoiceId } = req.body;
+
+      if (!invoiceId) {
+        return res.status(400).json({ error: "Invoice ID is required" });
+      }
+
+      const payments = await loadPayments();
+      const invoicePayments = payments.filter((p: any) => p.invoiceId === invoiceId && p.status === 'succeeded');
+      
+      const totalPaid = invoicePayments.reduce((sum: number, p: any) => sum + p.amount, 0);
+      
+      // Mock invoice total - in real implementation, fetch from invoice storage
+      const invoiceTotal = 10000; // $100.00 in cents
+      
+      let newStatus = 'unpaid';
+      if (totalPaid >= invoiceTotal) {
+        newStatus = 'paid';
+      } else if (totalPaid > 0) {
+        newStatus = 'partial';
+      }
+
+      res.json({
+        invoiceId,
+        totalAmount: invoiceTotal,
+        totalPaid,
+        outstanding: invoiceTotal - totalPaid,
+        status: newStatus,
+        payments: invoicePayments
+      });
+    } catch (error: any) {
+      console.error("Error reconciling payment:", error);
+      res.status(500).json({ error: error.message || "Failed to reconcile payment" });
+    }
+  });
+
+  // Webhook Routes
+  app.post("/webhooks/stripe", async (req, res) => {
+    try {
+      const connectors = await loadConnectors();
+      const stripeConnector = connectors.find((c: any) => c.provider === 'stripe' && c.status === 'active');
+      
+      if (!stripeConnector) {
+        return res.status(404).json({ error: "No active Stripe connector found" });
+      }
+
+      const credentials = decryptCredentials(stripeConnector.encryptedCredentials);
+      const adapter = new StripeAdapter(credentials);
+
+      const webhookRequest = {
+        headers: req.headers as Record<string, string>,
+        body: req.body,
+        rawBody: req.body
+      };
+
+      const isValid = await adapter.verifyWebhookSignature(webhookRequest);
+      if (!isValid) {
+        return res.status(400).json({ error: "Invalid webhook signature" });
+      }
+
+      const event = await adapter.normalizeWebhookEvent(webhookRequest);
+      if (event) {
+        // Save payment to database
+        const payments = await loadPayments();
+        payments.push(event.payment);
+        await savePayments(payments);
+
+        console.log(`Processed Stripe webhook: ${event.type} for invoice ${event.invoiceId}`);
+      }
+
+      res.json({ received: true });
+    } catch (error: any) {
+      console.error("Error processing Stripe webhook:", error);
+      res.status(500).json({ error: error.message || "Failed to process webhook" });
+    }
+  });
+
+  app.post("/webhooks/razorpay", async (req, res) => {
+    try {
+      const connectors = await loadConnectors();
+      const razorpayConnector = connectors.find((c: any) => c.provider === 'razorpay' && c.status === 'active');
+      
+      if (!razorpayConnector) {
+        return res.status(404).json({ error: "No active Razorpay connector found" });
+      }
+
+      const credentials = decryptCredentials(razorpayConnector.encryptedCredentials);
+      const adapter = new RazorpayAdapter(credentials);
+
+      const webhookRequest = {
+        headers: req.headers as Record<string, string>,
+        body: req.body,
+        rawBody: req.body
+      };
+
+      const isValid = await adapter.verifyWebhookSignature(webhookRequest);
+      if (!isValid) {
+        return res.status(400).json({ error: "Invalid webhook signature" });
+      }
+
+      const event = await adapter.normalizeWebhookEvent(webhookRequest);
+      if (event) {
+        // Save payment to database
+        const payments = await loadPayments();
+        payments.push(event.payment);
+        await savePayments(payments);
+
+        console.log(`Processed Razorpay webhook: ${event.type} for invoice ${event.invoiceId}`);
+      }
+
+      res.json({ received: true });
+    } catch (error: any) {
+      console.error("Error processing Razorpay webhook:", error);
+      res.status(500).json({ error: error.message || "Failed to process webhook" });
+    }
+  });
+
+  // Payment Providers endpoint (similar to shipping providers)
+  app.get("/api/pay/providers", async (req, res) => {
+    try {
+      const providers = [
+        {
+          id: 'stripe',
+          name: 'Stripe',
+          description: 'Accept payments online with Stripe',
+          logo: '/icons/stripe.png',
+          supported: true,
+          countries: ['US', 'GB', 'CA', 'AU', 'IN', 'SG'],
+          credentialFields: [
+            { key: 'secretKey', label: 'Secret Key', type: 'password', required: true },
+            { key: 'publishableKey', label: 'Publishable Key', type: 'text', required: false },
+            { key: 'webhookSecret', label: 'Webhook Secret', type: 'password', required: false }
+          ]
+        },
+        {
+          id: 'razorpay',
+          name: 'Razorpay',
+          description: 'Accept payments in India with Razorpay',
+          logo: '/icons/razorpay.png',
+          supported: true,
+          countries: ['IN'],
+          credentialFields: [
+            { key: 'keyId', label: 'Key ID', type: 'text', required: true },
+            { key: 'keySecret', label: 'Key Secret', type: 'password', required: true },
+            { key: 'webhookSecret', label: 'Webhook Secret', type: 'password', required: false }
+          ]
+        },
+        {
+          id: 'paypal',
+          name: 'PayPal',
+          description: 'Accept payments worldwide with PayPal',
+          logo: '/icons/paypal.png',
+          supported: false,
+          countries: ['US', 'GB', 'CA', 'AU', 'DE', 'FR'],
+          credentialFields: [
+            { key: 'clientId', label: 'Client ID', type: 'text', required: true },
+            { key: 'clientSecret', label: 'Client Secret', type: 'password', required: true }
+          ]
+        }
+      ];
+      
+      res.json(providers);
+    } catch (error) {
+      console.error("Error fetching payment providers:", error);
+      res.status(500).json({ error: "Failed to fetch payment providers" });
     }
   });
 
