@@ -1479,8 +1479,16 @@ export type ForecastHorizon = "30" | "60" | "90";
 
 export interface ForecastSettings {
   defaultMethod: ForecastMethod;
+  defaultHorizon: ForecastHorizon;
   ewmaAlpha: number; // for exponential weighted moving average
   minHistoryDays: number; // minimum days of history required
+  defaultSafetyStock: number;
+  defaultLeadTimeDays: number;
+  autoRefreshEnabled: boolean;
+  autoRefreshIntervalMinutes: number;
+  cacheStaleHours: number;
+  priorityProductsEnabled: boolean;
+  maxCacheEntries: number;
 }
 
 export interface DailyForecast {
@@ -1540,8 +1548,16 @@ export type ForecastStatus = "healthy" | "action_needed" | "critical";
 // Zod schemas for validation
 export const forecastSettingsSchema = z.object({
   defaultMethod: z.enum(["moving_avg", "ewma"]),
+  defaultHorizon: z.enum(["30", "60", "90"]),
   ewmaAlpha: z.number().min(0.1).max(0.9),
-  minHistoryDays: z.number().min(7).max(90),
+  minHistoryDays: z.number().min(7).max(365),
+  defaultSafetyStock: z.number().min(0),
+  defaultLeadTimeDays: z.number().min(1).max(365),
+  autoRefreshEnabled: z.boolean(),
+  autoRefreshIntervalMinutes: z.number().min(5).max(1440),
+  cacheStaleHours: z.number().min(1).max(168),
+  priorityProductsEnabled: z.boolean(),
+  maxCacheEntries: z.number().min(50).max(10000),
 });
 
 export const dailyForecastSchema = z.object({

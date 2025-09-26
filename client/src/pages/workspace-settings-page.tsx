@@ -12,9 +12,10 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Switch } from "@/components/ui/switch";
 import { Separator } from "@/components/ui/separator";
 import { Badge } from "@/components/ui/badge";
-import { Trash2, Plus, Save, RotateCcw } from "lucide-react";
+import { Trash2, Plus, Save, RotateCcw, TrendingUp } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { apiRequest } from "@/lib/queryClient";
+import { getForecastSettings, saveForecastSettings } from "@/utils/forecastStorage";
 
 // Form schemas
 const generalSettingsSchema = z.object({
@@ -42,6 +43,19 @@ const notificationSchema = z.object({
   smtpPort: z.number().optional(),
   smtpUser: z.string().optional(),
   smtpPassword: z.string().optional()
+});
+
+const forecastSettingsSchema = z.object({
+  defaultMethod: z.enum(["moving_avg", "ewma"]),
+  defaultHorizon: z.enum(["30", "60", "90"]),
+  minHistoryDays: z.number().min(7).max(365),
+  defaultSafetyStock: z.number().min(0),
+  defaultLeadTimeDays: z.number().min(1).max(365),
+  autoRefreshEnabled: z.boolean(),
+  autoRefreshIntervalMinutes: z.number().min(5).max(1440),
+  cacheStaleHours: z.number().min(1).max(168),
+  priorityProductsEnabled: z.boolean(),
+  maxCacheEntries: z.number().min(50).max(10000)
 });
 
 export default function WorkspaceSettingsPage() {
@@ -96,6 +110,26 @@ export default function WorkspaceSettingsPage() {
       smtpPort: notifications?.smtpPort || 587,
       smtpUser: notifications?.smtpUser || "",
       smtpPassword: notifications?.smtpPassword || ""
+    }
+  });
+
+  // Load current forecast settings
+  const currentForecastSettings = getForecastSettings();
+
+  // Forecast Settings Form
+  const forecastForm = useForm({
+    resolver: zodResolver(forecastSettingsSchema),
+    defaultValues: {
+      defaultMethod: currentForecastSettings.defaultMethod,
+      defaultHorizon: currentForecastSettings.defaultHorizon,
+      minHistoryDays: currentForecastSettings.minHistoryDays,
+      defaultSafetyStock: currentForecastSettings.defaultSafetyStock,
+      defaultLeadTimeDays: currentForecastSettings.defaultLeadTimeDays,
+      autoRefreshEnabled: currentForecastSettings.autoRefreshEnabled,
+      autoRefreshIntervalMinutes: currentForecastSettings.autoRefreshIntervalMinutes,
+      cacheStaleHours: currentForecastSettings.cacheStaleHours,
+      priorityProductsEnabled: currentForecastSettings.priorityProductsEnabled,
+      maxCacheEntries: currentForecastSettings.maxCacheEntries
     }
   });
 
@@ -211,6 +245,22 @@ export default function WorkspaceSettingsPage() {
     updateNotificationsMutation.mutate(data);
   };
 
+  const onForecastSubmit = (data: any) => {
+    try {
+      saveForecastSettings(data);
+      toast({
+        title: "Forecast Settings Updated",
+        description: "Your forecasting preferences have been saved successfully.",
+      });
+    } catch (error) {
+      toast({
+        title: "Update Failed",
+        description: "Failed to save forecast settings",
+        variant: "destructive",
+      });
+    }
+  };
+
   const resetForm = (formType: string) => {
     if (formType === "general") {
       generalForm.reset();
@@ -218,6 +268,8 @@ export default function WorkspaceSettingsPage() {
       regionForm.reset();
     } else if (formType === "notification") {
       notificationForm.reset();
+    } else if (formType === "forecast") {
+      forecastForm.reset();
     }
   };
 
@@ -246,11 +298,15 @@ export default function WorkspaceSettingsPage() {
         {/* Left Navigation */}
         <div className="col-span-3">
           <Tabs value={activeTab} onValueChange={setActiveTab} orientation="vertical" className="w-full">
-            <TabsList className="grid w-full grid-rows-4 h-auto">
+            <TabsList className="grid w-full grid-rows-5 h-auto">
               <TabsTrigger value="general" className="justify-start">General</TabsTrigger>
               <TabsTrigger value="localization" className="justify-start">Localization</TabsTrigger>
               <TabsTrigger value="regions" className="justify-start">Regions & SLAs</TabsTrigger>
               <TabsTrigger value="notifications" className="justify-start">Notifications</TabsTrigger>
+              <TabsTrigger value="forecasting" className="justify-start">
+                <TrendingUp className="h-4 w-4 mr-2" />
+                Forecasting
+              </TabsTrigger>
             </TabsList>
           </Tabs>
         </div>
@@ -672,6 +728,249 @@ export default function WorkspaceSettingsPage() {
                   </form>
                 </CardContent>
               </Card>
+            </TabsContent>
+
+            {/* Forecasting Tab */}
+            <TabsContent value="forecasting">
+              <div className="space-y-6">
+                {/* General Forecast Settings */}
+                <Card>
+                  <CardHeader>
+                    <CardTitle>General Forecasting Settings</CardTitle>
+                    <CardDescription>
+                      Configure default settings for demand forecasting and reorder suggestions
+                    </CardDescription>
+                  </CardHeader>
+                  <CardContent>
+                    <form onSubmit={forecastForm.handleSubmit(onForecastSubmit)} className="space-y-6">
+                      <div className="grid grid-cols-2 gap-6">
+                        <div>
+                          <Label htmlFor="defaultMethod">Default Forecasting Method</Label>
+                          <Select 
+                            value={forecastForm.watch("defaultMethod")}
+                            onValueChange={(value) => forecastForm.setValue("defaultMethod", value as "moving_avg" | "ewma")}
+                          >
+                            <SelectTrigger>
+                              <SelectValue placeholder="Select method" />
+                            </SelectTrigger>
+                            <SelectContent>
+                              <SelectItem value="moving_avg">Moving Average</SelectItem>
+                              <SelectItem value="ewma">Exponential Weighted Moving Average</SelectItem>
+                            </SelectContent>
+                          </Select>
+                          <p className="text-sm text-gray-600 dark:text-gray-400 mt-1">
+                            Method used for new products without specific settings
+                          </p>
+                        </div>
+
+                        <div>
+                          <Label htmlFor="defaultHorizon">Default Forecast Horizon</Label>
+                          <Select 
+                            value={forecastForm.watch("defaultHorizon")}
+                            onValueChange={(value) => forecastForm.setValue("defaultHorizon", value as "30" | "60" | "90")}
+                          >
+                            <SelectTrigger>
+                              <SelectValue placeholder="Select horizon" />
+                            </SelectTrigger>
+                            <SelectContent>
+                              <SelectItem value="30">30 Days</SelectItem>
+                              <SelectItem value="60">60 Days</SelectItem>
+                              <SelectItem value="90">90 Days</SelectItem>
+                            </SelectContent>
+                          </Select>
+                          <p className="text-sm text-gray-600 dark:text-gray-400 mt-1">
+                            Default time period for demand forecasting
+                          </p>
+                        </div>
+                      </div>
+
+                      <div className="grid grid-cols-2 gap-6">
+                        <div>
+                          <Label htmlFor="minHistoryDays">Minimum History Days</Label>
+                          <Input
+                            id="minHistoryDays"
+                            type="number"
+                            {...forecastForm.register("minHistoryDays", { valueAsNumber: true })}
+                            placeholder="30"
+                          />
+                          <p className="text-sm text-gray-600 dark:text-gray-400 mt-1">
+                            Minimum sales history required for forecasting (7-365 days)
+                          </p>
+                          {forecastForm.formState.errors.minHistoryDays && (
+                            <p className="text-sm text-red-500 mt-1">
+                              {forecastForm.formState.errors.minHistoryDays.message}
+                            </p>
+                          )}
+                        </div>
+
+                        <div>
+                          <Label htmlFor="defaultSafetyStock">Default Safety Stock</Label>
+                          <Input
+                            id="defaultSafetyStock"
+                            type="number"
+                            {...forecastForm.register("defaultSafetyStock", { valueAsNumber: true })}
+                            placeholder="50"
+                          />
+                          <p className="text-sm text-gray-600 dark:text-gray-400 mt-1">
+                            Default safety stock level for reorder calculations
+                          </p>
+                          {forecastForm.formState.errors.defaultSafetyStock && (
+                            <p className="text-sm text-red-500 mt-1">
+                              {forecastForm.formState.errors.defaultSafetyStock.message}
+                            </p>
+                          )}
+                        </div>
+                      </div>
+
+                      <div>
+                        <Label htmlFor="defaultLeadTimeDays">Default Lead Time (Days)</Label>
+                        <Input
+                          id="defaultLeadTimeDays"
+                          type="number"
+                          {...forecastForm.register("defaultLeadTimeDays", { valueAsNumber: true })}
+                          placeholder="14"
+                          className="max-w-xs"
+                        />
+                        <p className="text-sm text-gray-600 dark:text-gray-400 mt-1">
+                          Default supplier lead time for reorder suggestions (1-365 days)
+                        </p>
+                        {forecastForm.formState.errors.defaultLeadTimeDays && (
+                          <p className="text-sm text-red-500 mt-1">
+                            {forecastForm.formState.errors.defaultLeadTimeDays.message}
+                          </p>
+                        )}
+                      </div>
+
+                      <Separator />
+
+                      <div className="flex justify-between">
+                        <Button type="button" variant="outline" onClick={() => resetForm("forecast")}>
+                          <RotateCcw className="h-4 w-4 mr-2" />
+                          Reset
+                        </Button>
+                        <Button type="submit">
+                          <Save className="h-4 w-4 mr-2" />
+                          Save Changes
+                        </Button>
+                      </div>
+                    </form>
+                  </CardContent>
+                </Card>
+
+                {/* Performance & Caching Settings */}
+                <Card>
+                  <CardHeader>
+                    <CardTitle>Performance & Caching</CardTitle>
+                    <CardDescription>
+                      Configure auto-refresh and caching behavior for optimal performance
+                    </CardDescription>
+                  </CardHeader>
+                  <CardContent>
+                    <form onSubmit={forecastForm.handleSubmit(onForecastSubmit)} className="space-y-6">
+                      <div className="space-y-4">
+                        <div className="flex items-center justify-between">
+                          <div>
+                            <Label htmlFor="autoRefreshEnabled">Auto Refresh</Label>
+                            <p className="text-sm text-gray-600 dark:text-gray-400">
+                              Automatically refresh stale forecasts in background
+                            </p>
+                          </div>
+                          <Switch
+                            id="autoRefreshEnabled"
+                            checked={forecastForm.watch("autoRefreshEnabled")}
+                            onCheckedChange={(checked) => forecastForm.setValue("autoRefreshEnabled", checked)}
+                          />
+                        </div>
+
+                        <div className="flex items-center justify-between">
+                          <div>
+                            <Label htmlFor="priorityProductsEnabled">Priority Products</Label>
+                            <p className="text-sm text-gray-600 dark:text-gray-400">
+                              Give higher-value products priority for refresh
+                            </p>
+                          </div>
+                          <Switch
+                            id="priorityProductsEnabled"
+                            checked={forecastForm.watch("priorityProductsEnabled")}
+                            onCheckedChange={(checked) => forecastForm.setValue("priorityProductsEnabled", checked)}
+                          />
+                        </div>
+                      </div>
+
+                      <div className="grid grid-cols-2 gap-6">
+                        <div>
+                          <Label htmlFor="autoRefreshIntervalMinutes">Auto Refresh Interval (Minutes)</Label>
+                          <Input
+                            id="autoRefreshIntervalMinutes"
+                            type="number"
+                            {...forecastForm.register("autoRefreshIntervalMinutes", { valueAsNumber: true })}
+                            placeholder="360"
+                            disabled={!forecastForm.watch("autoRefreshEnabled")}
+                          />
+                          <p className="text-sm text-gray-600 dark:text-gray-400 mt-1">
+                            How often to check for stale forecasts (5-1440 minutes)
+                          </p>
+                          {forecastForm.formState.errors.autoRefreshIntervalMinutes && (
+                            <p className="text-sm text-red-500 mt-1">
+                              {forecastForm.formState.errors.autoRefreshIntervalMinutes.message}
+                            </p>
+                          )}
+                        </div>
+
+                        <div>
+                          <Label htmlFor="cacheStaleHours">Cache Stale After (Hours)</Label>
+                          <Input
+                            id="cacheStaleHours"
+                            type="number"
+                            {...forecastForm.register("cacheStaleHours", { valueAsNumber: true })}
+                            placeholder="6"
+                          />
+                          <p className="text-sm text-gray-600 dark:text-gray-400 mt-1">
+                            Mark forecasts as stale after this time (1-168 hours)
+                          </p>
+                          {forecastForm.formState.errors.cacheStaleHours && (
+                            <p className="text-sm text-red-500 mt-1">
+                              {forecastForm.formState.errors.cacheStaleHours.message}
+                            </p>
+                          )}
+                        </div>
+                      </div>
+
+                      <div>
+                        <Label htmlFor="maxCacheEntries">Maximum Cache Entries</Label>
+                        <Input
+                          id="maxCacheEntries"
+                          type="number"
+                          {...forecastForm.register("maxCacheEntries", { valueAsNumber: true })}
+                          placeholder="1000"
+                          className="max-w-xs"
+                        />
+                        <p className="text-sm text-gray-600 dark:text-gray-400 mt-1">
+                          Maximum number of forecasts to keep in cache (50-10000)
+                        </p>
+                        {forecastForm.formState.errors.maxCacheEntries && (
+                          <p className="text-sm text-red-500 mt-1">
+                            {forecastForm.formState.errors.maxCacheEntries.message}
+                          </p>
+                        )}
+                      </div>
+
+                      <Separator />
+
+                      <div className="flex justify-between">
+                        <Button type="button" variant="outline" onClick={() => resetForm("forecast")}>
+                          <RotateCcw className="h-4 w-4 mr-2" />
+                          Reset
+                        </Button>
+                        <Button type="submit">
+                          <Save className="h-4 w-4 mr-2" />
+                          Save Changes
+                        </Button>
+                      </div>
+                    </form>
+                  </CardContent>
+                </Card>
+              </div>
             </TabsContent>
           </Tabs>
         </div>

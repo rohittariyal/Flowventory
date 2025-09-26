@@ -14,8 +14,16 @@ const SALES_ORDERS_KEY = "flowventory:orders";
 // Default forecast settings
 const DEFAULT_FORECAST_SETTINGS: ForecastSettings = {
   defaultMethod: "moving_avg",
+  defaultHorizon: "30",
   ewmaAlpha: 0.35,
-  minHistoryDays: 30
+  minHistoryDays: 30,
+  defaultSafetyStock: 50,
+  defaultLeadTimeDays: 14,
+  autoRefreshEnabled: true,
+  autoRefreshIntervalMinutes: 360, // 6 hours
+  cacheStaleHours: 6,
+  priorityProductsEnabled: true,
+  maxCacheEntries: 1000
 };
 
 // === Forecast Settings Management ===
