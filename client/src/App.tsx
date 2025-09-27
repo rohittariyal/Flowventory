@@ -31,6 +31,7 @@ import LocationsSettingsPage from "@/pages/locations-settings-page";
 import ShippingSettingsPage from "@/pages/shipping-settings-page";
 import PaymentSettingsPage from "@/pages/payment-settings-page";
 import CompliancePage from "@/pages/compliance-page";
+import InsightsPage from "@/pages/insights-page";
 import { ProtectedRoute } from "./lib/protected-route";
 import { initializeSeedData } from "@/data/seedInvoiceData";
 import { initializeSessionData, initializeProductNotesData } from "@/data/seedSessionData";
@@ -70,6 +71,7 @@ function Router() {
       <ProtectedRoute path="/settings/shipping" component={ShippingSettingsPage} />
       <ProtectedRoute path="/settings/payments" component={PaymentSettingsPage} />
       <ProtectedRoute path="/compliance" component={CompliancePage} />
+      <ProtectedRoute path="/insights" component={InsightsPage} />
       <Route path="/auth" component={AuthPage} />
       <Route component={NotFound} />
     </Switch>

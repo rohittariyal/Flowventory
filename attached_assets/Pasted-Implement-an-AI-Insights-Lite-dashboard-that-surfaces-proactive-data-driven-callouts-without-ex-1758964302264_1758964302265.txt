@@ -1,0 +1,100 @@
+Implement an “AI Insights (Lite)” dashboard that surfaces proactive, data-driven callouts without external ML.
+Frontend-only, localStorage data; simple heuristics + rules.
+
+GOALS
+- One-page dashboard with insight cards, each explaining the “why” and suggested action.
+- Pull signals from inventory, orders, shipments, suppliers, invoices, and forecast cache.
+- One-click actions: open SKU, create PO, nudge supplier, create transfer, send payment link, etc.
+
+DATA SOURCES (read-only; already exist)
+- "flowventory:inventory"  // per-location stock + thresholds + leadTimeDays
+- "flowventory:orders"     // items with productId, qty, createdAt, locationId
+- "flowventory:shipments"  // status timeline
+- "flowventory:suppliers"  // leadTimeDays, on-time %
+- "flowventory:invoices"   // status UNPAID/PARTIAL/PAID, dueDate
+- "flowventory:forecast"   // avgDaily, suggestedQty per SKU/location (from your forecasting feature)
+- "flowventory:moves"      // transfers & picks (optional)
+- "flowventory:locations"  // regions
+
+HEURISTICS (compute client-side)
+- Low Cover Risk (per SKU/location):
+  daily = max(1, forecast.avgDaily || 0)
+  coverDays = (onHand - safetyStock) / daily
+  risk if coverDays < leadTimeDays → severity = leadTimeDays - coverDays
+- Stagnant Stock (potential dead stock):
+  no picks/orders for this SKU in last N days (e.g., 45) AND onHand > safetyStock
+- Supplier At-Risk:
+  supplier.onTimePct < 85% OR last 3 POs had delays (if tracked), OR average leadTimeDays increasing
+- Late Shipments:
+  shipments with status IN_TRANSIT/OUT_FOR_DELIVERY older than X days (e.g., 7)
+- Overdue Invoices:
+  invoices status != PAID and dueDate < today
+- Expiry Risk:
+  batch-tracked SKUs with expiry in ≤ 30 days and qty > 0
+- Forecast Surprise:
+  recent 14d avg > 1.4× 60d avg  → demand spike
+  recent 14d avg < 0.6× 60d avg  → demand drop
+
+UI / ROUTES
+- Add route: /insights
+- Top: filters (Location, Region, Severity) + “Refresh”
+- Grid of insight cards, grouped by category:
+  1) Stock Risks
+  2) Supplier Risks
+  3) Logistics (Shipments)
+  4) Finance (Receivables)
+  5) Forecast Anomalies
+- Each card shows:
+  - Title (“Reorder soon: SKU-123 (Dubai)”)
+  - Why (explain with numbers: “cover 3.2d < lead time 7d; avg daily 5.4; on-hand 21; safety 10”)
+  - Action buttons:
+    * “Create PO (suggest 60)”  → opens PO flow prefilled
+    * “Nudge Supplier”          → opens supplier detail or a compose modal (stub)
+    * “Create Transfer”         → opens transfer modal with suggested qty from warehouse with surplus
+    * “Track Shipment”          → opens shipment detail
+    * “Send Payment Link”       → calls your payments adapter flow
+  - Severity chip: Critical / High / Medium / Info
+  - Tiny “data source” hint (Forecast / Inventory / Shipments / Invoices)
+
+ACTIONS / SUGGESTIONS
+- Suggested PO Qty:
+  use forecast.suggestedQty if present,
+  else ceil((leadTimeDays + 14) * avgDaily + safetyStock - onHand), clamp ≥ 1
+- Suggested Transfer:
+  find other locations where onHand - safetyStock > 0; propose min(surplus, need)
+
+COMPONENTS
+- InsightCard.tsx: props = { category, severity, title, why, actions[] }
+- useInsights() hook:
+  - reads datasets from localStorage
+  - computes all heuristics
+  - returns grouped & sorted insights
+- Severity ranking:
+  Critical > High > Medium > Info
+  sort within group by severity desc, then by magnitude of risk (e.g., days short)
+
+STATE & PERSISTENCE
+- "flowventory:insights:dismissed" -> [ insightId ]
+  - Allow dismiss per insight (×), with “Undo” toast
+  - auto-expires daily (store date & reset next day)
+- “Mark Done” when action performed (optional V1: on click, dismiss)
+
+STYLING
+- Neon SaaS: rounded-2xl cards, subtle border/shadow, chips
+- Icons per category (risk, truck, supplier, alert, cash)
+- Empty state per category: “No critical risks now”
+
+SEED
+- If little data, create 6–8 dummy insights so the page shows variety:
+  - 2 Stock Risks (one critical, one medium)
+  - 1 Supplier Risk (onTime 72%)
+  - 1 Late Shipment (10 days in transit)
+  - 1 Overdue Invoice (due 5 days ago)
+  - 1 Forecast Spike (1.6× over baseline)
+
+ACCEPTANCE (Frontend)
+- /insights loads within ~1s and shows grouped cards with counts
+- Clicking action buttons routes to the correct flows with prefilled context
+- Filters (Location/Region/Severity) narrow the cards
+- Dismiss/Undo works; refresh recomputes insights from current data
+- When inventory/orders change, refreshing updates counts and may create/remove insights
