@@ -39,6 +39,7 @@ import { initializeAnalyticsData } from "@/utils/analytics";
 import { initializeTaxationData } from "@/utils/taxation";
 import { initializeWarehouseData } from "@/utils/warehouse";
 import { seedForecastData } from "@/data/seedForecastData";
+import { initializeLocationAccessData } from "@/data/seedLocationData";
 
 function Router() {
   return (
@@ -87,6 +88,7 @@ function App() {
   initializeTaxationData();
   initializeWarehouseData();
   seedForecastData(); // Initialize forecast demo data
+  initializeLocationAccessData(); // Initialize location access data
   
   return (
     <QueryClientProvider client={queryClient}>

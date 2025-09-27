@@ -37,7 +37,14 @@ import {
 } from "@/components/ui/alert-dialog";
 import { Badge } from "@/components/ui/badge";
 import { Card } from "@/components/ui/card";
-import { Plus, Edit, Trash2, Users, Mail, Shield } from "lucide-react";
+import { Plus, Edit, Trash2, Users, Mail, Shield, MapPin } from "lucide-react";
+import { 
+  getLocations, 
+  updateUserLocations, 
+  formatLocationScope, 
+  canManageUserLocations,
+  getLocationName
+} from "@/utils/locationAccess";
 
 export default function UsersPage() {
   const { users, roles, updateUsers, hasPermission } = usePerms();
@@ -48,6 +55,67 @@ export default function UsersPage() {
   const [userToDelete, setUserToDelete] = useState<User | null>(null);
   const [formData, setFormData] = useState<Partial<User>>({});
   const [errors, setErrors] = useState<Record<string, string>>({});
+  const [isLocationModalOpen, setIsLocationModalOpen] = useState(false);
+  const [locationUser, setLocationUser] = useState<User | null>(null);
+  const [selectedLocations, setSelectedLocations] = useState<string[]>([]);
+
+  const locations = getLocations();
+  const canManageLocations = canManageUserLocations();
+
+  // Location assignment handlers
+  const handleAssignLocations = (user: User) => {
+    setLocationUser(user);
+    const userLocations = (user as any).allowedLocations || [];
+    setSelectedLocations(userLocations);
+    setIsLocationModalOpen(true);
+  };
+
+  const handleSaveLocationAssignment = () => {
+    if (!locationUser) return;
+
+    try {
+      updateUserLocations(locationUser.id, selectedLocations);
+      
+      // Update the users list
+      const updatedUsers = users.map(user => 
+        user.id === locationUser.id 
+          ? { ...user, allowedLocations: selectedLocations }
+          : user
+      );
+      updateUsers(updatedUsers);
+
+      setIsLocationModalOpen(false);
+      setLocationUser(null);
+      setSelectedLocations([]);
+
+      toast({
+        title: "Locations Updated",
+        description: `Successfully updated location access for ${locationUser.name}`,
+      });
+    } catch (error) {
+      toast({
+        title: "Error",
+        description: "Failed to update location assignments",
+        variant: "destructive",
+      });
+    }
+  };
+
+  const toggleLocationSelection = (locationId: string) => {
+    setSelectedLocations(prev => 
+      prev.includes(locationId)
+        ? prev.filter(id => id !== locationId)
+        : [...prev, locationId]
+    );
+  };
+
+  const selectAllLocations = () => {
+    setSelectedLocations(locations.map(loc => loc.id));
+  };
+
+  const clearAllLocations = () => {
+    setSelectedLocations([]);
+  };
 
   // Check if current user can access this page
   if (!hasPermission('settings')) {
@@ -227,13 +295,14 @@ export default function UsersPage() {
                   <TableHead className="text-zinc-300">User</TableHead>
                   <TableHead className="text-zinc-300">Email</TableHead>
                   <TableHead className="text-zinc-300">Role</TableHead>
-                  <TableHead className="text-zinc-300 w-24">Actions</TableHead>
+                  <TableHead className="text-zinc-300">Locations</TableHead>
+                  <TableHead className="text-zinc-300 w-32">Actions</TableHead>
                 </TableRow>
               </TableHeader>
               <TableBody>
                 {users.length === 0 ? (
                   <TableRow>
-                    <TableCell colSpan={4} className="text-center text-muted-foreground py-8">
+                    <TableCell colSpan={5} className="text-center text-muted-foreground py-8">
                       No users found
                     </TableCell>
                   </TableRow>
@@ -259,6 +328,26 @@ export default function UsersPage() {
                       </TableCell>
                       <TableCell>
                         <div className="flex items-center gap-2">
+                          <MapPin className="h-3 w-3 text-zinc-400" />
+                          <span className="text-sm text-zinc-300" data-testid={`locations-${user.id}`}>
+                            {formatLocationScope(user as any)}
+                          </span>
+                        </div>
+                      </TableCell>
+                      <TableCell>
+                        <div className="flex items-center gap-2">
+                          {canManageLocations && (
+                            <Button
+                              size="sm"
+                              variant="ghost"
+                              onClick={() => handleAssignLocations(user as any)}
+                              className="h-8 text-xs text-zinc-400 hover:text-white"
+                              data-testid={`assign-locations-${user.id}`}
+                            >
+                              <MapPin className="h-3 w-3 mr-1" />
+                              Locations
+                            </Button>
+                          )}
                           <Button
                             size="sm"
                             variant="ghost"
@@ -355,6 +444,106 @@ export default function UsersPage() {
                 {editingUser ? "Update User" : "Create User"}
               </Button>
             </div>
+          </div>
+        </DialogContent>
+      </Dialog>
+
+      {/* Location Assignment Dialog */}
+      <Dialog open={isLocationModalOpen} onOpenChange={setIsLocationModalOpen}>
+        <DialogContent className="bg-zinc-900 border-zinc-800 text-white max-w-lg" data-testid="location-assignment-dialog">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2">
+              <MapPin className="h-5 w-5" />
+              Assign Locations - {locationUser?.name}
+            </DialogTitle>
+          </DialogHeader>
+          <div className="space-y-4 py-4">
+            <div className="flex items-center justify-between">
+              <p className="text-sm text-zinc-400">
+                Select locations this user can access
+              </p>
+              <div className="flex gap-2">
+                <Button
+                  size="sm"
+                  variant="outline"
+                  onClick={selectAllLocations}
+                  className="border-zinc-700 text-zinc-300 hover:bg-zinc-800"
+                  data-testid="select-all-locations"
+                >
+                  Select All
+                </Button>
+                <Button
+                  size="sm"
+                  variant="outline"
+                  onClick={clearAllLocations}
+                  className="border-zinc-700 text-zinc-300 hover:bg-zinc-800"
+                  data-testid="clear-all-locations"
+                >
+                  Clear All
+                </Button>
+              </div>
+            </div>
+
+            <div className="space-y-2 max-h-64 overflow-y-auto">
+              {locations.length === 0 ? (
+                <p className="text-center text-zinc-400 py-4">No locations available</p>
+              ) : (
+                locations.map((location) => (
+                  <div
+                    key={location.id}
+                    className="flex items-center space-x-3 p-3 rounded border border-zinc-700 hover:bg-zinc-800 cursor-pointer"
+                    onClick={() => toggleLocationSelection(location.id)}
+                    data-testid={`location-${location.id}`}
+                  >
+                    <input
+                      type="checkbox"
+                      checked={selectedLocations.includes(location.id)}
+                      onChange={() => toggleLocationSelection(location.id)}
+                      className="rounded border-zinc-600 text-green-600 focus:ring-green-500 focus:ring-offset-zinc-900"
+                      data-testid={`checkbox-${location.id}`}
+                    />
+                    <div className="flex-1">
+                      <p className="font-medium text-white">{location.name}</p>
+                      <p className="text-sm text-zinc-400">Region: {location.regionId}</p>
+                    </div>
+                  </div>
+                ))
+              )}
+            </div>
+
+            {selectedLocations.length === 0 && (
+              <div className="bg-yellow-50 dark:bg-yellow-900/20 p-3 rounded-md">
+                <p className="text-sm text-yellow-700 dark:text-yellow-300">
+                  <strong>Warning:</strong> No locations selected. User will have no access to location-specific data.
+                </p>
+              </div>
+            )}
+
+            <div className="bg-blue-50 dark:bg-blue-950 p-3 rounded-md">
+              <p className="text-sm text-blue-700 dark:text-blue-300">
+                <strong>Note:</strong> {['owner', 'admin'].includes(locationUser?.roleId?.toLowerCase() || '') 
+                  ? 'Owners and Admins have access to all locations when no specific locations are assigned.'
+                  : 'Users with Manager or Staff roles need explicit location assignments to access data.'}
+              </p>
+            </div>
+          </div>
+
+          <div className="flex justify-end gap-3">
+            <Button
+              variant="outline"
+              onClick={() => setIsLocationModalOpen(false)}
+              className="border-zinc-700 text-zinc-300 hover:bg-zinc-800"
+              data-testid="cancel-location-assignment"
+            >
+              Cancel
+            </Button>
+            <Button
+              onClick={handleSaveLocationAssignment}
+              className="bg-green-600 hover:bg-green-700 text-white"
+              data-testid="save-location-assignment"
+            >
+              Save Assignments
+            </Button>
           </div>
         </DialogContent>
       </Dialog>

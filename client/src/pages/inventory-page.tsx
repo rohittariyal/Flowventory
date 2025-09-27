@@ -13,6 +13,14 @@ import { AlertTriangle, Package, Plus, FileText, CheckCircle, Search, Layers, Cl
 import { Link } from "wouter";
 import { apiRequest } from "@/lib/queryClient";
 import { useToast } from "@/hooks/use-toast";
+import { LocationGuard } from "@/components/LocationGuard";
+import { 
+  getCurrentUser, 
+  getUserScope, 
+  getUserAccessibleLocations,
+  scopeFilter,
+  inScope
+} from "@/utils/locationAccess";
 import { getAllProducts, updateProductStock, type Product } from "@/data/seedProductData";
 import { getBatchesByProduct, initializeBatchStorage } from "@/lib/batchStorage";
 import { statusFor, getBatchSummary, fifoPick } from "@/lib/batchUtils";
@@ -44,6 +52,8 @@ function InventoryPage() {
   const queryClient = useQueryClient();
   const [products, setProducts] = useState<Product[]>([]);
   const [locations, setLocations] = useState<Location[]>([]);
+  const [accessibleLocations, setAccessibleLocations] = useState<Location[]>([]);
+  const [userScope, setUserScope] = useState<any>(null);
   const [inventorySettings, setInventorySettings] = useState<InventorySettings>({
     combineLocations: false,
     allowNegativeStock: false,
@@ -70,10 +80,50 @@ function InventoryPage() {
     const allLocations = getLocations();
     const settings = getInventorySettings();
     
-    // Generate summaries for all products
-    const allSummaries = allProducts.map(product => 
-      getProductInventorySummary(product.id)
-    );
+    // Get current user and their location scope
+    const currentUser = getCurrentUser();
+    const scope = currentUser ? getUserScope(currentUser) : { scope: 'none' };
+    const accessibleLocs = getUserAccessibleLocations();
+    
+    setUserScope(scope);
+    setAccessibleLocations(accessibleLocs);
+    
+    // Generate summaries for all products, but filter by accessible locations
+    const allSummaries = allProducts.map(product => {
+      const fullSummary = getProductInventorySummary(product.id);
+      
+      // If user has location restrictions, filter locations
+      if (scope.scope === 'subset') {
+        const accessibleLocationIds = accessibleLocs.map(loc => loc.id);
+        const filteredLocations = fullSummary.locations.filter(loc => 
+          accessibleLocationIds.includes(loc.locationId)
+        );
+        
+        // Recalculate totals based on filtered locations
+        const totalOnHand = filteredLocations.reduce((sum, loc) => sum + loc.onHand, 0);
+        const totalAllocated = filteredLocations.reduce((sum, loc) => sum + loc.allocated, 0);
+        const totalAvailable = filteredLocations.reduce((sum, loc) => sum + loc.available, 0);
+        
+        // Determine overall status based on filtered locations
+        let overallStatus: 'OK' | 'LOW' | 'OUT' = 'OK';
+        if (totalOnHand <= 0) {
+          overallStatus = 'OUT';
+        } else if (filteredLocations.some(loc => loc.status === 'LOW' || loc.status === 'OUT')) {
+          overallStatus = 'LOW';
+        }
+        
+        return {
+          ...fullSummary,
+          locations: filteredLocations,
+          totalOnHand,
+          totalAllocated,
+          totalAvailable,
+          overallStatus
+        };
+      }
+      
+      return fullSummary;
+    });
     
     setProducts(allProducts);
     setLocations(allLocations);
@@ -436,7 +486,8 @@ function InventoryPage() {
   };
 
   return (
-    <div className="container mx-auto p-3 sm:p-6 space-y-4 sm:space-y-6">
+    <LocationGuard>
+      <div className="container mx-auto p-3 sm:p-6 space-y-4 sm:space-y-6">
       <Card>
         <CardHeader>
           <div className="flex items-center gap-2 sm:gap-3">
@@ -475,10 +526,10 @@ function InventoryPage() {
                     <SelectItem value="ALL">
                       <div className="flex items-center gap-2">
                         <MapPin className="h-4 w-4" />
-                        All Locations
+                        {userScope?.scope === 'subset' ? 'All Accessible Locations' : 'All Locations'}
                       </div>
                     </SelectItem>
-                    {locations.map((location) => (
+                    {accessibleLocations.map((location) => (
                       <SelectItem key={location.id} value={location.id}>
                         <div className="flex items-center gap-2">
                           {location.type === "warehouse" && <Warehouse className="h-4 w-4" />}
@@ -500,7 +551,20 @@ function InventoryPage() {
             {inventorySettings.combineLocations && selectedLocationFilter === "ALL" && (
               <div className="flex items-center gap-2 text-sm text-muted-foreground">
                 <MapPin className="h-4 w-4" />
-                <span>Combined view: Showing totals with location breakdown on hover</span>
+                <span>
+                  Combined view: Showing totals with location breakdown on hover
+                  {userScope?.scope === 'subset' && ` (${accessibleLocations.length} accessible locations)`}
+                </span>
+              </div>
+            )}
+
+            {/* Location access info */}
+            {userScope?.scope === 'subset' && (
+              <div className="flex items-center gap-2 text-sm text-blue-400 bg-blue-950/20 p-2 rounded">
+                <MapPin className="h-4 w-4" />
+                <span>
+                  Viewing inventory for {accessibleLocations.length} assigned location{accessibleLocations.length !== 1 ? 's' : ''}: {accessibleLocations.map(l => l.name).join(', ')}
+                </span>
               </div>
             )}
           </div>
@@ -987,7 +1051,8 @@ function InventoryPage() {
           </div>
         </DialogContent>
       </Dialog>
-    </div>
+      </div>
+    </LocationGuard>
   );
 }
 
