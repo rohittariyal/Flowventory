@@ -86,6 +86,7 @@ function InsightCard({ insight }: { insight: Insight }) {
               const updated = current.filter((entry: any) => entry.id !== insight.id);
               localStorage.setItem("flowventory:insights:dismissed", JSON.stringify(updated));
             }}
+            data-testid="button-undo-dismiss-insight"
           >
             Undo
           </Button>
@@ -95,14 +96,14 @@ function InsightCard({ insight }: { insight: Insight }) {
   };
 
   return (
-    <Card className="relative">
+    <Card className="relative" data-testid={`card-insight-${insight.id}`}>
       <CardHeader className="pb-3">
         <div className="flex items-start justify-between">
           <div className="flex items-center gap-2">
-            <Badge variant={SEVERITY_COLORS[insight.severity]} className="capitalize">
+            <Badge variant={SEVERITY_COLORS[insight.severity]} className="capitalize" data-testid={`badge-severity-${insight.severity}`}>
               {insight.severity}
             </Badge>
-            <Badge variant="outline" className="text-xs">
+            <Badge variant="outline" className="text-xs" data-testid="badge-data-source">
               {insight.dataSource}
             </Badge>
           </div>
@@ -111,12 +112,13 @@ function InsightCard({ insight }: { insight: Insight }) {
             size="sm"
             onClick={handleDismiss}
             className="h-6 w-6 p-0"
+            data-testid="button-dismiss-insight"
           >
             <X className="h-4 w-4" />
           </Button>
         </div>
-        <CardTitle className="text-base">{insight.title}</CardTitle>
-        <CardDescription className="text-sm">{insight.why}</CardDescription>
+        <CardTitle className="text-base" data-testid="text-insight-title">{insight.title}</CardTitle>
+        <CardDescription className="text-sm" data-testid="text-insight-why">{insight.why}</CardDescription>
       </CardHeader>
       <CardContent className="pt-0">
         <div className="flex flex-wrap gap-2">
@@ -127,6 +129,7 @@ function InsightCard({ insight }: { insight: Insight }) {
               size="sm"
               onClick={action.onClick}
               className="text-xs"
+              data-testid={`button-action-${action.label.toLowerCase().replace(/[^a-z0-9]/g, '-')}`}
             >
               {action.icon}
               {action.label}
@@ -156,11 +159,12 @@ function CategorySection({
       <div 
         className="flex items-center justify-between cursor-pointer"
         onClick={onToggle}
+        data-testid={`button-toggle-category-${category}`}
       >
         <div className="flex items-center gap-2">
           <Icon className="h-5 w-5" />
-          <h3 className="text-lg font-semibold">{CATEGORY_LABELS[category]}</h3>
-          <Badge variant="secondary" className="ml-2">
+          <h3 className="text-lg font-semibold" data-testid={`text-category-title-${category}`}>{CATEGORY_LABELS[category]}</h3>
+          <Badge variant="secondary" className="ml-2" data-testid={`badge-category-count-${category}`}>
             {insights.length}
           </Badge>
         </div>
@@ -314,13 +318,13 @@ export default function InsightsPage() {
                   value={filters.location} 
                   onValueChange={(value) => setFilters(prev => ({ ...prev, location: value }))}
                 >
-                  <SelectTrigger>
+                  <SelectTrigger data-testid="select-location-filter">
                     <SelectValue placeholder="All locations" />
                   </SelectTrigger>
                   <SelectContent>
-                    <SelectItem value="all">All locations</SelectItem>
+                    <SelectItem value="all" data-testid="option-location-all">All locations</SelectItem>
                     {locations.map(location => (
-                      <SelectItem key={location.id} value={location.id}>
+                      <SelectItem key={location.id} value={location.id} data-testid={`option-location-${location.id}`}>
                         {location.name}
                       </SelectItem>
                     ))}
@@ -334,13 +338,13 @@ export default function InsightsPage() {
                   value={filters.region} 
                   onValueChange={(value) => setFilters(prev => ({ ...prev, region: value }))}
                 >
-                  <SelectTrigger>
+                  <SelectTrigger data-testid="select-region-filter">
                     <SelectValue placeholder="All regions" />
                   </SelectTrigger>
                   <SelectContent>
-                    <SelectItem value="all">All regions</SelectItem>
+                    <SelectItem value="all" data-testid="option-region-all">All regions</SelectItem>
                     {Array.from(new Set(locations.map(loc => loc.regionId))).map(regionId => (
-                      <SelectItem key={regionId} value={regionId}>
+                      <SelectItem key={regionId} value={regionId} data-testid={`option-region-${regionId}`}>
                         {regionId.replace('region-', '').toUpperCase()}
                       </SelectItem>
                     ))}
@@ -354,15 +358,15 @@ export default function InsightsPage() {
                   value={filters.severity} 
                   onValueChange={(value) => setFilters(prev => ({ ...prev, severity: value }))}
                 >
-                  <SelectTrigger>
+                  <SelectTrigger data-testid="select-severity-filter">
                     <SelectValue placeholder="All severities" />
                   </SelectTrigger>
                   <SelectContent>
-                    <SelectItem value="all">All severities</SelectItem>
-                    <SelectItem value="critical">Critical</SelectItem>
-                    <SelectItem value="high">High</SelectItem>
-                    <SelectItem value="medium">Medium</SelectItem>
-                    <SelectItem value="info">Info</SelectItem>
+                    <SelectItem value="all" data-testid="option-severity-all">All severities</SelectItem>
+                    <SelectItem value="critical" data-testid="option-severity-critical">Critical</SelectItem>
+                    <SelectItem value="high" data-testid="option-severity-high">High</SelectItem>
+                    <SelectItem value="medium" data-testid="option-severity-medium">Medium</SelectItem>
+                    <SelectItem value="info" data-testid="option-severity-info">Info</SelectItem>
                   </SelectContent>
                 </Select>
               </div>
