@@ -16,6 +16,9 @@ import {
   currencyFormat,
   initializeTaxationData
 } from "@/utils/taxation";
+import { LocationGuard } from "@/components/LocationGuard";
+import { useAuth } from "@/hooks/use-auth";
+import { getUserScope, getUserAccessibleLocations, scopeFilter } from "@/utils/locationAccess";
 
 export default function CompliancePage() {
   const [filters, setFilters] = useState({
@@ -28,6 +31,12 @@ export default function CompliancePage() {
   const [reportData, setReportData] = useState<ComplianceReportRow[]>([]);
   const [settings, setSettings] = useState<any>(null);
   const { toast } = useToast();
+  const { user } = useAuth();
+
+  // Get user's location scope for access control
+  const userScope = user ? getUserScope(user) : null;
+  const accessibleLocations = getUserAccessibleLocations();
+  const accessibleRegions = accessibleLocations.map(loc => loc.regionId);
 
   useEffect(() => {
     // Initialize comprehensive taxation data if not present
@@ -49,7 +58,17 @@ export default function CompliancePage() {
       filters.dateEnd || undefined,
       filters.docType
     );
-    setReportData(data);
+    
+    // Filter data based on user's location scope
+    let filteredData = data;
+    if (userScope?.scope === 'subset') {
+      filteredData = data.filter(row => accessibleRegions.includes(row.region));
+    } else if (userScope?.scope === 'none') {
+      filteredData = [];
+    }
+    // If scope is 'all', show all data
+    
+    setReportData(filteredData);
   };
 
   const handleExportCSV = () => {
@@ -106,18 +125,21 @@ export default function CompliancePage() {
 
   if (!settings) {
     return (
-      <div className="p-6 space-y-6">
-        <div className="flex items-center space-x-2">
-          <FileText className="h-6 w-6" />
-          <h1 className="text-2xl font-semibold">Compliance Reports</h1>
+      <LocationGuard>
+        <div className="p-6 space-y-6">
+          <div className="flex items-center space-x-2">
+            <FileText className="h-6 w-6" />
+            <h1 className="text-2xl font-semibold">Compliance Reports</h1>
+          </div>
+          <div className="text-center">Loading compliance data...</div>
         </div>
-        <div className="text-center">Loading compliance data...</div>
-      </div>
+      </LocationGuard>
     );
   }
 
   return (
-    <div className="p-6 space-y-6" data-testid="page-compliance">
+    <LocationGuard>
+      <div className="p-6 space-y-6" data-testid="page-compliance">
       {/* Header */}
       <div className="flex items-center justify-between">
         <div className="flex items-center space-x-2">
@@ -348,5 +370,6 @@ export default function CompliancePage() {
         </CardContent>
       </Card>
     </div>
+    </LocationGuard>
   );
 }
