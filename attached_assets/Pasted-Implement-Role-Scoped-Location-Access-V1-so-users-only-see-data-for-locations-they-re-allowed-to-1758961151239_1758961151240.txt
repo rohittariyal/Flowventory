@@ -1,0 +1,88 @@
+Implement “Role-Scoped Location Access (V1)” so users only see data for locations they’re allowed to access.
+
+GOALS
+- Add per-user allowedLocations (array of locationIds) on top of existing Roles & Permissions.
+- Gate all location-aware views (inventory, products breakdown, orders picking, shipments, reports).
+- Provide an Admin UX to assign locations to users.
+- Fall back to “all locations” when user has none specified and role = Owner/Admin.
+
+DATA (localStorage additions)
+- "flowventory:users": extend each user with:
+    { id, name, email, roleId, allowedLocations?: string[] }  // optional, empty = all (for Owner/Admin), none = none (for Staff/Manager unless set)
+- "flowventory:session": { currentUserId }
+- Existing:
+  - "flowventory:locations": [{ id, name, regionId, ... }]
+  - "flowventory:inventory", "flowventory:orders", "flowventory:shipments", etc.
+
+UTILS
+- getCurrentUser() -> from session + users
+- getUserScope(user):
+    - if roleId in {"owner", "admin"} and (!allowedLocations || allowedLocations.length == 0) => { scope:"all" }
+    - else if allowedLocations?.length > 0 => { scope:"subset", locations: allowedLocations }
+    - else => { scope:"none" }  // no access until assigned
+- inScope(locationId, userScope) -> boolean
+- scopeFilter(collection, byLocationIdField) -> filters rows by inScope
+
+ADMIN UI
+1) Settings → Users (/workspace/users)
+   - Add a column “Locations”
+   - Action “Assign Locations” opens modal:
+     - Multi-select of locations (checkbox list) with “Select all” (only for Admin/Owner)
+     - Save writes allowedLocations for that user
+   - Show a small chip summary in table, e.g., “All” or “3 locations”
+
+GUARDING VIEWS
+2) Inventory (/inventory)
+   - If userScope = "subset":
+     - Location filter dropdown only lists allowed locations
+     - “All locations” view aggregates only across allowed ones
+     - Breakdown drawer shows only allowed locations
+   - If userScope = "none": render “No access to any location. Ask an admin to assign locations.”
+
+3) Product Detail → Locations tab
+   - Same filtering: only show allowed locations
+   - Disable/Hide “Receive/Adjust/Transfer” for locations outside scope
+
+4) Orders & Picking
+   - When choosing source location for lines:
+     - Limit dropdown to allowed locations
+     - If none allowed → show guard message & disable picking
+
+5) Shipments
+   - Shipments list: rows visible only if shipment’s source location is in scope (assume you store it on shipment; if not, infer from order)
+   - Detail page guarded similarly
+
+6) Reports
+   - “Stock by Location”, “Transfer Log”, etc. should pre-filter to scope and hide locations outside scope
+   - Saved Views should store location filters but still respect scope when loaded by another user
+
+ROLE DEFAULTS
+- Owner/Admin:
+  - If allowedLocations empty/undefined => access all locations
+- Manager/Staff:
+  - If allowedLocations not set => scope = none (show guard)
+  - Admin must explicitly assign locations
+
+UX POLISH
+- In top navbar (or profile menu), show a scope chip:
+  - “All locations” for Owner/Admin without restriction
+  - “3 locations” for subset
+  - “No locations” for none (click opens request/assign dialog if user is Admin viewing self? optional)
+
+VALIDATION
+- Prevent saving a user with an empty roleId
+- Only Owner/Admin can edit another user’s allowedLocations
+- When a location is deleted, remove it from all users’ allowedLocations
+
+SEED
+- Ensure at least 3 locations exist
+- Have 3 users:
+  - Owner (all locations)
+  - Manager (assigned to 1–2 locations)
+  - Staff (no locations → sees guard)
+
+ACCEPTANCE (Frontend)
+- Log in as Manager → only assigned locations appear in filters, breakdowns, and picking; others are hidden/disabled
+- Log in as Staff with no locations → clear “No access” guard on location-bound pages
+- Owner sees everything regardless of assignment (when allowedLocations unset)
+- Reports and Shipments respect scope; exporting CSV includes only allowed data

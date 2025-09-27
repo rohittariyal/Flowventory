@@ -630,6 +630,66 @@ export default function InvoiceDetailPage() {
                   <span className="font-bold text-red-600">{currencyFormat(getRemainingBalance(), invoice.currency, invoice.locale)}</span>
                 </div>
               </div>
+
+              {/* Payment Gateway Integration */}
+              {getRemainingBalance() > 0 && getActiveConnectors().length > 0 && (
+                <div className="border-t pt-4 space-y-4">
+                  <h4 className="font-medium text-sm text-gray-700 dark:text-gray-300">Online Payment</h4>
+                  <div className="space-y-3">
+                    <div>
+                      <Label htmlFor="paymentConnector" className="text-sm">Payment Gateway</Label>
+                      <Select value={selectedPaymentConnector} onValueChange={setSelectedPaymentConnector} data-testid="select-payment-connector">
+                        <SelectTrigger className="w-full">
+                          <SelectValue placeholder="Select payment gateway" />
+                        </SelectTrigger>
+                        <SelectContent>
+                          {getActiveConnectors().map((connector) => (
+                            <SelectItem key={connector.id} value={connector.id} data-testid={`option-connector-${connector.id}`}>
+                              {connector.name} ({connector.provider})
+                            </SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
+                    </div>
+                    <div className="flex gap-2">
+                      <Button
+                        onClick={handleCreatePaymentLink}
+                        disabled={createPaymentLinkMutation.isPending || !selectedPaymentConnector}
+                        className="flex-1"
+                        data-testid="button-create-payment-link"
+                      >
+                        {createPaymentLinkMutation.isPending ? (
+                          <>
+                            <Clock className="h-4 w-4 mr-2 animate-spin" />
+                            Creating...
+                          </>
+                        ) : (
+                          <>
+                            <CreditCard className="h-4 w-4 mr-2" />
+                            Create Payment Link
+                          </>
+                        )}
+                      </Button>
+                      <Button
+                        variant="outline"
+                        onClick={handleReconcilePayment}
+                        disabled={reconcilePaymentMutation.isPending}
+                        data-testid="button-reconcile-payment"
+                      >
+                        {reconcilePaymentMutation.isPending ? (
+                          <Clock className="h-4 w-4 animate-spin" />
+                        ) : (
+                          <RefreshCw className="h-4 w-4" />
+                        )}
+                      </Button>
+                    </div>
+                  </div>
+                  <div className="text-xs text-gray-500 bg-blue-50 dark:bg-blue-950 p-3 rounded-md">
+                    <AlertCircle className="h-4 w-4 inline mr-1 text-blue-600" />
+                    Payment links allow customers to pay securely online. Click reconcile to check for new payments.
+                  </div>
+                </div>
+              )}
             </CardContent>
           </Card>
 
