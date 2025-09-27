@@ -1,3 +1,4 @@
+
 import { useState, useMemo } from "react";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
@@ -7,6 +8,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { useToast } from "@/hooks/use-toast";
 import { LocationGuard } from "@/components/LocationGuard";
+import { useInsights, type Insight, type InsightAction } from "@/hooks/use-insights";
 import { 
   AlertTriangle, 
   TrendingUp, 
@@ -20,24 +22,6 @@ import {
   X,
   ChevronRight
 } from "lucide-react";
-
-export interface InsightAction {
-  label: string;
-  onClick: () => void;
-  variant?: "default" | "outline" | "destructive";
-  icon?: React.ReactNode;
-}
-
-export interface Insight {
-  id: string;
-  category: "stock" | "supplier" | "logistics" | "finance" | "forecast";
-  severity: "critical" | "high" | "medium" | "info";
-  title: string;
-  why: string;
-  actions: InsightAction[];
-  dataSource: string;
-  magnitude?: number; // For sorting within severity
-}
 
 export interface InsightFilters {
   location: string;
@@ -221,9 +205,7 @@ export default function InsightsPage() {
     forecast: true
   });
   const { toast } = useToast();
-
-  // TODO: Implement useInsights hook
-  const insights: Insight[] = [];
+  const { insights, locations, refreshInsights } = useInsights();
 
   const filteredInsights = useMemo(() => {
     // Get dismissed insights for today
@@ -239,7 +221,13 @@ export default function InsightsPage() {
       filtered = filtered.filter(insight => insight.severity === filters.severity);
     }
     
-    // TODO: Add location/region filtering once we have insights with location data
+    if (filters.location !== "all") {
+      filtered = filtered.filter(insight => insight.locationId === filters.location);
+    }
+    
+    if (filters.region !== "all") {
+      filtered = filtered.filter(insight => insight.regionId === filters.region);
+    }
     
     return filtered;
   }, [insights, filters]);
@@ -274,12 +262,11 @@ export default function InsightsPage() {
 
   const handleRefresh = () => {
     // Clear dismissed insights and refresh
-    localStorage.removeItem("flowventory:insights:dismissed");
+    refreshInsights();
     toast({
       title: "Insights refreshed",
       description: "All insights have been recomputed from current data"
     });
-    // TODO: Trigger insights recomputation
   };
 
   const toggleCategory = (category: string) => {
@@ -332,7 +319,11 @@ export default function InsightsPage() {
                   </SelectTrigger>
                   <SelectContent>
                     <SelectItem value="all">All locations</SelectItem>
-                    {/* TODO: Add actual locations from localStorage */}
+                    {locations.map(location => (
+                      <SelectItem key={location.id} value={location.id}>
+                        {location.name}
+                      </SelectItem>
+                    ))}
                   </SelectContent>
                 </Select>
               </div>
@@ -348,7 +339,11 @@ export default function InsightsPage() {
                   </SelectTrigger>
                   <SelectContent>
                     <SelectItem value="all">All regions</SelectItem>
-                    {/* TODO: Add actual regions from localStorage */}
+                    {Array.from(new Set(locations.map(loc => loc.regionId))).map(regionId => (
+                      <SelectItem key={regionId} value={regionId}>
+                        {regionId.replace('region-', '').toUpperCase()}
+                      </SelectItem>
+                    ))}
                   </SelectContent>
                 </Select>
               </div>
