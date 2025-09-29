@@ -1,0 +1,149 @@
+Implement “Public API & Webhooks (V1)” for Flowventory.
+
+GOALS
+- Issue API keys (scoped + revocable) to workspaces.
+- Expose read/write REST endpoints for core entities.
+- Support outbound webhooks with secret signing + retry.
+- Provide an in-app API Docs page + API Key management UI.
+- Add basic rate limiting + audit log.
+
+STACK
+- server: Node + Express
+- client: React (existing)
+- storage: simple JSON files for V1 (swap to DB later)
+
+SERVER FOLDERS
+/server
+  index.js
+  middleware/
+    auth.js           // API key check + scope enforcement
+    ratelimit.js      // naive token bucket per key
+    audit.js          // write each call to db/audit.json
+  routes/
+    api/
+      products.js
+      inventory.js
+      orders.js
+      suppliers.js
+      customers.js
+      invoices.js
+      webhooks_inbound.js   // (optional for inbound partner hooks)
+    mgmt/
+      keys.js         // create/list/revoke keys
+      webhooks.js     // register/list/delete outbound webhooks
+  services/
+    webhooks.js       // queue + retry with exponential backoff
+    signing.js        // HMAC-SHA256 signing
+  db/
+    api_keys.json     // [{ id, keyPrefix, hashedKey, scopes:["read:orders","write:inventory",...], createdAt, revokedAt? }]
+    webhooks.json     // [{ id, url, secret, events:["order.created",...], active:true, lastStatus?, lastAttemptAt? }]
+    audit.json        // append-only logs
+    ratelimits.json   // in-memory ok for dev
+
+ENV
+PORT=4002
+API_HASH_SECRET=change_me
+WEBHOOK_USER_AGENT=Flowventory-Hook/1.0
+
+SECURITY
+- API keys = prefix + random 32 bytes (show full once on create)
+- Store only hash (HMAC with API_HASH_SECRET); compare on request
+- Scopes model:
+  - read:products, write:products
+  - read:inventory, write:inventory
+  - read:orders, write:orders
+  - read:suppliers, write:suppliers
+  - read:customers, write:customers
+  - read:invoices, write:invoices
+- middleware/auth enforces scopes per route
+- middleware/ratelimit: default 60 req/min/key
+- middleware/audit logs: {ts, keyPrefix, ip, method, path, status, ms}
+
+REST ENDPOINTS (V1)
+- Products
+  GET /api/v1/products               (scope: read:products, filters: q, updatedSince)
+  GET /api/v1/products/:id           (read:products)
+  POST /api/v1/products              (write:products)
+  PATCH /api/v1/products/:id         (write:products)
+
+- Inventory (location-aware)
+  GET /api/v1/inventory              (read:inventory, filters: productId, locationId)
+  PATCH /api/v1/inventory/adjust     (write:inventory)  // body: { productId, locationId, delta, reason }
+
+- Orders
+  GET /api/v1/orders                 (read:orders, filters: status, dateFrom/dateTo, customerId)
+  GET /api/v1/orders/:id             (read:orders)
+  POST /api/v1/orders                (write:orders)
+
+- Suppliers / Customers
+  GET /api/v1/suppliers              (read:suppliers)
+  GET /api/v1/customers              (read:customers)
+
+- Invoices
+  GET /api/v1/invoices               (read:invoices, filters: status, dueBefore)
+  PATCH /api/v1/invoices/:id/status  (write:invoices)  // set UNPAID/PARTIAL/PAID
+
+OUTBOUND WEBHOOKS
+- Events to support V1:
+  - product.created, product.updated
+  - inventory.adjusted, inventory.low_stock
+  - order.created, order.status_changed
+  - shipment.created, shipment.status_changed
+  - invoice.created, invoice.paid
+- Registering webhooks:
+  POST   /mgmt/webhooks           body: { url, events[], secret? } -> returns id + generated secret if missing
+  GET    /mgmt/webhooks
+  DELETE /mgmt/webhooks/:id
+- Delivery:
+  - POST JSON to target url with headers:
+      X-Flowventory-Event: <event>
+      X-Flowventory-Id: <uuid>
+      X-Flowventory-Signature: sha256=<hex(hmac(secret, rawBody))>
+      User-Agent: Flowventory-Hook/1.0
+  - Retry policy: 5 attempts with backoff (1m, 5m, 15m, 1h, 6h)
+  - Persist delivery attempts in webhooks.json (lastStatus, lastAttemptAt)
+
+CLIENT UI
+1) Settings → Developers (/settings/developers)
+   - Tabs: API Keys | Webhooks | API Docs
+   - API Keys:
+     - List keys (show prefix only), scopes chips, created date, revoke button
+     - “Create API Key” modal:
+       * Name/Label
+       * Scope multiselect
+       * Generate → show full key once with copy button
+   - Webhooks:
+     - List registered hooks (url, events, status)
+     - “Add Webhook” modal: url, event multiselect, optional secret (auto-generate if empty)
+     - Test delivery button (sends a sample event payload)
+   - API Docs:
+     - Read-only page with curl examples, headers, pagination, filters, signature verification snippet
+
+DOCS — EXAMPLES
+- curl with API key:
+  curl -H "Authorization: Bearer <API_KEY>" https://<host>/api/v1/products?q=shirt
+- signature verify (Node):
+  const sig = req.headers['x-flowventory-signature'].split('=')[1];
+  const calc = crypto.createHmac('sha256', secret).update(rawBody).digest('hex');
+  if (sig !== calc) return res.status(401).end();
+
+AUDIT VIEW (optional)
+- /settings/developers/audit: table of last 200 API calls with search/filter by keyPrefix or path
+
+VALIDATION
+- Creating key requires at least one scope
+- Revoking a key immediately blocks further calls (test with 401)
+- Webhook URL must be https in production; allow http in dev
+- Rate limit returns 429 with JSON: { error:"rate_limited", retryAfterSec: N }
+
+SEED
+- If no keys exist, show empty state
+- If no webhooks, show empty state
+- Provide a “Generate Demo Key” (read-only scopes) for quick testing in dev
+
+ACCEPTANCE (Manual E2E)
+- Create an API key with read:products → curl GET /products works; POST fails with 403 (scope)
+- Create a webhook for order.created → create an order in-app → webhook receives payload with valid signature
+- Revoke key → further API calls return 401
+- Rate limiting triggers 429 after 60 req/min (adjustable)
+- Audit log shows recent API requests with status codes

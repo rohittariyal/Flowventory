@@ -6,6 +6,11 @@ import { syncManager } from "./syncAdapters";
 import { digestScheduler } from "./digestScheduler";
 import { storage } from "./storage";
 import { hashPassword } from "./auth";
+import { startWebhookProcessor } from "./services/webhooks";
+
+// Import API routes
+import apiRoutes from "./routes/api";
+import mgmtRoutes from "./routes/mgmt";
 
 // Seed demo users for development
 async function seedDemoUsers() {
@@ -79,6 +84,10 @@ app.use((req, res, next) => {
   next();
 });
 
+  // Mount API routes before main routes
+  app.use('/api', apiRoutes);
+  app.use('/mgmt', mgmtRoutes);
+
 (async () => {
   const server = await registerRoutes(app);
 
@@ -122,6 +131,9 @@ app.use((req, res, next) => {
       // Start auto-sync every 30 minutes (optional cron)
       syncManager.startAutoSync(30);
     }
+    
+    // Start webhook processor
+    startWebhookProcessor();
 
     // Daily digest scheduler is always running (configured via settings)
     console.log("Daily digest scheduler initialized and running");
