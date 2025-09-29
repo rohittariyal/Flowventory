@@ -37,6 +37,7 @@ import { ProtectedRoute } from "./lib/protected-route";
 import { initializeSeedData } from "@/data/seedInvoiceData";
 import { initializeSessionData, initializeProductNotesData } from "@/data/seedSessionData";
 import { initializeProductData, initializeBatchInventoryData, initializeBatchEventsData } from "@/data/seedProductData";
+import { initializeSupplierBenchmarkData } from "@/data/seedSupplierData";
 import { initializeAnalyticsData } from "@/utils/analytics";
 import { initializeTaxationData } from "@/utils/taxation";
 import { initializeWarehouseData } from "@/utils/warehouse";
@@ -88,6 +89,7 @@ function App() {
   initializeProductData();
   initializeBatchInventoryData();
   initializeBatchEventsData();
+  initializeSupplierBenchmarkData(); // Initialize supplier benchmarking data
   initializeAnalyticsData();
   initializeTaxationData();
   initializeWarehouseData();

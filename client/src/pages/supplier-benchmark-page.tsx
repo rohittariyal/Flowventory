@@ -453,7 +453,7 @@ export default function SupplierBenchmarkPage() {
 
   // Get unique categories and SKUs for filters
   const categories = useMemo(() => {
-    const cats = new Set(data.products.map(p => p.category).filter(Boolean));
+    const cats = new Set(data.products.map(p => p.category).filter((cat): cat is string => Boolean(cat)));
     return Array.from(cats);
   }, [data.products]);
 
