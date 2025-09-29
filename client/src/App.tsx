@@ -33,6 +33,10 @@ import PaymentSettingsPage from "@/pages/payment-settings-page";
 import CompliancePage from "@/pages/compliance-page";
 import InsightsPage from "@/pages/insights-page";
 import SupplierBenchmarkPage from "@/pages/supplier-benchmark-page";
+import ApiKeysPage from "@/pages/api-keys-page";
+import WebhooksPage from "@/pages/webhooks-page";
+import ApiDocsPage from "@/pages/api-docs-page";
+import AuditLogsPage from "@/pages/audit-logs-page";
 import { ProtectedRoute } from "./lib/protected-route";
 import { initializeSeedData } from "@/data/seedInvoiceData";
 import { initializeSessionData, initializeProductNotesData } from "@/data/seedSessionData";
@@ -75,6 +79,10 @@ function Router() {
       <ProtectedRoute path="/settings/payments" component={PaymentSettingsPage} />
       <ProtectedRoute path="/compliance" component={CompliancePage} />
       <ProtectedRoute path="/insights" component={InsightsPage} />
+      <ProtectedRoute path="/settings/developers" component={ApiDocsPage} />
+      <ProtectedRoute path="/settings/developers/keys" component={ApiKeysPage} />
+      <ProtectedRoute path="/settings/developers/webhooks" component={WebhooksPage} />
+      <ProtectedRoute path="/settings/developers/audit" component={AuditLogsPage} />
       <Route path="/auth" component={AuthPage} />
       <Route component={NotFound} />
     </Switch>
