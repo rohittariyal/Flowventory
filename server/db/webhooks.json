@@ -1,1 +1,32 @@
-[]
+[
+  {
+    "id": "ae578d75-0e5d-4cc9-86d9-bc9fd33fdfd2",
+    "url": "https://webhook.site/test-endpoint",
+    "secret": "663116c00d9a1195f4f921cd96733de0012dda59a718fc5e74e4a1770d74c626",
+    "events": [
+      "product.created",
+      "inventory.adjusted"
+    ],
+    "active": true,
+    "name": "Test Webhook",
+    "description": "",
+    "createdAt": "2025-09-29T10:12:28.929Z",
+    "updatedAt": "2025-09-29T10:12:28.929Z",
+    "failureCount": 0
+  },
+  {
+    "id": "dc0712e7-99f4-407c-97c8-8a41efb856fb",
+    "url": "https://webhook.site/test-endpoint",
+    "secret": "60bf63519af301ea542adfb89611c47f74f789f4a095cdbe11b630e34641bcaa",
+    "events": [
+      "product.created",
+      "inventory.adjusted"
+    ],
+    "active": true,
+    "name": "Test Webhook",
+    "description": "Test webhook for automated testing",
+    "createdAt": "2025-09-29T10:16:20.891Z",
+    "updatedAt": "2025-09-29T10:16:20.891Z",
+    "failureCount": 0
+  }
+]

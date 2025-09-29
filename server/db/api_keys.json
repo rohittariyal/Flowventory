@@ -1,0 +1,24 @@
+[
+  {
+    "id": "d2356ede-623e-4228-894d-e5f66e6e4af2",
+    "keyPrefix": "fv_434386dd",
+    "hashedKey": "72e26445d80cfc0ccee7de7ee6076f82f6ac34d593d72a0c34f65f5d5c1c4fcb",
+    "scopes": [
+      "read:products",
+      "read:inventory"
+    ],
+    "name": "Test Integration Key",
+    "createdAt": "2025-09-29T10:10:55.571Z"
+  },
+  {
+    "id": "c77de0c2-c019-4cf3-b900-555d8e60129e",
+    "keyPrefix": "fv_aa268326",
+    "hashedKey": "e4b76f3633d590a22c842551690808d55287e0858e971ae151f39f249acda52e",
+    "scopes": [
+      "read:products",
+      "read:inventory"
+    ],
+    "name": "Test Integration Key",
+    "createdAt": "2025-09-29T10:15:09.946Z"
+  }
+]

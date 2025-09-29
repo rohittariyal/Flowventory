@@ -37,7 +37,7 @@ import {
 } from "@/components/ui/alert";
 import { useToast } from "@/hooks/use-toast";
 import { usePerms } from "@/hooks/use-perms";
-import { Trash2, Plus, Settings, Globe, MapPin, Bell, Mail, Eye, Send, AlertCircle, X, RotateCcw, Users, Shield, DollarSign, FileText, Truck, CreditCard } from "lucide-react";
+import { Trash2, Plus, Settings, Globe, MapPin, Bell, Mail, Eye, Send, AlertCircle, X, RotateCcw, Users, Shield, DollarSign, FileText, Truck, CreditCard, Code, Key, Webhook, Activity } from "lucide-react";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { RolesPermissions } from "@/components/RolesPermissions";
 
@@ -466,6 +466,7 @@ export default function SettingsPage() {
     { id: "finance", label: "Finance & Tax", icon: DollarSign },
     { id: "payments", label: "Payments", icon: CreditCard },
     { id: "shipping", label: "Shipping", icon: Truck },
+    { id: "developer", label: "Developer Tools", icon: Code },
     ...(hasPermission('settings') ? [{ id: "roles", label: "Roles & Permissions", icon: Shield }] : []),
   ];
 
@@ -1354,6 +1355,164 @@ export default function SettingsPage() {
                 </div>
               </CardContent>
             </Card>
+          )}
+
+          {activeTab === "developer" && (
+            <div className="space-y-6">
+              <Card>
+                <CardHeader>
+                  <CardTitle className="flex items-center space-x-2">
+                    <Code className="h-5 w-5" />
+                    <span>Developer Tools & API Access</span>
+                  </CardTitle>
+                  <CardDescription>
+                    Manage API keys, webhooks, and monitor API usage for integrations
+                  </CardDescription>
+                </CardHeader>
+                <CardContent>
+                  <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+                    {/* API Documentation */}
+                    <div className="bg-blue-50 dark:bg-blue-900/20 p-4 rounded-lg">
+                      <div className="flex items-start space-x-3">
+                        <FileText className="h-5 w-5 text-blue-600 mt-0.5" />
+                        <div>
+                          <h4 className="font-medium text-blue-900 dark:text-blue-100">
+                            API Documentation
+                          </h4>
+                          <p className="text-sm text-blue-700 dark:text-blue-300 mt-1">
+                            Complete guide to using the Flowventory REST API with examples and authentication details.
+                          </p>
+                          <a
+                            href="/settings/developers"
+                            className="inline-flex items-center mt-3 px-3 py-2 bg-blue-600 text-white text-sm font-medium rounded-md hover:bg-blue-700 transition-colors"
+                            data-testid="link-api-docs"
+                          >
+                            <FileText className="h-4 w-4 mr-2" />
+                            View API Docs
+                          </a>
+                        </div>
+                      </div>
+                    </div>
+
+                    {/* API Keys */}
+                    <div className="bg-green-50 dark:bg-green-900/20 p-4 rounded-lg">
+                      <div className="flex items-start space-x-3">
+                        <Key className="h-5 w-5 text-green-600 mt-0.5" />
+                        <div>
+                          <h4 className="font-medium text-green-900 dark:text-green-100">
+                            API Keys
+                          </h4>
+                          <p className="text-sm text-green-700 dark:text-green-300 mt-1">
+                            Create and manage API keys with scoped permissions for secure access to your data.
+                          </p>
+                          <a
+                            href="/settings/developers/keys"
+                            className="inline-flex items-center mt-3 px-3 py-2 bg-green-600 text-white text-sm font-medium rounded-md hover:bg-green-700 transition-colors"
+                            data-testid="link-api-keys"
+                          >
+                            <Key className="h-4 w-4 mr-2" />
+                            Manage API Keys
+                          </a>
+                        </div>
+                      </div>
+                    </div>
+
+                    {/* Webhooks */}
+                    <div className="bg-purple-50 dark:bg-purple-900/20 p-4 rounded-lg">
+                      <div className="flex items-start space-x-3">
+                        <Webhook className="h-5 w-5 text-purple-600 mt-0.5" />
+                        <div>
+                          <h4 className="font-medium text-purple-900 dark:text-purple-100">
+                            Webhooks
+                          </h4>
+                          <p className="text-sm text-purple-700 dark:text-purple-300 mt-1">
+                            Configure webhook endpoints to receive real-time notifications about events.
+                          </p>
+                          <a
+                            href="/settings/developers/webhooks"
+                            className="inline-flex items-center mt-3 px-3 py-2 bg-purple-600 text-white text-sm font-medium rounded-md hover:bg-purple-700 transition-colors"
+                            data-testid="link-webhooks"
+                          >
+                            <Webhook className="h-4 w-4 mr-2" />
+                            Manage Webhooks
+                          </a>
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* API Usage & Monitoring */}
+                  <div className="mt-6 bg-gray-50 dark:bg-gray-900/20 p-4 rounded-lg">
+                    <div className="flex items-start space-x-3">
+                      <Activity className="h-5 w-5 text-gray-600 mt-0.5" />
+                      <div className="flex-1">
+                        <h4 className="font-medium text-gray-900 dark:text-gray-100">
+                          API Usage & Audit Logs
+                        </h4>
+                        <p className="text-sm text-gray-700 dark:text-gray-300 mt-1">
+                          Monitor API usage, track requests, analyze performance, and view detailed audit logs for debugging and security.
+                        </p>
+                        <a
+                          href="/settings/developers/audit"
+                          className="inline-flex items-center mt-3 px-3 py-2 bg-gray-600 text-white text-sm font-medium rounded-md hover:bg-gray-700 transition-colors"
+                          data-testid="link-audit-logs"
+                        >
+                          <Activity className="h-4 w-4 mr-2" />
+                          View Audit Logs
+                        </a>
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* Developer Features List */}
+                  <div className="mt-6 grid grid-cols-1 md:grid-cols-2 gap-6">
+                    <div className="space-y-4">
+                      <h4 className="font-medium">API Features</h4>
+                      <div className="space-y-2 text-sm text-gray-600 dark:text-gray-300">
+                        <div className="flex items-center space-x-2">
+                          <div className="w-2 h-2 bg-green-500 rounded-full"></div>
+                          <span>RESTful API with JWT authentication</span>
+                        </div>
+                        <div className="flex items-center space-x-2">
+                          <div className="w-2 h-2 bg-green-500 rounded-full"></div>
+                          <span>Scoped permissions for security</span>
+                        </div>
+                        <div className="flex items-center space-x-2">
+                          <div className="w-2 h-2 bg-green-500 rounded-full"></div>
+                          <span>Rate limiting and usage monitoring</span>
+                        </div>
+                        <div className="flex items-center space-x-2">
+                          <div className="w-2 h-2 bg-green-500 rounded-full"></div>
+                          <span>Comprehensive audit logging</span>
+                        </div>
+                      </div>
+                    </div>
+                    
+                    <div className="space-y-4">
+                      <h4 className="font-medium">Webhook Events</h4>
+                      <div className="space-y-2 text-sm text-gray-600 dark:text-gray-300">
+                        <div className="flex items-center space-x-2">
+                          <div className="w-2 h-2 bg-blue-500 rounded-full"></div>
+                          <span>Product and inventory updates</span>
+                        </div>
+                        <div className="flex items-center space-x-2">
+                          <div className="w-2 h-2 bg-blue-500 rounded-full"></div>
+                          <span>Order status changes</span>
+                        </div>
+                        <div className="flex items-center space-x-2">
+                          <div className="w-2 h-2 bg-blue-500 rounded-full"></div>
+                          <span>Invoice and payment events</span>
+                        </div>
+                        <div className="flex items-center space-x-2">
+                          <div className="w-2 h-2 bg-blue-500 rounded-full"></div>
+                          <span>Signed payloads for security</span>
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+                </CardContent>
+              </Card>
+            </div>
           )}
 
           {activeTab === "shipping" && (

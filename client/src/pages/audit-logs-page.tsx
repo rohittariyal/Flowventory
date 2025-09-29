@@ -61,7 +61,7 @@ export default function AuditLogsPage() {
       // Load audit logs with current filters
       const logsParams = new URLSearchParams();
       Object.entries(filters).forEach(([key, value]) => {
-        if (value) logsParams.append(key, value.toString());
+        if (value && value !== 'all') logsParams.append(key, value.toString());
       });
 
       const [logsResponse, statsResponse] = await Promise.all([
@@ -111,7 +111,7 @@ export default function AuditLogsPage() {
     try {
       const params = new URLSearchParams();
       Object.entries(filters).forEach(([key, value]) => {
-        if (value) params.append(key, value.toString());
+        if (value && value !== 'all') params.append(key, value.toString());
       });
       params.append('export', 'true');
 
@@ -311,7 +311,7 @@ export default function AuditLogsPage() {
                       <SelectValue placeholder="All methods" />
                     </SelectTrigger>
                     <SelectContent>
-                      <SelectItem value="">All methods</SelectItem>
+                      <SelectItem value="all">All methods</SelectItem>
                       <SelectItem value="GET">GET</SelectItem>
                       <SelectItem value="POST">POST</SelectItem>
                       <SelectItem value="PATCH">PATCH</SelectItem>
@@ -328,7 +328,7 @@ export default function AuditLogsPage() {
                       <SelectValue placeholder="All codes" />
                     </SelectTrigger>
                     <SelectContent>
-                      <SelectItem value="">All codes</SelectItem>
+                      <SelectItem value="all">All codes</SelectItem>
                       <SelectItem value="200">200 (OK)</SelectItem>
                       <SelectItem value="201">201 (Created)</SelectItem>
                       <SelectItem value="400">400 (Bad Request)</SelectItem>
