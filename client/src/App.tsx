@@ -32,6 +32,7 @@ import ShippingSettingsPage from "@/pages/shipping-settings-page";
 import PaymentSettingsPage from "@/pages/payment-settings-page";
 import CompliancePage from "@/pages/compliance-page";
 import InsightsPage from "@/pages/insights-page";
+import SupplierBenchmarkPage from "@/pages/supplier-benchmark-page";
 import { ProtectedRoute } from "./lib/protected-route";
 import { initializeSeedData } from "@/data/seedInvoiceData";
 import { initializeSessionData, initializeProductNotesData } from "@/data/seedSessionData";
@@ -59,6 +60,7 @@ function Router() {
       <ProtectedRoute path="/workspace-settings" component={WorkspaceSettingsPage} />
       <ProtectedRoute path="/settings" component={SettingsPage} />
       <ProtectedRoute path="/suppliers" component={SuppliersPage} />
+      <ProtectedRoute path="/suppliers/benchmark" component={SupplierBenchmarkPage} />
       <ProtectedRoute path="/returns" component={ReturnsPage} />
       <ProtectedRoute path="/customers" component={CustomersPage} />
       <ProtectedRoute path="/customers/:id" component={CustomerDetailPage} />

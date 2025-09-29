@@ -1,0 +1,45 @@
+Implement “Supplier Benchmarking (V1)” to compare suppliers by on-time %, lead time, price variance, and defect/return rate.
+Frontend-first, persist via localStorage.
+
+GOALS
+- Give founders a ranking of suppliers per SKU/category.
+- Surface quick actions: Create PO, Nudge supplier, Open SLA.
+
+DATA (localStorage)
+- "flowventory:suppliers": [{ id, name, region, leadTimeDays?, contactEmail?, phone? }]
+- "flowventory:purchaseOrders": [
+    { id, number, supplierId, createdAt, expectedAt, receivedAt?, items:[{ productId, qty, unitPrice }] , status }
+  ]
+- "flowventory:returns": [{ id, ts, productId, supplierId?, qty, reason }]  // optional
+- "flowventory:products": [{ id, sku, name, category? }]
+- "flowventory:sla": [{ supplierId, targetLeadTimeDays: number, targetOnTimePct: number }] // optional
+
+DERIVED METRICS (compute client-side, last 90 days by default)
+- onTimePct = (# POs with receivedAt <= expectedAt) / (# received POs)
+- avgLeadTime = avg( receivedAt - createdAt ) on received POs
+- priceVar (per product) = (unitPrice - medianPriceForProduct) / medianPriceForProduct
+- defectRate (if returns exist) = returnedQtyFromSupplier / totalQtyFromSupplier
+
+ROUTES & UI
+- /suppliers/benchmark
+  - Filters: date range (default 90d), category/SKU, region
+  - Table columns: Supplier, On-time %, Avg Lead Time, Price Variance (median), Defect/Return %, PO Count, Actions
+  - Sortable by any metric; default sort On-time % desc, then Lead Time asc
+  - Row actions:
+     * “Create PO” (prefill supplier)
+     * “Open Supplier” (detail page)
+     * “Nudge” (opens email compose modal with canned template)
+  - Trend mini-sparkline (optional): lead time over time
+
+SCORE
+- score = (onTimePct * 0.5) + (normalizedLeadTime * 0.3) + (1 - priceVarNormalized) * 0.2
+  (simple 0–100; show “Top Choice”, “Consider”, “Watchlist” badge)
+
+PERSISTENCE
+- Save last used filters to "flowventory:views:supplierBenchmark"
+
+ACCEPTANCE (Frontend)
+- Changing filters re-computes metrics immediately
+- Sorting works; badges reflect score bands
+- Create PO opens with supplier preselected
+- Export CSV button downloads the table with computed metrics
